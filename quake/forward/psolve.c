@@ -230,6 +230,7 @@ static struct Param_t {
     noyesflag_t  includeTopography;
     noyesflag_t  includeNonlinearAnalysis;
     noyesflag_t  useInfQk;
+    noyesflag_t  includeIncidentPlaneWaves;
     int  theTimingBarriersFlag;
     stiffness_type_t   theStiffness;
     int      theStationsPrintRate;
@@ -672,7 +673,8 @@ static int32_t parse_parameters( const char* numericalin )
 	      	  mesh_coordinates_for_matlab[64],
     		  implement_drm[64],
     		  use_infinite_qk[64],
-    		  include_topography[64];
+    		  include_topography[64],
+    		  include_incident_planewaves[64];
 
     damping_type_t   typeOfDamping     = -1;
     stiffness_type_t stiffness_method  = -1;
@@ -686,6 +688,7 @@ static int32_t parse_parameters( const char* numericalin )
     noyesflag_t      meshCoordinatesForMatlab  = -1;
     noyesflag_t      implementdrm              = -1;
     noyesflag_t		 haveTopography            = -1;
+    noyesflag_t		 includePlaneWaves         = -1;
 
     /* Obtain the specification of the simulation */
     if ((fp = fopen(physicsin, "r")) == NULL)
@@ -777,7 +780,8 @@ static int32_t parse_parameters( const char* numericalin )
         (parsetext(fp, "include_buildings",              's', &include_buildings           ) != 0) ||
         (parsetext(fp, "mesh_coordinates_for_matlab",    's', &mesh_coordinates_for_matlab ) != 0) ||
         (parsetext(fp, "implement_drm",    				 's', &implement_drm               ) != 0) ||
-        (parsetext(fp, "include_topography",    		 's', &include_topography          ) != 0) ||       
+        (parsetext(fp, "include_topography",    		 's', &include_topography          ) != 0) ||
+        (parsetext(fp, "include_incident_planewaves",    's', &include_incident_planewaves ) != 0) ||
         (parsetext(fp, "simulation_velocity_profile_freq_hz",'d', &freq_vel                ) != 0) ||
         (parsetext(fp, "use_infinite_qk",                's', &use_infinite_qk             ) != 0) )
     {
@@ -998,6 +1002,16 @@ static int32_t parse_parameters( const char* numericalin )
                 include_topography );
     }
 
+    if ( strcasecmp(include_incident_planewaves, "yes") == 0 ) {
+        includePlaneWaves = YES;
+    } else if ( strcasecmp(include_incident_planewaves, "no") == 0 ) {
+        includePlaneWaves = NO;
+    } else {
+        solver_abort( __FUNCTION_NAME, NULL,
+                "Unknown response for include_incident_planewaves (yes or no): %s\n",
+                include_incident_planewaves );
+    }
+
     /* Init the static global variables */
 
     Param.theRegionLat      = region_origin_latitude_deg;
@@ -1051,6 +1065,8 @@ static int32_t parse_parameters( const char* numericalin )
 
     Param.includeTopography         = haveTopography;
 
+    Param.includeIncidentPlaneWaves = includePlaneWaves;
+
     strcpy( Param.theCheckPointingDirOut, checkpoint_path );
 
     monitor_print("\n\n---------------- Some Input Data ----------------\n\n");
@@ -1067,6 +1083,7 @@ static int32_t parse_parameters( const char* numericalin )
     monitor_print("cvmdb_input_file:                   %s\n", Param.cvmdb_input_file);
     monitor_print("Implement drm:      	               %s\n", implement_drm);
     monitor_print("Include Topography:                 %s\n", include_topography);
+    monitor_print("Include Incident Plane Waves:       %s\n", include_incident_planewaves);
     monitor_print("\n-------------------------------------------------\n\n");
 
     fflush(Param.theMonitorFileFp);
