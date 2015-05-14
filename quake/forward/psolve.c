@@ -4169,6 +4169,24 @@ solver_compute_force_nonlinear( mysolver_t *solver,
 
 
 /**
+ * Compute the plane waves contribution to the force.
+ */
+static void
+solver_compute_force_planewaves( mesh_t     *myMesh,
+        mysolver_t *mySolver,
+        double      theDeltaT,
+        int         step,
+        fmatrix_t (*theK1)[8], fmatrix_t (*theK2)[8] )
+{
+    if ( Param.includeIncidentPlaneWaves == YES ) {
+        Timer_Start( "Compute addforces Incident Plane Waves" );
+        compute_addforce_PlaneWaves ( myMesh, mySolver, theDeltaT, step, theK1, theK2);
+        Timer_Stop( "Compute addforces Incident Plane Waves" );
+    }
+}
+
+
+/**
  * Compute the topography contribution to the force.
  * \param deltaT2 Delta t^2 (i.e., squared).
  */
@@ -4481,6 +4499,7 @@ static void solver_run()
         solver_compute_force_damping( Global.mySolver, Global.myMesh, Global.theK1, Global.theK2 );
         solver_compute_force_gravity( Global.mySolver, Global.myMesh, step );
         solver_compute_force_nonlinear( Global.mySolver, Global.myMesh, Param.theDeltaTSquared );
+        solver_compute_force_planewaves( Global.myMesh, Global.mySolver, Param.theDeltaT, step, Global.theK1, Global.theK2 );
 
         Timer_Stop( "Compute Physics" );
 
@@ -7824,7 +7843,7 @@ int main( int argc, char** argv )
     }
     
     if ( Param.includeIncidentPlaneWaves == YES ){
-    	drmHS_solver_init( Global.myMesh, Global.mySolver );
+    	PlaneWaves_solver_init( Global.myID, Global.myMesh, Global.mySolver );
     }
 
     Timer_Start("Source Init");
