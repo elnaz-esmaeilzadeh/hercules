@@ -73,7 +73,7 @@ static int32_t            myDRM_Brd6 = 0;
 static int32_t            myDRM_Brd7 = 0;
 static int32_t            myDRM_Brd8 = 0;
 
-void topo_DRM_init( mesh_t *myMesh, mysolver_t *mySolver) {
+void drmHS_solver_init( mesh_t *myMesh, mysolver_t *mySolver) {
 
 
 	int32_t halfFace_elem, theBorderElem;  /* half the number of elements in a box's face. Artificially defined by me */

@@ -58,6 +58,7 @@
 #include "drm.h"
 #include "meshformatlab.h"
 #include "topography.h"
+#include "drm_halfspace.h"
 
 /* ONLY GLOBAL VARIABLES ALLOWED OUTSIDE OF PARAM. and GLOBAL. IN ALL OF PSOLVE!! */
 MPI_Comm comm_solver;
@@ -7732,6 +7733,7 @@ int main( int argc, char** argv )
         topo_init( Global.myID, Param.parameters_input_file );
     }
 
+
     // INTRODUCE BKT MODEL
     /* Init Quality Factor Table */
     constract_Quality_Factor_Table();
@@ -7821,6 +7823,10 @@ int main( int argc, char** argv )
         nonlinear_stats(Global.myID, Global.theGroupSize);
     }
     
+    if ( Param.includeIncidentPlaneWaves == YES ){
+    	drmHS_solver_init( Global.myMesh, Global.mySolver );
+    }
+
     Timer_Start("Source Init");
     source_init(Param.parameters_input_file);
     Timer_Stop("Source Init");

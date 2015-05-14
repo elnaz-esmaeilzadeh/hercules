@@ -9,7 +9,7 @@
 #define DRM_HALFSPACE_H_
 
 
-void topo_DRM_init( mesh_t *myMesh, mysolver_t *mySolver);
+void drmHS_solver_init( mesh_t *myMesh, mysolver_t *mySolver);
 
 
 #endif /* DRM_HALFSPACE_H_ */
