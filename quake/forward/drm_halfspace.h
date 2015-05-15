@@ -9,8 +9,14 @@
 #define DRM_HALFSPACE_H_
 
 
-void PlaneWaves_solver_init( int32_t myID, mesh_t *myMesh, mysolver_t *mySolver);
-void compute_addforce_PlaneWaves ( mesh_t     *myMesh,
+typedef enum {
+  SV = 0,  P
+} planewavetype_t;
+
+void    drm_planewaves_init ( int32_t myID, const char *parametersin );
+int32_t drm_planewaves_initparameters ( const char *parametersin );
+void    PlaneWaves_solver_init( int32_t myID, mesh_t *myMesh, mysolver_t *mySolver);
+void    compute_addforce_PlaneWaves ( mesh_t     *myMesh,
                                 mysolver_t *mySolver,
                                 double      theDeltaT,
                                 int         step,

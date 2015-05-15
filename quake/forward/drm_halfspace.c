@@ -33,6 +33,18 @@
 #include "topography.h"
 #include "geometrics.h"
 
+static planewavetype_t	thePlaneWaveType;
+static int32_t	theDRMBox_halfwidthElements = 0;
+static int32_t	theDRMBox_DepthElements = 0;
+static double 	thedrmbox_esize         = 0.0;
+
+static double 	theTs = 0.0;
+static double 	thefc = 0.0;
+static double   theUo = 0.0;
+static double 	theplanewave_strike = 0.0;
+
+static double 	theXc  = 0.0;
+static double 	theYc  = 0.0;
 
 static int32_t            *myDRMFace1ElementsMapping;
 static int32_t            *myDRMFace2ElementsMapping;
@@ -73,6 +85,126 @@ static int32_t            myDRM_Brd6 = 0;
 static int32_t            myDRM_Brd7 = 0;
 static int32_t            myDRM_Brd8 = 0;
 
+
+
+void drm_planewaves_init ( int32_t myID, const char *parametersin ) {
+
+    int     int_message[3];
+    double  double_message[7];
+
+    /* Capturing data from file --- only done by PE0 */
+    if (myID == 0) {
+        if ( drm_planewaves_initparameters( parametersin ) != 0 ) {
+            fprintf(stderr,"Thread %d: drm_planewaves_init: "
+                    "incidentPlaneWaves_initparameters error\n",myID);
+            MPI_Abort(MPI_COMM_WORLD, ERROR);
+            exit(1);
+        }
+
+    }
+
+    /* Broadcasting data */
+
+    int_message   [0]    = (int)thePlaneWaveType;
+    int_message   [1]    = theDRMBox_halfwidthElements;
+    int_message   [2]    = theDRMBox_DepthElements;
+
+    double_message[0] = theTs;
+    double_message[1] = thefc;
+    double_message[2] = theUo;
+    double_message[3] = theplanewave_strike;
+    double_message[4] = theXc;
+    double_message[5] = theYc;
+    double_message[6] = thedrmbox_esize;
+
+    MPI_Bcast(double_message, 7, MPI_DOUBLE, 0, comm_solver);
+    MPI_Bcast(int_message,    3, MPI_INT,    0, comm_solver);
+
+    thePlaneWaveType             = int_message[0];
+    theDRMBox_halfwidthElements  = int_message[1];
+    theDRMBox_DepthElements      = int_message[2];
+
+    theTs               = double_message[0];
+    thefc               = double_message[1];
+    theUo               = double_message[2];
+    theplanewave_strike = double_message[3];
+    theXc               = double_message[4];
+    theYc               = double_message[5];
+    thedrmbox_esize     = double_message[6];
+
+    return;
+
+}
+
+
+
+int32_t
+drm_planewaves_initparameters ( const char *parametersin ) {
+    FILE                *fp;
+
+    double              drmbox_halfwidth_elements, drmbox_depth_elements, Ts, fc, Uo, planewave_strike, L_ew, L_ns, drmbox_esize;
+    char                type_of_wave[64];
+
+    planewavetype_t     planewave;
+
+
+    /* Opens parametersin file */
+
+   if ( ( fp = fopen(parametersin, "r" ) ) == NULL ) {
+        fprintf( stderr,
+                 "Error opening %s\n at drm_planewaves_initparameters",
+                 parametersin );
+        return -1;
+    }
+
+
+     /* Parses parametersin to capture drm_planewaves single-value parameters */
+    if ( ( parsetext(fp, "type_of_wave",                     's', &type_of_wave                ) != 0) ||
+         ( parsetext(fp, "DRMBox_Noelements_in_halfwidth",   'd', &drmbox_halfwidth_elements   ) != 0) ||
+         ( parsetext(fp, "DRMBox_Noelements_in_depth",       'd', &drmbox_depth_elements       ) != 0) ||
+         ( parsetext(fp, "DRMBox_element_size_m",            'd', &drmbox_esize                ) != 0) ||
+         ( parsetext(fp, "Ts",                               'd', &Ts                          ) != 0) ||
+         ( parsetext(fp, "region_length_east_m",             'd', &L_ew                        ) != 0) ||
+         ( parsetext(fp, "region_length_north_m",            'd', &L_ns                        ) != 0) ||
+         ( parsetext(fp, "fc",                               'd', &fc                          ) != 0) ||
+         ( parsetext(fp, "Uo",                               'd', &Uo                          ) != 0) ||
+         ( parsetext(fp, "planewave_strike",                 'd', &planewave_strike            ) != 0) )
+    {
+        fprintf( stderr,
+                 "Error parsing planewaves parameters from %s\n",
+                 parametersin );
+        return -1;
+    }
+
+    if ( strcasecmp(type_of_wave, "SV") == 0 ) {
+    	planewave = SV;
+    } else if ( strcasecmp(type_of_wave, "P") == 0 ) {
+    	planewave = P;
+    } else {
+        fprintf(stderr,
+                "Illegal type_of_wave for incident plane wave analysis"
+                "(SV, P): %s\n", type_of_wave);
+        return -1;
+    }
+
+    /*  Initialize the static global variables */
+	thePlaneWaveType                 = planewave;
+	theDRMBox_halfwidthElements      = drmbox_halfwidth_elements;
+	theDRMBox_DepthElements          = drmbox_depth_elements;
+	theTs                            = Ts;
+	thefc                            = fc;
+    theUo                            = Uo;
+	theplanewave_strike              = planewave_strike * PI / 180.00;
+	theXc                            = L_ew / 2.0;
+	theYc                            = L_ns / 2.0;
+	thedrmbox_esize                  = drmbox_esize;
+
+    fclose(fp);
+
+    return 0;
+}
+
+
 void PlaneWaves_solver_init( int32_t myID, mesh_t *myMesh, mysolver_t *mySolver) {
 
 
@@ -80,20 +212,20 @@ void PlaneWaves_solver_init( int32_t myID, mesh_t *myMesh, mysolver_t *mySolver)
 	int32_t theFaceElem, theBaseElem;
 
 	/* Data required by me before running the simmulation */
-	double hmin     = 3.90625 ; /* 15.625 for the SanchezSeama Ridge
+	double hmin     = 15.625 ; /* 15.625 for the SanchezSeama Ridge
 	                              15.625 for the Gaussian Ridge */
-	halfFace_elem   = 64;     /* this defines B. See figure in manuscript.
+	halfFace_elem   = 15;     /* this defines B. See figure in manuscript.
 	                             halfFace_elem   = 15 for the SphericalRidge
 	                             halfFace_elem   = 60 for the GaussianRidge
 	                             halfFace_elem   = 60 for the SanSesma Ridge */
 
-	theBorderElem   = 64;     /* this defines the depth, See figure in manuscript  */
+	theBorderElem   = 5;     /* this defines the depth, See figure in manuscript  */
 	                         /* 5 for the gaussian ridge, 3 for the SanSesma ridge */
-	double theXc           = 500;   /* domain center coordinates */
-	double theYc           = 500;
-	double Ts              = 3.5;  /* 0.18 for the Gaussian Ridge. 0.2 for the SanSesma Ridge  */
-	double fc              = 2;  /* 10.26 for the Gaussian Ridge. 10 for the SanSesma Ridge  */
-	int    wave_dir        = 0;    /*  0:X, 1:Y, 2:Z */
+//	double theXc           = 1000;   /* domain center coordinates */
+//	double theYc           = 1000;
+	double Ts              = 5.0;  /* 0.18 for the Gaussian Ridge. 0.2 for the SanSesma Ridge  */
+	double fc              = 0.25;  /* 10.26 for the Gaussian Ridge. 10 for the SanSesma Ridge  */
+	int    wave_dir        = 2;    /*  0:X, 1:Y, 2:Z */
 
 	/* --------  */
 	double DRM_D = theBorderElem * hmin;
@@ -278,6 +410,10 @@ void PlaneWaves_solver_init( int32_t myID, mesh_t *myMesh, mysolver_t *mySolver)
 	myDRM_Brd6        = countb6;
 	myDRM_Brd7        = countb7;
 	myDRM_Brd8        = countb8;
+
+//	fprintf(stdout,"myID = %d, myDRM_Face1Count= %d, myDRM_Face2Count= %d, myDRM_Face3Count= %d, myDRM_Face4Count= %d, myDRM_BottomCount=%d \n"
+//			       "myDRM_Brd1=%d, myDRM_Brd2=%d, myDRM_Brd3=%d, myDRM_Brd4=%d, myDRM_Brd5=%d, myDRM_Brd6=%d, myDRM_Brd7=%d, myDRM_Brd8=%d \n\n",
+//			       myID, countf1, countf2, countf3, countf4,countbott,countb1,countb2,countb3,countb4,countb5,countb6,countb7,countb8);
 
 }
 

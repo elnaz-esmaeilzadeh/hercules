@@ -370,7 +370,7 @@ monitor_print( const char* format, ... )
 static void read_parameters( int argc, char** argv ){
 
 #define LOCAL_INIT_DOUBLE_MESSAGE_LENGTH 18  /* Must adjust this if adding double params */
-#define LOCAL_INIT_INT_MESSAGE_LENGTH 21     /* Must adjust this if adding int params */
+#define LOCAL_INIT_INT_MESSAGE_LENGTH 22     /* Must adjust this if adding int params */
 
     double  double_message[LOCAL_INIT_DOUBLE_MESSAGE_LENGTH];
     int     int_message[LOCAL_INIT_INT_MESSAGE_LENGTH];
@@ -450,6 +450,7 @@ static void read_parameters( int argc, char** argv ){
     int_message[18] = (int)Param.useInfQk;
     int_message[19] = Param.theStepMeshingFactor;
     int_message[20] = (int)Param.includeTopography;
+    int_message[21] = (int)Param.includeIncidentPlaneWaves;
 
     MPI_Bcast(int_message, LOCAL_INIT_INT_MESSAGE_LENGTH, MPI_INT, 0, comm_solver);
 
@@ -474,6 +475,7 @@ static void read_parameters( int argc, char** argv ){
     Param.useInfQk                       = int_message[18];
     Param.theStepMeshingFactor           = int_message[19];
     Param.includeTopography              = int_message[20];
+    Param.includeIncidentPlaneWaves      = int_message[21];
 
     /*Broadcast all string params*/
     MPI_Bcast (Param.parameters_input_file,  256, MPI_CHAR, 0, comm_solver);
@@ -7750,6 +7752,17 @@ int main( int argc, char** argv )
 
     if ( Param.includeTopography == YES ){
         topo_init( Global.myID, Param.parameters_input_file );
+    }
+
+    if ( Param.includeIncidentPlaneWaves == YES ){
+
+    	/* compute half-space Vs */
+/*    	cvmpayload_t props;
+    	int res = cvm_query( Global.theCVMEp, Param.theDomainY / 2.0, Param.theDomainX / 2.0, Param.theDomainZ, &props );
+    	double VsHS = props.Vs;*/
+
+    	drm_planewaves_init( Global.myID, Param.parameters_input_file );
+
     }
 
 
