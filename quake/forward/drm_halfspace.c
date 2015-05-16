@@ -34,17 +34,16 @@
 #include "geometrics.h"
 
 static planewavetype_t	thePlaneWaveType;
-static int32_t	theDRMBox_halfwidthElements = 0;
-static int32_t	theDRMBox_DepthElements = 0;
-static double 	thedrmbox_esize         = 0.0;
+static int32_t	        theDRMBox_halfwidthElements = 0;
+static int32_t	        theDRMBox_DepthElements = 0;
+static double 	        thedrmbox_esize         = 0.0;
 
-static double 	theTs = 0.0;
-static double 	thefc = 0.0;
-static double   theUo = 0.0;
-static double 	theplanewave_strike = 0.0;
-
-static double 	theXc  = 0.0;
-static double 	theYc  = 0.0;
+static double 	        theTs = 0.0;
+static double 	        thefc = 0.0;
+static double           theUo = 0.0;
+static double 	        theplanewave_strike = 0.0;
+static double 	        theXc  = 0.0;
+static double 	        theYc  = 0.0;
 
 static int32_t            *myDRMFace1ElementsMapping;
 static int32_t            *myDRMFace2ElementsMapping;
@@ -61,15 +60,7 @@ static int32_t            *myDRMBorder5ElementsMapping;
 static int32_t            *myDRMBorder6ElementsMapping;
 static int32_t            *myDRMBorder7ElementsMapping;
 static int32_t            *myDRMBorder8ElementsMapping;
-
-static int32_t            myTopoDRMFaceElementsCount = 0;
-static int32_t            myTopoDRMBorderElementsCount = 0;
-
-
-static double            myTs  = 0;
-static double            myFc  = 0;
-static int               myDir = 0;
-static double            theDRMdepth;
+static double              theDRMdepth;
 
 static int32_t            myDRM_Face1Count  = 0;
 static int32_t            myDRM_Face2Count  = 0;
@@ -84,7 +75,6 @@ static int32_t            myDRM_Brd5 = 0;
 static int32_t            myDRM_Brd6 = 0;
 static int32_t            myDRM_Brd7 = 0;
 static int32_t            myDRM_Brd8 = 0;
-
 
 
 void drm_planewaves_init ( int32_t myID, const char *parametersin ) {
@@ -207,42 +197,15 @@ drm_planewaves_initparameters ( const char *parametersin ) {
 
 void PlaneWaves_solver_init( int32_t myID, mesh_t *myMesh, mysolver_t *mySolver) {
 
-
-	int32_t halfFace_elem, theBorderElem;  /* half the number of elements in a box's face. Artificially defined by me */
 	int32_t theFaceElem, theBaseElem;
 
-	/* Data required by me before running the simmulation */
-	double hmin     = 15.625 ; /* 15.625 for the SanchezSeama Ridge
-	                              15.625 for the Gaussian Ridge */
-	halfFace_elem   = 15;     /* this defines B. See figure in manuscript.
-	                             halfFace_elem   = 15 for the SphericalRidge
-	                             halfFace_elem   = 60 for the GaussianRidge
-	                             halfFace_elem   = 60 for the SanSesma Ridge */
-
-	theBorderElem   = 5;     /* this defines the depth, See figure in manuscript  */
-	                         /* 5 for the gaussian ridge, 3 for the SanSesma ridge */
-//	double theXc           = 1000;   /* domain center coordinates */
-//	double theYc           = 1000;
-	double Ts              = 5.0;  /* 0.18 for the Gaussian Ridge. 0.2 for the SanSesma Ridge  */
-	double fc              = 0.25;  /* 10.26 for the Gaussian Ridge. 10 for the SanSesma Ridge  */
-	int    wave_dir        = 2;    /*  0:X, 1:Y, 2:Z */
-
-	/* --------  */
-	double DRM_D = theBorderElem * hmin;
-	double DRM_B = halfFace_elem * hmin;
-
+	double DRM_D = theDRMBox_DepthElements * thedrmbox_esize;
+	double DRM_B = theDRMBox_halfwidthElements * thedrmbox_esize;
 	double thebase_zcoord = get_thebase_topo();
 
-	theFaceElem = 2 * ( halfFace_elem + 0 ) * theBorderElem;
-	theBaseElem = 4 * halfFace_elem * halfFace_elem;
+	theFaceElem = 2 * ( theDRMBox_halfwidthElements + 0 ) * theDRMBox_DepthElements;
+	theBaseElem = 4 * theDRMBox_halfwidthElements * theDRMBox_halfwidthElements;
 	theDRMdepth = DRM_D;
-
-	myTopoDRMBorderElementsCount = theBorderElem;
-	myTopoDRMFaceElementsCount   = theFaceElem;
-	myTs                         = Ts;
-	myFc                         = fc;
-	myDir                        = wave_dir;
-
 
 	/*  mapping of face1 elements */
 	int32_t eindex;
@@ -257,10 +220,10 @@ void PlaneWaves_solver_init( int32_t myID, mesh_t *myMesh, mysolver_t *mySolver)
 	XMALLOC_VAR_N(myDRMBottomElementsMapping , int32_t, theBaseElem);
 
 	/* border elements*/
-	XMALLOC_VAR_N(myDRMBorder1ElementsMapping, int32_t, theBorderElem + 1);
-	XMALLOC_VAR_N(myDRMBorder2ElementsMapping, int32_t, theBorderElem + 1);
-	XMALLOC_VAR_N(myDRMBorder3ElementsMapping, int32_t, theBorderElem + 1);
-	XMALLOC_VAR_N(myDRMBorder4ElementsMapping, int32_t, theBorderElem + 1);
+	XMALLOC_VAR_N(myDRMBorder1ElementsMapping, int32_t, theDRMBox_DepthElements + 1);
+	XMALLOC_VAR_N(myDRMBorder2ElementsMapping, int32_t, theDRMBox_DepthElements + 1);
+	XMALLOC_VAR_N(myDRMBorder3ElementsMapping, int32_t, theDRMBox_DepthElements + 1);
+	XMALLOC_VAR_N(myDRMBorder4ElementsMapping, int32_t, theDRMBox_DepthElements + 1);
 
 	XMALLOC_VAR_N(myDRMBorder5ElementsMapping, int32_t, theFaceElem);
 	XMALLOC_VAR_N(myDRMBorder6ElementsMapping, int32_t, theFaceElem);
@@ -294,7 +257,7 @@ void PlaneWaves_solver_init( int32_t myID, mesh_t *myMesh, mysolver_t *mySolver)
 
 			myDRMFace1ElementsMapping[countf1] = eindex;
 			countf1++;
-		} else 	if ( ( ( theYc - ( yo + hmin ) ) == DRM_B ) &&        /* face 2*/
+		} else 	if ( ( ( theYc - ( yo + thedrmbox_esize ) ) == DRM_B ) &&        /* face 2*/
 				( xo >= ( theXc - DRM_B ) ) &&
 				( xo <  ( theXc + DRM_B ) ) &&
 				( zo <  DRM_D + thebase_zcoord ) &&
@@ -303,7 +266,7 @@ void PlaneWaves_solver_init( int32_t myID, mesh_t *myMesh, mysolver_t *mySolver)
 			myDRMFace2ElementsMapping[countf2] = eindex;
 			countf2++;
 
-		} else 	if ( ( ( theXc - ( xo + hmin ) ) == DRM_B ) &&      /*face 3*/
+		} else 	if ( ( ( theXc - ( xo + thedrmbox_esize ) ) == DRM_B ) &&      /*face 3*/
 				( yo >= ( theYc - DRM_B ) ) &&
 				( yo <  ( theYc + DRM_B ) ) &&
 				( zo <  DRM_D + thebase_zcoord ) &&
@@ -331,7 +294,7 @@ void PlaneWaves_solver_init( int32_t myID, mesh_t *myMesh, mysolver_t *mySolver)
 			countbott++;
 
 		} else 	if ( ( ( yo - theYc ) == DRM_B ) &&      /*border 1*/
-				( ( xo + hmin ) == ( theXc - DRM_B ) ) &&
+				( ( xo + thedrmbox_esize ) == ( theXc - DRM_B ) ) &&
 				( zo <=  DRM_D + thebase_zcoord ) &&
 				( zo >=  thebase_zcoord ) ) {
 
@@ -346,15 +309,15 @@ void PlaneWaves_solver_init( int32_t myID, mesh_t *myMesh, mysolver_t *mySolver)
 			myDRMBorder2ElementsMapping[countb2] = eindex;
 			countb2++;
 
-		} else if ( ( ( theYc - ( yo + hmin ) ) == DRM_B ) &&  /* border 3*/
-				( ( xo + hmin)  == ( theXc - DRM_B ) ) &&
+		} else if ( ( ( theYc - ( yo + thedrmbox_esize ) ) == DRM_B ) &&  /* border 3*/
+				( ( xo + thedrmbox_esize)  == ( theXc - DRM_B ) ) &&
 				( zo <=  DRM_D + thebase_zcoord ) &&
 				( zo >=  thebase_zcoord ) ) {
 
 			myDRMBorder3ElementsMapping[countb3] = eindex;
 			countb3++;
 
-		} else if ( ( ( theYc - ( yo + hmin ) ) == DRM_B ) &&  /* border 4*/
+		} else if ( ( ( theYc - ( yo + thedrmbox_esize ) ) == DRM_B ) &&  /* border 4*/
 				(  xo  == ( theXc + DRM_B ) ) &&
 				( zo <=  DRM_D + thebase_zcoord ) &&
 				( zo >=  thebase_zcoord ) ) {
@@ -370,7 +333,7 @@ void PlaneWaves_solver_init( int32_t myID, mesh_t *myMesh, mysolver_t *mySolver)
 			myDRMBorder5ElementsMapping[countb5] = eindex;
 			countb5++;
 
-		} else if ( ( ( theYc - ( yo + hmin ) ) == DRM_B ) &&          /* border 6*/
+		} else if ( ( ( theYc - ( yo + thedrmbox_esize ) ) == DRM_B ) &&          /* border 6*/
 				( xo >= ( theXc - DRM_B ) ) &&
 				( xo <  ( theXc + DRM_B ) ) &&
 				( zo ==  DRM_D + thebase_zcoord )          ) {
@@ -378,7 +341,7 @@ void PlaneWaves_solver_init( int32_t myID, mesh_t *myMesh, mysolver_t *mySolver)
 			myDRMBorder6ElementsMapping[countb6] = eindex;
 			countb6++;
 
-		} else if ( ( ( theXc - ( xo + hmin ) ) == DRM_B ) &&      /* border 7*/
+		} else if ( ( ( theXc - ( xo + thedrmbox_esize ) ) == DRM_B ) &&      /* border 7*/
 				( yo >= ( theYc - DRM_B ) ) &&
 				( yo <  ( theYc + DRM_B ) ) &&
 				( zo ==  DRM_D + thebase_zcoord )          ) {
@@ -708,7 +671,7 @@ void DRM_ForcesinElement ( mesh_t     *myMesh,
 	double  h, Vs;
 	h    = (double)edata->edgesize;
 
-	if ( ( myDir == 0 ) || ( myDir == 1 ) )
+	if ( thePlaneWaveType == SV  )
 		Vs = edata->Vs;
 	else
 		Vs = edata->Vp;
@@ -783,20 +746,16 @@ void DRM_ForcesinElement ( mesh_t     *myMesh,
 
 void getRicker ( fvector_t *myDisp, double zp, double t, double Vs ) {
 
-	double Rz = Ricker_displ ( zp, myTs, t, myFc, Vs  );
+	double Rz = Ricker_displ ( zp, theTs, t, thefc, Vs  );
 
-	if ( myDir == 0 ) {
-		myDisp->f[0] = Rz;
-		myDisp->f[1] = 0.0;
-		myDisp->f[2] = 0.0;
-	} else if ( myDir == 1 ) {
-		myDisp->f[0] = 0.0;
-		myDisp->f[1] = Rz;
+	if ( thePlaneWaveType == SV ) {
+		myDisp->f[0] = Rz * theUo * cos (theplanewave_strike);
+		myDisp->f[1] = Rz * theUo * sin (theplanewave_strike);
 		myDisp->f[2] = 0.0;
 	} else {
 		myDisp->f[0] = 0.0;
 		myDisp->f[1] = 0.0;
-		myDisp->f[2] = Rz;
+		myDisp->f[2] = Rz * theUo;
 	}
 
 }
