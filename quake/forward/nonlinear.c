@@ -1328,9 +1328,9 @@ double compute_hardening ( double gamma, double c, double Sy, double h, double e
 
 	if ( theMaterialModel == VONMISES ) {
 		if ( Sy == 0 )
-			H = c / sqrt(3.0);
+			H = c;
 		else
-			H = Sy / sqrt(3.0);
+			H = Sy;
 	} else if ( theMaterialModel == DRUCKERPRAGER ) {
 		H = gamma * ( c + h * ep_bar);
 	} else {
@@ -1558,11 +1558,11 @@ void material_update ( nlconstants_t constants, tensor_t e_n, tensor_t ep, tenso
 			    double S_aa    = 2.0 * tensor_J2 ( eta_n ); /* eta_n is already deviatoric */
 			    double S_sa    = 2.0 * combtensor_J2(eta_n, dev_pr);
 
-			    double  H_kin  = mu;
-			    double  H_nlin = sqrt(3.0/2.0) * H_kin/( sqrt(3.0) * c - Sy );  /* Remember that c=Su for the vonMises yielding criterion */
+			    double  H_kin  = 2.0 * mu;
+			    double  H_nlin = sqrt(3.0/2.0) * H_kin/( c - 3.0 * Sy );  /* Remember that c=Su for the vonMises yielding criterion */
 			    double  G1     = mu + H_kin/2.0;
 
-			    Sy = sqrt(2.0/3.0)*Sy;
+			    Sy = sqrt(2.0)*Sy;
 
 			    /* coefficients of the quartic function  */
 			    C1 = pow( 2.0 * mu * H_nlin, 2.0 );

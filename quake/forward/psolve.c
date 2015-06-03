@@ -1420,7 +1420,24 @@ setrec( octant_t* leaf, double ticksize, void* data )
                     z_m -= get_surface_shift();
 		}
 
-		res = cvm_query( Global.theCVMEp, y_m, x_m, z_m, &g_props );
+		/* Reset Shear Velocities. Doriam */
+		if (z_m>=125)
+			res = cvm_query( Global.theCVMEp, y_m, x_m, z_m, &g_props );
+		else {
+			double a = 250.0;
+			double b = 125.0;
+			double H = 125.0;
+
+			double m = 2.0 * ( a + b - b * z_m /H );
+
+			if ( ( y_m <= ( 1000 + m / 2.0 ) ) &&
+			     ( y_m >= ( 1000 - m / 2.0 ) ) &&
+			     ( x_m <= ( 1000 + m / 2.0   ) ) &&
+			     ( x_m >= ( 1000 - m / 2.0  ) ) ) {
+				res = cvm_query( Global.theCVMEp, 1000.00, 1000.0, 0.10, &g_props );
+			} else
+				res = cvm_query( Global.theCVMEp, 1000.00, 1000.0, 300.0, &g_props );
+		}
 
 		if (res != 0) {
 		    continue;
@@ -7501,8 +7518,30 @@ mesh_correct_properties( etree_t* cvm )
 
             		}
 
-                    res = cvm_query( Global.theCVMEp, east_m, north_m,
-                                     depth_m, &g_props );
+                    //res = cvm_query( Global.theCVMEp, east_m, north_m,
+                      //               depth_m, &g_props );
+
+            		/* Reset Shear Velocities. Doriam */
+            		if (depth_m>=125)
+            			res = cvm_query( Global.theCVMEp, east_m, north_m,
+                                depth_m, &g_props );
+            		else {
+            			double a = 250.0;
+            			double b = 125.0;
+            			double H = 125.0;
+
+            			double m = 2.0 * ( a + b - b * depth_m /H );
+
+            			if ( ( east_m <= ( 1000 + m / 2.0 ) ) &&
+            			     ( east_m >= ( 1000 - m / 2.0 ) ) &&
+            			     ( north_m <= ( 1000 + m / 2.0   ) ) &&
+            			     ( north_m >= ( 1000 - m / 2.0   ) ) ) {
+            				res = cvm_query( Global.theCVMEp, 1000.00, 1000.0, 0.10, &g_props );
+            			} else
+            				res = cvm_query( Global.theCVMEp, 1000.00, 1000.0, 300.0, &g_props );
+            		}
+
+
 
                     if (res != 0) {
                         fprintf(stderr, "Cannot find the query point: east = %lf, north = %lf, depth = %lf \n",
