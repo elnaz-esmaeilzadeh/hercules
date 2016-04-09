@@ -54,132 +54,9 @@ static int32_t            *myTopoElementsMapping;
 static topometh_t         theTopoMethod;
 static topostation_t      *myTopoStations;
 
-
-/*  ============================================  */
-/* TODO: Only for the TopoDRM. Erase later Dorian */
-static int32_t            *myDRMFace1ElementsMapping;
-static int32_t            *myDRMFace2ElementsMapping;
-static int32_t            *myDRMFace3ElementsMapping;
-static int32_t            *myDRMFace4ElementsMapping;
-static int32_t            *myDRMBottomElementsMapping;
-
-static int32_t            *myDRMBorder1ElementsMapping;
-static int32_t            *myDRMBorder2ElementsMapping;
-static int32_t            *myDRMBorder3ElementsMapping;
-static int32_t            *myDRMBorder4ElementsMapping;
-
-static int32_t            *myDRMBorder5ElementsMapping;
-static int32_t            *myDRMBorder6ElementsMapping;
-static int32_t            *myDRMBorder7ElementsMapping;
-static int32_t            *myDRMBorder8ElementsMapping;
-
-static int32_t            myTopoDRMFaceElementsCount = 0;
-static int32_t            myTopoDRMBorderElementsCount = 0;
-
-
-static double            myTs  = 0;
-static double            myFc  = 0;
-static int               myDir = 0;
-static double            theDRMdepth;
-
-static int32_t            myDRM_Face1Count  = 0;
-static int32_t            myDRM_Face2Count  = 0;
-static int32_t            myDRM_Face3Count  = 0;
-static int32_t            myDRM_Face4Count  = 0;
-static int32_t            myDRM_BottomCount = 0;
-static int32_t            myDRM_Brd1 = 0;
-static int32_t            myDRM_Brd2 = 0;
-static int32_t            myDRM_Brd3 = 0;
-static int32_t            myDRM_Brd4 = 0;
-static int32_t            myDRM_Brd5 = 0;
-static int32_t            myDRM_Brd6 = 0;
-static int32_t            myDRM_Brd7 = 0;
-static int32_t            myDRM_Brd8 = 0;
-
-
 static double The_hypocenter_lat_deg = 0;
 static double The_hypocenter_long_deg = 0;
 static double The_hypocenter_deep = 0;
-
-/* ==============================   */
-
-/* Gauss Points matrix up until 10 integration points. 1st row: gp positions,
-                                                       2nd row: gp weights, */
-
-#define  GP40  gp40[2][40] = { {-0.0387724175060508, 0.0387724175060508, -0.1160840706752552, 0.1160840706752552, \
-		                        -0.1926975807013711, 0.1926975807013711, -0.2681521850072537, 0.2681521850072537, \
-		                        -0.3419940908257585, 0.3419940908257585, -0.4137792043716050, 0.4137792043716050, \
-		                        -0.4830758016861787, 0.4830758016861787, -0.5494671250951282, 0.5494671250951282, \
-		                        -0.6125538896679802, 0.6125538896679802, -0.6719566846141796, 0.6719566846141796, \
-                                -0.7273182551899271, 0.7273182551899271, -0.7783056514265194, 0.7783056514265194, \
-                                -0.8246122308333117, 0.8246122308333117, -0.8659595032122595, 0.8659595032122595, \
-                                -0.9020988069688743, 0.9020988069688743, -0.9328128082786765, 0.9328128082786765, \
-                                -0.9579168192137917, 0.9579168192137917, -0.9772599499837743, 0.9772599499837743, \
-                                -0.9907262386994570, 0.9907262386994570, -0.9982377097105593, 0.9982377097105593 },\
-		                       { 0.0775059479784248, 0.0775059479784248,  0.0770398181642480, 0.0770398181642480, \
-	                             0.0761103619006262, 0.0761103619006262,  0.0747231690579683, 0.0747231690579683, \
-	                             0.0728865823958041, 0.0728865823958041,  0.0706116473912868, 0.0706116473912868, \
-	                             0.0679120458152339, 0.0679120458152339,  0.0648040134566010, 0.0648040134566010, \
-	                             0.0613062424929289, 0.0613062424929289,  0.0574397690993916, 0.0574397690993916, \
-	                             0.0532278469839368, 0.0532278469839368,  0.0486958076350722, 0.0486958076350722, \
-	                             0.0438709081856733, 0.0438709081856733,  0.0387821679744720, 0.0387821679744720, \
-	                             0.0334601952825478, 0.0334601952825478,  0.0279370069800234, 0.0279370069800234, \
-	                             0.0222458491941670, 0.0222458491941670,  0.0164210583819079, 0.0164210583819079, \
-	                             0.0104982845311528, 0.0104982845311528,  0.0045212770985332, 0.0045212770985332 }  }
-
-
-
-# define GPLOB40 gplob40[2][40] = { {    1.000000000000000,  0.995297929244349,  0.984266280717503,  0.967010076487989, \
-										 0.943639764943602,  0.914303339690209,  0.879186343479340,  0.838510822778106, \
-										 0.792533952601552,  0.741546419147384,  0.685870585084314,  0.625858452755258, \
-										 0.561889439294723,  0.494367978125254,  0.423720962155551,  0.350395044914181, \
-										 0.274853816714324,  0.197574873718911,  0.119046798444971,  0.039766070802182, \
-										-0.039766070802182, -0.119046798444971, -0.197574873718911, -0.274853816714324, \
-										-0.350395044914181, -0.423720962155551, -0.494367978125254, -0.561889439294723, \
-										-0.625858452755258, -0.685870585084314, -0.741546419147384, -0.792533952601552, \
-										-0.838510822778106, -0.879186343479340, -0.914303339690209, -0.943639764943602, \
-										-0.967010076487989, -0.984266280717503, -0.995297929244349, -1.000000000000000 }, \
-									{    0.001282051282051,  0.007891011588601,  0.014159307549920,  0.020334759063387, \
-									     0.026381190653141,  0.032260717927117,  0.037936243700708,  0.043371908194758, \
-									     0.048533353845914,  0.053387951971494,  0.057905011981786,  0.062055976475709, \
-									     0.065814602222896,  0.069157126276081,  0.072062416302054,  0.074512104235389, \
-									     0.076490702433397,  0.077985701608681,  0.078987649925364,  0.079490212761550, \
-									     0.079490212761550,  0.078987649925364,  0.077985701608681,  0.076490702433397, \
-									     0.074512104235389,  0.072062416302054,  0.069157126276081,  0.065814602222896, \
-									     0.062055976475709,  0.057905011981786,  0.053387951971494,  0.048533353845914, \
-									     0.043371908194758,  0.037936243700708,  0.032260717927117,  0.026381190653141,  \
-									     0.020334759063387,  0.014159307549920,  0.007891011588601,  0.001282051282051 } }
-
-#define  GP60  gp60[2][60] ={ {  -0.0259597723012478, 0.0259597723012478, -0.0778093339495366, 0.0778093339495366, \
-		                         -0.1294491353969450, 0.1294491353969450, -0.1807399648734254, 0.1807399648734254, \
-		                         -0.2315435513760293, 0.2315435513760293, -0.2817229374232617, 0.2817229374232617, \
-		                         -0.3311428482684482, 0.3311428482684482, -0.3796700565767980, 0.3796700565767980, \
-		                         -0.4271737415830784, 0.4271737415830784, -0.4735258417617071, 0.4735258417617071, \
-		                         -0.5186014000585697, 0.5186014000585697, -0.5622789007539445, 0.5622789007539445, \
-		                         -0.6044405970485104, 0.6044405970485104, -0.6449728284894770, 0.6449728284894770, \
-		                         -0.6837663273813555, 0.6837663273813555, -0.7207165133557304, 0.7207165133557304, \
-		                         -0.7557237753065856, 0.7557237753065856, -0.7886937399322641, 0.7886937399322641, \
-		                         -0.8195375261621458, 0.8195375261621458, -0.8481719847859296, 0.8481719847859296, \
-		                         -0.8745199226468983, 0.8745199226468983, -0.8985103108100460, 0.8985103108100460, \
-		                         -0.9200784761776275, 0.9200784761776275, -0.9391662761164232, 0.9391662761164232, \
-		                         -0.9557222558399961, 0.9557222558399961, -0.9697017887650528, 0.9697017887650528, \
-		                         -0.9810672017525982, 0.9810672017525982, -0.9897878952222218, 0.9897878952222218, \
-		                         -0.9958405251188381, 0.9958405251188381, -0.9992101232274361, 0.9992101232274361}, \
-		                      {   0.0519078776312206, 0.0519078776312206,  0.0517679431749102, 0.0517679431749102,  \
-								  0.0514884515009809, 0.0514884515009809,  0.0510701560698556, 0.0510701560698556,  \
-								  0.0505141845325094, 0.0505141845325094,  0.0498220356905502, 0.0498220356905502,  \
-								  0.0489955754557568, 0.0489955754557568,  0.0480370318199712, 0.0480370318199712,  \
-								  0.0469489888489122, 0.0469489888489122,  0.0457343797161145, 0.0457343797161145,  \
-								  0.0443964787957871, 0.0443964787957871,  0.0429388928359356, 0.0429388928359356,  \
-								  0.0413655512355848, 0.0413655512355848,  0.0396806954523808, 0.0396806954523808,  \
-								  0.0378888675692434, 0.0378888675692434,  0.0359948980510845, 0.0359948980510845,  \
-								  0.0340038927249464, 0.0340038927249464,  0.0319212190192963, 0.0319212190192963,  \
-								  0.0297524915007889, 0.0297524915007889,  0.0275035567499248, 0.0275035567499248,  \
-								  0.0251804776215212, 0.0251804776215212,  0.0227895169439978, 0.0227895169439978,  \
-								  0.0203371207294573, 0.0203371207294573,  0.0178299010142077, 0.0178299010142077,  \
-								  0.0152746185967848, 0.0152746185967848,  0.0126781664768160, 0.0126781664768160,  \
-								  0.0100475571822880, 0.0100475571822880,  0.0073899311633455, 0.0073899311633455,  \
-								  0.0047127299269536, 0.0047127299269536,  0.0020268119688738, 0.0020268119688738 } }
 
 
 /* Quadrature rule for equilateral tetrahedron based upon Shunn, L. and Ham, F.
@@ -274,49 +151,12 @@ static double The_hypocenter_deep = 0;
 								       	   	   {0, 1, 0, 1}   }
 
 
-#define TETRADER tetraDer[15][4] =   { {   -1,     0,    1,    0}, \
-								       {   -1,     1,    0,    0}, \
-								       {   -1,     0,    0,    1}, \
-								       {    1,     0,   -1,    0}, \
-								       {    1,    -1,    0,    0}, \
-								       {   -1,     0,    0,    1}, \
-								       {   -1,     0,    1,    0}, \
-								       {    1,    -1,    0,    0}, \
-								       {    1,     0,    0,   -1}, \
-								       {    1,     0,   -1,    0}, \
-								       {   -1,     1,    0,    0}, \
-								       {    1,     0,    0,   -1}, \
-								       { -0.5,  -0.5,  0.5,  0.5}, \
-								       {  0.5,  -0.5,  0.5, -0.5}, \
-								       { -0.5,   0.5,  0.5, -0.5}, }
-
-#define TETRADERSYMM tetraDerSymm[15][4] =   { {   -1,     0,    1,    0}, \
-								               {    0,     1,   -1,    0}, \
-								               {    0,     0,   -1,    1}, \
-								               {    0,    -1,    1,    0}, \
-								               {   -1,     1,    0,    0}, \
-								               {    0,    -1,    0,    1}, \
-								               {   -1,     1,    0,    0}, \
-								               {   -1,     0,    1,    0}, \
-								               {    1,     0,    0,   -1}, \
-								               {   -1,     0,    1,    0}, \
-								               {    0,    -1,    1,    0}, \
-								               {    0,     0,    1,   -1}, \
-								               { -0.5,  -0.5,  0.5,  0.5}, \
-								               { -0.5,   0.5,  0.5, -0.5}, \
-								               { -0.5,   0.5, -0.5,  0.5}, }
-
-
 /* -------------------------------------------------------------------------- */
 /*                            Basic Functions                                 */
 /* -------------------------------------------------------------------------- */
 
 double get_thebase_topo() {
     return thebase_zcoord;
-}
-
-int8_t topo_maxLevel() {
-    return theMaxoctlevel;
 }
 
 //returns YES if the element is air element ( Vp = -1 ), or if it composes the topography surface.
@@ -429,43 +269,6 @@ double point_to_plane( double xp, double yp, double zp, double xo, double yo, do
 
 }
 
-/* returns the zp coordinate of a point inside a plane using linear interp   */
-double interp_z( double xp, double yp, double xo, double yo, double h, double zcoords[4] )
-{
-	double x1, y1, mag;
-	vector3D_t V1, V2, V3, V4, N;
-
-	V1.x[0] = h;
-	V1.x[1] = 0;
-	V1.x[2] = zcoords[3] - zcoords[0];
-
-	V2.x[0] = 0;
-	V2.x[1] = h;
-	V2.x[2] = zcoords[1] - zcoords[0];
-
-	V3.x[0] = h;
-	V3.x[1] = h;
-	V3.x[2] = zcoords[2] - zcoords[0];
-
-	x1 = xp - xo;
-	y1 = yp - yo;
-
-	if ( x1 / y1 > 1) {
-		cross_product ( V3, V1,  &V4);
-	}
-	else
-	{
-		cross_product ( V2, V3,  &V4);
-	}
-
-	mag     = magnitude(V4);
-	N.x[0]  = V4.x[0] / mag;
-	N.x[1]  = V4.x[1] / mag;
-	N.x[2]  = V4.x[2] / mag;
-
-	return zcoords[0] - ( N.x[0] * x1 + N.x[1] * y1) / N.x[2];
-
-}
 
 /* returns the elevation value of a point with plane coordinates (xo,yo).
  * Elevation is measured with respect to Hercules' Z global axis  */
@@ -505,31 +308,6 @@ double point_elevation ( double xo, double yo ) {
 
 	return zp;
 
-//	int i, j;
-//	double xp, yp, x_o, y_o, remi, remj, mesh_cz[4], zp;
-//
-//	xp = xo;
-//	yp = yo;
-//
-//	remi = modf (xp  / So, &x_o );
-//	remj = modf (yp  / So, &y_o );
-//
-//	i = x_o;
-//	j = y_o;
-//
-//	if ( ( remi == 0 ) && ( remj == 0) )
-//		zp = ( thebase_zcoord - theTopoInfo [ np_ew * i + j ] );
-//	else {
-//		mesh_cz[0] =  theTopoInfo [ np_ew * i + j ];
-//		mesh_cz[1] =  theTopoInfo [ np_ew * i + j + 1 ];
-//		mesh_cz[2] =  theTopoInfo [ np_ew * ( i + 1 ) + j + 1 ];
-//		mesh_cz[3] =  theTopoInfo [ np_ew * ( i + 1 ) + j ];
-//
-//		zp = thebase_zcoord - interp_z( xp, yp, x_o*So, y_o*So, So, mesh_cz );
-//	}
-//
-//	return zp;
-
 }
 
 
@@ -548,52 +326,12 @@ double point_PlaneDist ( double xp, double yp, double zp ) {
 	remi = modf (xp  / sep, &x_o );
 	remj = modf (yp  / sep, &y_o );
 
-//	crn1x =  xp - sep;
-//	crn2x =  xp + sep;
-//
-//	crn1y =  yp - sep;
-//	crn2y =  yp + sep;
-//
-//	if ( crn1x < 0 )
-//		crn1x = 0;
-//
-//	if ( crn1x > theDomainLong_ns )
-//		crn1x = theDomainLong_ns;
-//
-//	if ( crn1y < 0 )
-//		crn1y = 0;
-//
-//	if ( crn1y > theDomainLong_ew )
-//		crn1y = theDomainLong_ew ;
-
-
 	mesh_cz[0] =  thebase_zcoord - point_elevation (   x_o * sep      ,   y_o * sep );
 	mesh_cz[1] =  thebase_zcoord - point_elevation (   x_o * sep      , ( y_o + 1 ) * sep );
 	mesh_cz[2] =  thebase_zcoord - point_elevation ( ( x_o +1 ) * sep , ( y_o + 1 ) * sep );
 	mesh_cz[3] =  thebase_zcoord - point_elevation ( ( x_o +1 ) * sep ,   y_o * sep );
 
 	return	point_to_plane( xp, yp, zp, x_o * sep, y_o * sep, sep, mesh_cz );
-
-
-
-//	return point_elevation(xp,yp) - zp;
-//	int i, j;
-//	double x_o, y_o, remi, remj, mesh_cz[4];
-//
-//	zp = thebase_zcoord - zp; /* sea level elevation  */
-//
-//	remi = modf (xp  / So, &x_o );
-//	remj = modf (yp  / So, &y_o );
-//
-//	i = x_o;
-//	j = y_o;
-//
-//	mesh_cz[0] =  theTopoInfo [ np_ew * i + j ];
-//	mesh_cz[1] =  theTopoInfo [ np_ew * i + j + 1 ];
-//	mesh_cz[2] =  theTopoInfo [ np_ew * ( i + 1 ) + j + 1 ];
-//	mesh_cz[3] =  theTopoInfo [ np_ew * ( i + 1 ) + j ];
-//
-//	return	point_to_plane( xp, yp, zp, x_o*So, y_o*So, So, mesh_cz );
 
 }
 
@@ -654,7 +392,6 @@ int find_topoAirOct( tick_t xTick, tick_t yTick, tick_t zTick,  double  ticksize
     return 0;
 
 }
-
 
 
 /**
@@ -773,7 +510,7 @@ void topo_searchII ( octant_t *leaf, double ticksize, edata_t *edata, int *to_to
 
 
 /* Returns the real volume held by the Tetrahedral elements */
-void TetraHVol ( double xo, double yo, double zo, double esize, double So,
+void TetraHVol ( double xo, double yo, double zo, double esize,
 		         double VolTetr[5]) {
 
 	int i, j, m;
@@ -875,43 +612,6 @@ void TetraHVol ( double xo, double yo, double zo, double esize, double So,
 
 		}
 
-//		for ( i = 0; i < NGp; ++i ) {
-//			lx  = gplob40[0][i];
-//			qpx = gplob40[1][i];
-//
-//			for ( j = 0; j < NGp; ++j ) {
-//				ly  = gplob40[0][j];
-//				qpy = gplob40[1][j];
-//
-//				for ( k = 0; k < NGp; ++k ) {
-//					lz  = gplob40[0][k];
-//					qpz = gplob40[1][k];
-//
-//					/* Map cube into tetrahedron of side 2 */
-//	                r = ( 1 + lx ) * ( 1 - lz ) * ( 1 - ly ) / 4;
-//	                s = ( 1 + ly ) * ( 1 - lz ) / 2;
-//	                t = lz + 1;
-//
-//	                /* Map tetrahedron of side 2 into tetrahedron of size 1 */
-//	                eta = s / 2;
-//	                psi = r / 2;
-//	                gam = t / 2;
-//
-//	                /* get real coord of Gauss point */
-//	                xm = ( 1 - eta - psi - gam ) * MCx[m][0] + psi * MCx[m][1] + eta * MCx[m][2] + gam * MCx[m][3];
-//	                ym = ( 1 - eta - psi - gam ) * MCy[m][0] + psi * MCy[m][1] + eta * MCy[m][2] + gam * MCy[m][3];
-//	                zm = ( 1 - eta - psi - gam ) * MCz[m][0] + psi * MCz[m][1] + eta * MCz[m][2] + gam * MCz[m][3];
-//
-//					zt = point_elevation ( xm, ym );
-//
-//					if ( zm >= zt ) {
-//						Vpr +=  ( 1 - lz ) * ( 1 - lz ) * ( 1 - ly ) * qpx * qpy * qpz / 8;
-//					}
-//				}
-//			}
-//		}
-
-//		VolTetr[m] = 3.0 / 4.0 * Vpr; /* percentage of the tetrahedron's volume filled by topography  */
 		VolTetr[m] = Vpr; /* percentage of the tetrahedron's volume filled by topography  */
 
 	} /* for each tetrahedra */
@@ -1148,53 +848,7 @@ layer_prop( double east_m, double north_m, double depth_m, cvmpayload_t* payload
 			return 0;
 		}
 
-	 /* ======================== */
-	/*  ======================== */
-
-	/* compute limits to layers   */
-	/* external relief  */
-/*	z0 = Pelev;
-
-	 first layer
-	ratio = ( Del1 + H + Del3_FL ) / H ;
-	z1 = thebase_zcoord * ( 1 - ratio ) + ratio * Pelev + Del1;
-
-	 second layer
-	ratio = ( Del2 + H + Del3_SL ) / H ;
-	z2 = thebase_zcoord * ( 1 - ratio ) + ratio * Pelev + Del2;
-
-
-	double emin = ( (tick_t)1 << (PIXELLEVEL - theMaxoctlevel) ) * ticksize;
-
-
-	 Point in first layer
-	if ( ( depth_m >= z0  ) && ( depth_m < z1 ) ) {
-
-		payload->Vp = emin * theFact * theVpHS / theVsHS;
-		payload->Vs = emin * theFact;
-		payload->rho = therhoHS;
-
-		return 0;
-	}
-
-	 Point in second layer
-	if ( ( ( depth_m >= z0  ) && ( depth_m > z1 ) && ( depth_m < z2 ) ) ||
-		 ( ( depth_m >= z0  ) && ( z0 > z1 ) && ( depth_m < z2 ) )	) {
-
-		payload->Vp = emin * theFact * theVpHS / theVsHS;
-		payload->Vs = emin * theFact;
-		payload->rho = therhoHS;
-
-		return 0;
-	}*/
- /* ======================== */
-/*  ======================== */
-
-
-
 	/* Point in Half-space */
-
-
 		payload->Vp = theVpHS;
 		payload->Vs = theVsHS;
 		payload->rho = therhoHS;
@@ -1240,14 +894,7 @@ layer_Correctprop( double east_m, double north_m, double depth_m, cvmpayload_t* 
 
 	/* air */
 	if ( ( depth_m < z0  ) ) {
-
-
-//		payload->Vp = -1.0 ;
-//		payload->Vs =  0;
-//		payload->rho = 0;
 		return -1;
-
-
 	}
 
 	/* Point in first layer */
@@ -1271,18 +918,12 @@ layer_Correctprop( double east_m, double north_m, double depth_m, cvmpayload_t* 
 		return 0;
 	}
 
-	/* Point in Half-space */
-//	if ( ( depth_m >= z0  ) && ( depth_m > z2 ) && ( depth_m < z2 ) ){
-
 		payload->Vp = theVpHS;
 		payload->Vs = theVsHS;
 		payload->rho = therhoHS;
 
 		return 0;
-//	}
 
-
-//	return -1;
 
 }
 
@@ -1304,20 +945,9 @@ topography_initparameters ( const char *parametersin )
     /* =========================================== */
     /* read point source coordinates  */
     /* =========================================== */
-
-//    FILE* fparea, *fpstrike, *fpdip, *fprake, *fpslip, *fpcoords,
-//	*fpslipfun;
-
     FILE *fsource;
 
     char source_dir[256], source_file[256];
-//    char coordsin[256], areain[256], strikein[256], dipin[256], rakein[256];
-
-  //  size_t src_dir_len = sizeof(source_dir);
-  //  size_t sdo_len     = 0;
- //   char* src_dir_p    = source_dir;
- //   char*  theSourceOutputDir = NULL;
- //   source_type_t  theTypeOfSource;
     double hypocenter_lat_deg=0, hypocenter_long_deg=0, hypocenter_depth_m=0;
 
     /* =========================================== */
@@ -1648,6 +1278,7 @@ void topography_elements_count(int32_t myID, mesh_t *myMesh ) {
         edata_t    *edata;
         node_t     *node0dat;
         double      Vp, xo, yo, zo, esize, Vol;
+    	double      aux_vol[5] = { 0 };
         int32_t	    node0;
 
         elemp    = &myMesh->elemTable[eindex]; //Takes the information of the "eindex" element
@@ -1666,17 +1297,21 @@ void topography_elements_count(int32_t myID, mesh_t *myMesh ) {
         /* get element size */
 		esize = edata->edgesize;
 		Vol   = esize * esize *esize;
-
-		if ( ( Vp != -1 ) ) {
-			if ( ( topo_crossings ( xo, yo, zo, esize ) == 1 ) && (
-				 ( xo != 0.0 ) &&
-			     ( xo + esize != theDomainLong_ns ) &&
-			     ( yo != 0.0 ) &&
-			     ( yo + esize != theDomainLong_ew ) ) ) {
+		
+		if ( ( Vp != -1 ) && ( topo_crossings ( xo, yo, zo, esize ) == 1 )  && (
+				( xo != 0.0 ) &&
+				( xo + esize != theDomainLong_ns ) &&
+				( yo != 0.0 ) &&
+				( yo + esize != theDomainLong_ew ) ) ) {
+			/* Check for enclosed volume   */
+			TetraHVol ( xo, yo, zo, esize, aux_vol );
+			if ( ( aux_vol[0]==0 ) && ( aux_vol[1]==0 ) && ( aux_vol[2]==0 ) && ( aux_vol[3]==0 ) && ( aux_vol[4]==0 ) )  /* small enclosed volume */
+				get_airprops_topo( edata );  /* consider the element as an  air element */
+			else
 				count++;
 			}
-		}
     }
+    		
 
     if ( count > myMesh-> lenum ) {
         fprintf(stderr,"Thread %d: topography_elements_count: "
@@ -1723,9 +1358,8 @@ void topography_elements_mapping(int32_t myID, mesh_t *myMesh) {
 		esize = edata->edgesize;
 		Vol   = esize * esize *esize;
 
-		if ( ( Vp != -1 ) ) {
-			if ( ( topo_crossings ( xo, yo, zo, esize ) == 1 ) &&
-			     ( ( xo != 0.0 ) &&
+    	if ( ( Vp != -1 ) && ( topo_crossings ( xo, yo, zo, esize ) == 1 ) && (
+				 ( xo != 0.0 ) &&
 			       ( xo + esize != theDomainLong_ns ) &&
 			       ( yo != 0.0 ) &&
 			       ( yo + esize != theDomainLong_ew ) ) ) {
@@ -1733,7 +1367,6 @@ void topography_elements_mapping(int32_t myID, mesh_t *myMesh) {
 				count++;
 			}
 		}
-	}
 
 	if ( count != myTopoElementsCount ) {
 		fprintf(stderr,"Thread %d: topography_elements_mapping: "
@@ -1796,11 +1429,6 @@ void topo_solver_init(int32_t myID, mesh_t *myMesh) {
         node0    = elemp->lnid[0];             //Takes the ID for the zero node in element eindex
         node0dat = &myMesh->nodeTable[node0];
 
-        double po=90;
-
-        if ( topo_eindex == 5694 )
-             po=9090;
-
         /* get coordinates of element zero node */
 		xo = (node0dat->x)*(myMesh->ticksize);
 		yo = (node0dat->y)*(myMesh->ticksize);
@@ -1816,9 +1444,9 @@ void topo_solver_init(int32_t myID, mesh_t *myMesh) {
         ecp->rho    = edata->rho;
         ecp->h      = esize;
 
-        /* get Tetrahedra volumes using 10 points Gauss integation */
+        /* get Tetrahedra volumes using Shunn and Ham quadrature rule */
         if ( theTopoMethod == VT )
-        	TetraHVol ( xo, yo, zo, esize, So, ecp->tetraVol );
+        	TetraHVol ( xo, yo, zo, esize, ecp->tetraVol );
 
     } /* for all elements */
 
@@ -1871,10 +1499,6 @@ void compute_addforce_topoEffective ( mesh_t     *myMesh,
 	            int32_t    lnid = elemp->lnid[i];
 	            fvector_t* tm1Disp = mySolver->tm1 + lnid;
 	            fvector_t* tm2Disp = mySolver->tm2 + lnid;
-
-//	            curDisp[i].f[0] = tm1Disp->f[0];
-//	            curDisp[i].f[1] = tm1Disp->f[1];
-//	            curDisp[i].f[2] = tm1Disp->f[2];
 
 	            /* Rayleigh damping is considered simultaneously   */
 	            curDisp[i].f[0] = tm1Disp->f[0] * ( 1.0 + b_over_dt ) - b_over_dt * tm2Disp->f[0];
@@ -2229,621 +1853,6 @@ void TetraForces( fvector_t* un, fvector_t* resVec, double tetraVol[5], edata_t 
 }
 
 /* -------------------------------------------------------------------------- */
-/* TODO: DISCARD DRM FUNCTIONS. THEY ARE JUST MEANT FOR A QUICK CHECKING      */
-/* -------------------------------------------------------------------------- */
-
-double Ricker_displ ( double zp, double Ts, double t, double fc, double Vs  ) {
-
-	double alfa1 = ( PI * fc ) * ( PI * fc ) * ( t - zp / Vs - Ts) * ( t - zp / Vs - Ts);
-	double alfa2 = ( PI * fc ) * ( PI * fc ) * ( t + zp / Vs - Ts) * ( t + zp / Vs - Ts);
-
-	double uo1 = ( 2.0 * alfa1 - 1.0 ) * exp(-alfa1);
-	double uo2 = ( 2.0 * alfa2 - 1.0 ) * exp(-alfa2);
-
-	return (uo1+uo2);
-}
-
-double Ricker_Accel ( double zp, double Ts, double t, double fc, double Vs  ) {
-
-	double alfa1 = ( PI * fc ) * ( PI * fc ) * ( t - zp / Vs - Ts) * ( t - zp / Vs - Ts);
-	double alfa2 = ( PI * fc ) * ( PI * fc ) * ( t + zp / Vs - Ts) * ( t + zp / Vs - Ts);
-
-	double ao1 = ( 3 - 2 * alfa1 ) * exp(-alfa1);
-	       ao1 = ao1 + 2 * alfa1 * ( 2 * alfa1 - 5 ) * exp(-alfa1);
-
-	double ao2 = ( 3 - 2 * alfa2 ) * exp(-alfa2);
-	       ao2 = ao2 + 2 * alfa2 * ( 2 * alfa2 - 5 ) * exp(-alfa2);
-
-	return 2 * ( PI * fc ) * ( PI * fc ) * ( ao1 + ao2 );
-}
-
-void getRicker ( fvector_t *myDisp, double zp, double t, double Vs ) {
-
-	double Rz = Ricker_displ ( zp, myTs, t, myFc, Vs  );
-
-	if ( myDir == 0 ) {
-		myDisp->f[0] = Rz;
-		myDisp->f[1] = 0.0;
-		myDisp->f[2] = 0.0;
-	} else if ( myDir == 1 ) {
-		myDisp->f[0] = 0.0;
-		myDisp->f[1] = Rz;
-		myDisp->f[2] = 0.0;
-	} else {
-		myDisp->f[0] = 0.0;
-		myDisp->f[1] = 0.0;
-		myDisp->f[2] = Rz;
-	}
-
-}
-
-void DRM_ForcesinElement ( mesh_t     *myMesh,
-		mysolver_t *mySolver,
-		fmatrix_t (*theK1)[8], fmatrix_t (*theK2)[8],
-		int *f_nodes, int *e_nodes, int32_t   eindex, double tt, int Nnodes_e, int Nnodes_f )
-{
-
-    int       i, j;
-    int  CoordArr[8]      = { 0, 0, 0, 0, 1, 1, 1, 1 };
-
-
-	fvector_t localForce[8];
-
-	elem_t        *elemp;
-	edata_t       *edata;
-	node_t        *node0dat;
-	double        xo, yo, zo;
-	int32_t	      node0;
-	e_t*          ep;
-
-	/* Capture the table of elements from the mesh and the size
-	 * This is what gives me the connectivity to nodes */
-	elemp        = &myMesh->elemTable[eindex];
-	edata        = (edata_t *)elemp->data;
-	node0        = elemp->lnid[0];
-	node0dat     = &myMesh->nodeTable[node0];
-	ep           = &mySolver->eTable[eindex];
-
-	/* get coordinates of element zero node */
-	xo = (node0dat->x)*(myMesh->ticksize);
-	yo = (node0dat->y)*(myMesh->ticksize);
-	zo = (node0dat->z)*(myMesh->ticksize) - thebase_zcoord;
-
-
-	/* get material properties  */
-	double  h, Vs;
-	h    = (double)edata->edgesize;
-
-	if ( ( myDir == 0 ) || ( myDir == 1 ) )
-		Vs = edata->Vs;
-	else
-		Vs = edata->Vp;
-
-
-	/* Force contribution from external nodes */
-	/* -------------------------------
-	 * Ku DONE IN THE CONVENTIONAL WAY
-	 * ------------------------------- */
-	memset( localForce, 0, 8 * sizeof(fvector_t) );
-
-	fvector_t myDisp;
-	/* forces over f nodes */
-	for (i = 0; i < Nnodes_f; i++) {
-
-		int  nodef = *(f_nodes + i);
-		fvector_t* toForce = &localForce[ nodef ];
-
-		/* incoming displacements over e nodes */
-		for (j = 0; j < Nnodes_e; j++) {
-
-			int  nodee = *(e_nodes + j);
-
-			double z_ne = zo + h * CoordArr[ nodee ];   /* get zcoord */
-			getRicker ( &myDisp, z_ne, tt, Vs ); /* get Displ */
-
-			MultAddMatVec( &theK1[ nodef ][ nodee ], &myDisp, -ep->c1, toForce );
-			MultAddMatVec( &theK2[ nodef ][ nodee ], &myDisp, -ep->c2, toForce );
-		}
-	}
-
-	/* forces over e nodes */
-	for (i = 0; i < Nnodes_e; i++) {
-
-		int  nodee = *(e_nodes + i);
-		fvector_t* toForce = &localForce[ nodee ];
-
-		/* incoming displacements over f nodes */
-		for (j = 0; j < Nnodes_f; j++) {
-
-			int  nodef = *(f_nodes + j);
-
-			double z_nf = zo + h * CoordArr[ nodef ];   /* get zcoord */
-			getRicker ( &myDisp, z_nf, tt, Vs ); /* get Displ */
-
-			MultAddMatVec( &theK1[ nodee ][ nodef ], &myDisp, ep->c1, toForce );
-			MultAddMatVec( &theK2[ nodee ][ nodef ], &myDisp, ep->c2, toForce );
-		}
-	}
-	/* end Ku */
-
-	/* Loop over the 8 element nodes:
-	 * Add the contribution calculated above to the node
-	 * forces carried from the source and stiffness.
-	 */
-	for (i = 0; i < 8; i++) {
-
-		int32_t    lnid;
-		fvector_t *nodalForce;
-
-		lnid = elemp->lnid[i];
-
-		nodalForce = mySolver->force + lnid;
-
-		nodalForce->f[0] += localForce[i].f[0] ;
-		nodalForce->f[1] += localForce[i].f[1] ;
-		nodalForce->f[2] += localForce[i].f[2] ;
-
-	} /* element nodes */
-
-}
-
-void compute_addforce_topoDRM ( mesh_t     *myMesh,
-                                mysolver_t *mySolver,
-                                double      theDeltaT,
-                                int         step,
-                                fmatrix_t (*theK1)[8], fmatrix_t (*theK2)[8])
-{
-
-    int32_t   eindex;
-    int32_t   face_eindex;
-
-    int  f_nodes_face1[4] = { 0, 1, 4, 5 };
-    int  e_nodes_face1[4] = { 2, 3, 6, 7 };
-
-    int  f_nodes_face2[4] = { 2, 3, 6, 7 };
-    int  e_nodes_face2[4] = { 0, 1, 4, 5 };
-
-    int  f_nodes_face3[4] = { 1, 3, 5, 7 };
-    int  e_nodes_face3[4] = { 0, 2, 4, 6 };
-
-    int  f_nodes_face4[4] = { 0, 2, 4, 6 };
-    int  e_nodes_face4[4] = { 1, 3, 5, 7 };
-
-    int  f_nodes_bottom[4] = { 0, 1, 2, 3 };
-    int  e_nodes_bottom[4] = { 4, 5, 6, 7 };
-
-    int  f_nodes_border1[2] = { 1, 5 };
-    int  e_nodes_border1[6] = { 0, 2, 3, 4, 6, 7 };
-
-    int  f_nodes_border2[2] = { 0, 4 };
-    int  e_nodes_border2[6] = { 1, 2, 3, 5, 6, 7 };
-
-    int  f_nodes_border3[2] = { 3, 7 };
-    int  e_nodes_border3[6] = { 0, 1, 2, 4, 5, 6 };
-
-    int  f_nodes_border4[2] = { 2, 6 };
-    int  e_nodes_border4[6] = { 0, 1, 3, 4, 5, 7 };
-
-    int  f_nodes_border5[2] = { 0, 1 };
-    int  e_nodes_border5[6] = { 2, 3, 4, 5, 6, 7 };
-
-    int  f_nodes_border6[2] = { 2, 3 };
-    int  e_nodes_border6[6] = { 0, 1, 4, 5, 6, 7 };
-
-    int  f_nodes_border7[2] = { 1, 3 };
-    int  e_nodes_border7[6] = { 0, 2, 4, 5, 6, 7 };
-
-    int  f_nodes_border8[2] = { 0, 2 };
-    int  e_nodes_border8[6] = { 1, 3, 4, 5, 6, 7 };
-
-    double tt = theDeltaT * step;
-    int  *f_nodes, *e_nodes;
-
-    /* Loop over face1 elements */
-    f_nodes = &f_nodes_face1[0];
-    e_nodes = &e_nodes_face1[0];
-    for ( face_eindex = 0; face_eindex < myDRM_Face1Count ; face_eindex++) {
-    	eindex = myDRMFace1ElementsMapping[face_eindex];
-    	DRM_ForcesinElement ( myMesh, mySolver, theK1, theK2, f_nodes, e_nodes, eindex, tt, 4, 4 );
-    } /* all elements in face 1*/
-
-    /* Loop over face2 elements */
-    f_nodes = &f_nodes_face2[0];
-    e_nodes = &e_nodes_face2[0];
-    for ( face_eindex = 0; face_eindex < myDRM_Face2Count ; face_eindex++) {
-    	eindex = myDRMFace2ElementsMapping[face_eindex];
-    	DRM_ForcesinElement ( myMesh, mySolver, theK1, theK2, f_nodes, e_nodes, eindex, tt, 4, 4 );
-    } /* all elements in face 2*/
-
-    /* Loop over face3 elements */
-    f_nodes = &f_nodes_face3[0];
-    e_nodes = &e_nodes_face3[0];
-    for ( face_eindex = 0; face_eindex < myDRM_Face3Count ; face_eindex++) {
-    	eindex = myDRMFace3ElementsMapping[face_eindex];
-    	DRM_ForcesinElement ( myMesh, mySolver, theK1, theK2, f_nodes, e_nodes, eindex, tt, 4, 4 );
-    } /* all elements in face 3*/
-
-    /* Loop over face4 elements */
-    f_nodes = &f_nodes_face4[0];
-    e_nodes = &e_nodes_face4[0];
-    for ( face_eindex = 0; face_eindex < myDRM_Face4Count ; face_eindex++) {
-    	eindex = myDRMFace4ElementsMapping[face_eindex];
-    	DRM_ForcesinElement ( myMesh, mySolver, theK1, theK2, f_nodes, e_nodes, eindex, tt, 4, 4 );
-    } /* all elements in face 4*/
-
-    /* Loop over bottom elements */
-    f_nodes = &f_nodes_bottom[0];
-    e_nodes = &e_nodes_bottom[0];
-    for ( face_eindex = 0; face_eindex < myDRM_BottomCount ; face_eindex++) {
-    	eindex = myDRMBottomElementsMapping[face_eindex];
-    	DRM_ForcesinElement ( myMesh, mySolver, theK1, theK2, f_nodes, e_nodes, eindex, tt, 4, 4 );
-    } /* all elements in bottom*/
-
-    /* Loop over border1 elements */
-    f_nodes = &f_nodes_border1[0];
-    e_nodes = &e_nodes_border1[0];
-    for ( face_eindex = 0; face_eindex < myDRM_Brd1 ; face_eindex++) {
-    	eindex = myDRMBorder1ElementsMapping[face_eindex];
-
-    	/* check for bottom element */
-    	elem_t        *elemp;
-    	int32_t	      node0;
-    	node_t        *node0dat;
-    	double        zo;
-
-    	elemp        = &myMesh->elemTable[eindex];
-    	node0        = elemp->lnid[0];
-    	node0dat     = &myMesh->nodeTable[node0];
-    	zo           = (node0dat->z)*(myMesh->ticksize);
-
-    	if ( zo != theDRMdepth + thebase_zcoord ) {
-    		DRM_ForcesinElement ( myMesh, mySolver, theK1, theK2, f_nodes, e_nodes, eindex, tt, 6, 2 );
-    	} else {
-    	    int  f_corner[1] = { 1 };
-    	    int  e_corner[7] = { 0, 2, 3, 4, 5, 6, 7 };
-    	    int  *fcorner_nodes, *ecorner_nodes;
-    	    fcorner_nodes = &f_corner[0];
-    	    ecorner_nodes = &e_corner[0];
-    	    DRM_ForcesinElement ( myMesh, mySolver, theK1, theK2, fcorner_nodes, ecorner_nodes, eindex, tt, 7, 1 );
-
-    	}
-    } /* all elements in border1*/
-
-    /* Loop over border2 elements */
-    f_nodes = &f_nodes_border2[0];
-    e_nodes = &e_nodes_border2[0];
-    for ( face_eindex = 0; face_eindex < myDRM_Brd2 ; face_eindex++) {
-    	eindex = myDRMBorder2ElementsMapping[face_eindex];
-
-    	/* check for bottom element */
-    	elem_t        *elemp;
-    	int32_t	      node0;
-    	node_t        *node0dat;
-    	double        zo;
-
-    	elemp        = &myMesh->elemTable[eindex];
-    	node0        = elemp->lnid[0];
-    	node0dat     = &myMesh->nodeTable[node0];
-    	zo           = (node0dat->z)*(myMesh->ticksize);
-
-    	if ( zo != theDRMdepth + thebase_zcoord ) {
-    		DRM_ForcesinElement ( myMesh, mySolver, theK1, theK2, f_nodes, e_nodes, eindex, tt, 6, 2 );
-    	} else {
-    	    int  f_corner[1] = { 0 };
-    	    int  e_corner[7] = { 1, 2, 3, 4, 5, 6, 7 };
-    	    int  *fcorner_nodes, *ecorner_nodes;
-    	    fcorner_nodes = &f_corner[0];
-    	    ecorner_nodes = &e_corner[0];
-    	    DRM_ForcesinElement ( myMesh, mySolver, theK1, theK2, fcorner_nodes, ecorner_nodes, eindex, tt, 7, 1 );
-
-    	}
-
-    } /* all elements in border2*/
-
-    /* Loop over border3 elements */
-    f_nodes = &f_nodes_border3[0];
-    e_nodes = &e_nodes_border3[0];
-    for ( face_eindex = 0; face_eindex < myDRM_Brd3 ; face_eindex++) {
-    	eindex = myDRMBorder3ElementsMapping[face_eindex];
-
-    	/* check for bottom element */
-    	elem_t        *elemp;
-    	int32_t	      node0;
-    	node_t        *node0dat;
-    	double        zo;
-
-    	elemp        = &myMesh->elemTable[eindex];
-    	node0        = elemp->lnid[0];
-    	node0dat     = &myMesh->nodeTable[node0];
-    	zo           = (node0dat->z)*(myMesh->ticksize);
-
-    	if ( zo != theDRMdepth + thebase_zcoord ) {
-    		DRM_ForcesinElement ( myMesh, mySolver, theK1, theK2, f_nodes, e_nodes, eindex, tt, 6, 2 );
-    	} else {
-    	    int  f_corner[1] = { 3 };
-    	    int  e_corner[7] = { 0, 1, 2, 4, 5, 6, 7 };
-    	    int  *fcorner_nodes, *ecorner_nodes;
-    	    fcorner_nodes = &f_corner[0];
-    	    ecorner_nodes = &e_corner[0];
-    	    DRM_ForcesinElement ( myMesh, mySolver, theK1, theK2, fcorner_nodes, ecorner_nodes, eindex, tt, 7, 1 );
-
-    	}
-    } /* all elements in border3*/
-
-    /* Loop over border4 elements */
-    f_nodes = &f_nodes_border4[0];
-    e_nodes = &e_nodes_border4[0];
-    for ( face_eindex = 0; face_eindex < myDRM_Brd4 ; face_eindex++) {
-    	eindex = myDRMBorder4ElementsMapping[face_eindex];
-
-    	/* check for bottom element */
-    	elem_t        *elemp;
-    	int32_t	      node0;
-    	node_t        *node0dat;
-    	double        zo;
-
-    	elemp        = &myMesh->elemTable[eindex];
-    	node0        = elemp->lnid[0];
-    	node0dat     = &myMesh->nodeTable[node0];
-    	zo           = (node0dat->z)*(myMesh->ticksize);
-
-    	if ( zo != theDRMdepth + thebase_zcoord ) {
-    		DRM_ForcesinElement ( myMesh, mySolver, theK1, theK2, f_nodes, e_nodes, eindex, tt, 6, 2 );
-    	} else {
-    	    int  f_corner[1] = { 3 };
-    	    int  e_corner[7] = { 0, 1, 2, 4, 5, 6, 7 };
-    	    int  *fcorner_nodes, *ecorner_nodes;
-    	    fcorner_nodes = &f_corner[0];
-    	    ecorner_nodes = &e_corner[0];
-    	    DRM_ForcesinElement ( myMesh, mySolver, theK1, theK2, fcorner_nodes, ecorner_nodes, eindex, tt, 7, 1 );
-
-    	}
-    } /* all elements in border4*/
-
-    /* Loop over border5 elements */
-    f_nodes = &f_nodes_border5[0];
-    e_nodes = &e_nodes_border5[0];
-    for ( face_eindex = 0; face_eindex < myDRM_Brd5 ; face_eindex++) {
-    	eindex = myDRMBorder5ElementsMapping[face_eindex];
-    	DRM_ForcesinElement ( myMesh, mySolver, theK1, theK2, f_nodes, e_nodes, eindex, tt, 6, 2 );
-    } /* all elements in border5*/
-
-    /* Loop over border6 elements */
-    f_nodes = &f_nodes_border6[0];
-    e_nodes = &e_nodes_border6[0];
-    for ( face_eindex = 0; face_eindex < myDRM_Brd6 ; face_eindex++) {
-    	eindex = myDRMBorder6ElementsMapping[face_eindex];
-    	DRM_ForcesinElement ( myMesh, mySolver, theK1, theK2, f_nodes, e_nodes, eindex, tt, 6, 2 );
-    } /* all elements in border6*/
-
-    /* Loop over border7 elements */
-    f_nodes = &f_nodes_border7[0];
-    e_nodes = &e_nodes_border7[0];
-    for ( face_eindex = 0; face_eindex < myDRM_Brd7 ; face_eindex++) {
-    	eindex = myDRMBorder7ElementsMapping[face_eindex];
-    	DRM_ForcesinElement ( myMesh, mySolver, theK1, theK2, f_nodes, e_nodes, eindex, tt, 6, 2 );
-    } /* all elements in border7*/
-
-    /* Loop over border8 elements */
-    f_nodes = &f_nodes_border8[0];
-    e_nodes = &e_nodes_border8[0];
-    for ( face_eindex = 0; face_eindex < myDRM_Brd8 ; face_eindex++) {
-    	eindex = myDRMBorder8ElementsMapping[face_eindex];
-    	DRM_ForcesinElement ( myMesh, mySolver, theK1, theK2, f_nodes, e_nodes, eindex, tt, 6, 2 );
-    } /* all elements in border7*/
-
-
-    return;
-}
-
-void topo_DRM_init( mesh_t *myMesh, mysolver_t *mySolver) {
-
-
-	int32_t halfFace_elem, theBorderElem;  /* half the number of elements in a box's face. Artificially defined by me */
-	int32_t theFaceElem, theBaseElem;
-
-	/* Data required by me before running the simmulation */
-	double hmin     = 15.625 ; /* 15.625 for the SanchezSeama Ridge
-	                              15.625 for the Gaussian Ridge */
-	halfFace_elem   = 60;     /* this defines B. See figure in manuscript.
-	                             halfFace_elem   = 15 for the SphericalRidge
-	                             halfFace_elem   = 60 for the GaussianRidge
-	                             halfFace_elem   = 60 for the SanSesma Ridge */
-
-	theBorderElem   = 5;     /* this defines the depth, See figure in manuscript  */
-	                         /* 5 for the gaussian ridge, 3 for the SanSesma ridge */
-	double theXc           = 1000;   /* domain center coordinates */
-	double theYc           = 1000;
-	double Ts              = 0.20;  /* 0.18 for the Gaussian Ridge. 0.2 for the SanSesma Ridge  */
-	double fc              = 10;  /* 10.26 for the Gaussian Ridge. 10 for the SanSesma Ridge  */
-	int    wave_dir        = 2;    /*  0:X, 1:Y, 2:Z */
-
-	/* --------  */
-	double DRM_D = theBorderElem * hmin;
-	double DRM_B = halfFace_elem * hmin;
-
-
-	theFaceElem = 2 * ( halfFace_elem + 0 ) * theBorderElem;
-	theBaseElem = 4 * halfFace_elem * halfFace_elem;
-	theDRMdepth = DRM_D;
-
-	myTopoDRMBorderElementsCount = theBorderElem;
-	myTopoDRMFaceElementsCount   = theFaceElem;
-	myTs                         = Ts;
-	myFc                         = fc;
-	myDir                        = wave_dir;
-
-
-	/*  mapping of face1 elements */
-	int32_t eindex;
-	int32_t countf1 = 0, countf2 = 0, countf3 = 0, countf4 = 0, countbott=0;
-	int32_t countb1 = 0, countb2 = 0, countb3 = 0, countb4 = 0;
-	int32_t countb5 = 0, countb6 = 0, countb7 = 0, countb8 = 0;
-
-	XMALLOC_VAR_N(myDRMFace1ElementsMapping, int32_t, theFaceElem);
-	XMALLOC_VAR_N(myDRMFace2ElementsMapping, int32_t, theFaceElem);
-	XMALLOC_VAR_N(myDRMFace3ElementsMapping, int32_t, theFaceElem);
-	XMALLOC_VAR_N(myDRMFace4ElementsMapping, int32_t, theFaceElem);
-	XMALLOC_VAR_N(myDRMBottomElementsMapping , int32_t, theBaseElem);
-
-	/* border elements*/
-	XMALLOC_VAR_N(myDRMBorder1ElementsMapping, int32_t, theBorderElem + 1);
-	XMALLOC_VAR_N(myDRMBorder2ElementsMapping, int32_t, theBorderElem + 1);
-	XMALLOC_VAR_N(myDRMBorder3ElementsMapping, int32_t, theBorderElem + 1);
-	XMALLOC_VAR_N(myDRMBorder4ElementsMapping, int32_t, theBorderElem + 1);
-
-	XMALLOC_VAR_N(myDRMBorder5ElementsMapping, int32_t, theFaceElem);
-	XMALLOC_VAR_N(myDRMBorder6ElementsMapping, int32_t, theFaceElem);
-	XMALLOC_VAR_N(myDRMBorder7ElementsMapping, int32_t, theFaceElem);
-	XMALLOC_VAR_N(myDRMBorder8ElementsMapping, int32_t, theFaceElem);
-
-	for (eindex = 0; eindex < myMesh->lenum; eindex++) {
-
-		elem_t     *elemp;
-		node_t     *node0dat;
-		edata_t    *edata;
-		double      xo, yo, zo;
-		int32_t	    node0;
-
-		elemp    = &myMesh->elemTable[eindex]; //Takes the information of the "eindex" element
-		node0    = elemp->lnid[0];             //Takes the ID for the zero node in element eindex
-		node0dat = &myMesh->nodeTable[node0];
-		edata    = (edata_t *)elemp->data;
-
-		/* get coordinates of element zero node */
-		xo = (node0dat->x)*(myMesh->ticksize);
-		yo = (node0dat->y)*(myMesh->ticksize);
-		zo = (node0dat->z)*(myMesh->ticksize);
-
-
-		if ( ( ( yo - theYc ) == DRM_B ) &&                            /*face 1*/
-				( xo >= ( theXc - DRM_B ) ) &&
-				( xo <  ( theXc + DRM_B ) ) &&
-				( zo <  DRM_D + thebase_zcoord ) &&
-				( zo >=  thebase_zcoord ) ) {
-
-			myDRMFace1ElementsMapping[countf1] = eindex;
-			countf1++;
-		} else 	if ( ( ( theYc - ( yo + hmin ) ) == DRM_B ) &&        /* face 2*/
-				( xo >= ( theXc - DRM_B ) ) &&
-				( xo <  ( theXc + DRM_B ) ) &&
-				( zo <  DRM_D + thebase_zcoord ) &&
-				( zo >=  thebase_zcoord ) ) {
-
-			myDRMFace2ElementsMapping[countf2] = eindex;
-			countf2++;
-
-		} else 	if ( ( ( theXc - ( xo + hmin ) ) == DRM_B ) &&      /*face 3*/
-				( yo >= ( theYc - DRM_B ) ) &&
-				( yo <  ( theYc + DRM_B ) ) &&
-				( zo <  DRM_D + thebase_zcoord ) &&
-				( zo >=  thebase_zcoord ) ) {
-
-			myDRMFace3ElementsMapping[countf3] = eindex;
-			countf3++;
-
-		} else 	if ( ( ( xo - theXc ) == DRM_B ) &&             /* face 4*/
-				( yo >= ( theYc - DRM_B ) ) &&
-				( yo <  ( theYc + DRM_B ) ) &&
-				( zo <  DRM_D + thebase_zcoord ) &&
-				( zo >=  thebase_zcoord ) ) {
-
-			myDRMFace4ElementsMapping[countf4] = eindex;
-			countf4++;
-
-		} else 	if ( ( yo >= ( theYc - DRM_B ) ) &&         /*bottom*/
-				( yo <  ( theYc + DRM_B ) ) &&
-				( xo >= ( theXc - DRM_B ) ) &&
-				( xo <  ( theXc + DRM_B ) ) &&
-				( zo ==  DRM_D + thebase_zcoord )          ) {
-
-			myDRMBottomElementsMapping[countbott] = eindex;
-			countbott++;
-
-		} else 	if ( ( ( yo - theYc ) == DRM_B ) &&      /*border 1*/
-				( ( xo + hmin ) == ( theXc - DRM_B ) ) &&
-				( zo <=  DRM_D + thebase_zcoord ) &&
-				( zo >=  thebase_zcoord ) ) {
-
-			myDRMBorder1ElementsMapping[countb1] = eindex;
-			countb1++;
-
-		} else if ( ( ( yo - theYc ) == DRM_B  ) &&      /*border 2*/
-				( xo  == ( theXc + DRM_B ) ) &&
-				( zo <=  DRM_D + thebase_zcoord ) &&
-				( zo >=  thebase_zcoord ) ) {
-
-			myDRMBorder2ElementsMapping[countb2] = eindex;
-			countb2++;
-
-		} else if ( ( ( theYc - ( yo + hmin ) ) == DRM_B ) &&  /* border 3*/
-				( ( xo + hmin)  == ( theXc - DRM_B ) ) &&
-				( zo <=  DRM_D + thebase_zcoord ) &&
-				( zo >=  thebase_zcoord ) ) {
-
-			myDRMBorder3ElementsMapping[countb3] = eindex;
-			countb3++;
-
-		} else if ( ( ( theYc - ( yo + hmin ) ) == DRM_B ) &&  /* border 4*/
-				(  xo  == ( theXc + DRM_B ) ) &&
-				( zo <=  DRM_D + thebase_zcoord ) &&
-				( zo >=  thebase_zcoord ) ) {
-
-			myDRMBorder4ElementsMapping[countb4] = eindex;
-			countb4++;
-
-		} else 	if ( ( ( yo - theYc ) == DRM_B ) &&            /* border 5*/
-				( xo >= ( theXc - DRM_B ) ) &&
-				( xo <  ( theXc + DRM_B ) ) &&
-				( zo ==  DRM_D + thebase_zcoord )          ) {
-
-			myDRMBorder5ElementsMapping[countb5] = eindex;
-			countb5++;
-
-		} else if ( ( ( theYc - ( yo + hmin ) ) == DRM_B ) &&          /* border 6*/
-				( xo >= ( theXc - DRM_B ) ) &&
-				( xo <  ( theXc + DRM_B ) ) &&
-				( zo ==  DRM_D + thebase_zcoord )          ) {
-
-			myDRMBorder6ElementsMapping[countb6] = eindex;
-			countb6++;
-
-		} else if ( ( ( theXc - ( xo + hmin ) ) == DRM_B ) &&      /* border 7*/
-				( yo >= ( theYc - DRM_B ) ) &&
-				( yo <  ( theYc + DRM_B ) ) &&
-				( zo ==  DRM_D + thebase_zcoord )          ) {
-
-			myDRMBorder7ElementsMapping[countb7] = eindex;
-			countb7++;
-
-		} else if ( ( ( xo - theXc ) == DRM_B ) &&             /* border 8*/
-				( yo >= ( theYc - DRM_B ) ) &&
-				( yo <  ( theYc + DRM_B ) ) &&
-				( zo ==  DRM_D + thebase_zcoord )          ) {
-
-			myDRMBorder8ElementsMapping[countb8] = eindex;
-			countb8++;
-		}
-	}
-
-
-	myDRM_Face1Count  = countf1;
-	myDRM_Face2Count  = countf2;
-	myDRM_Face3Count  = countf3;
-	myDRM_Face4Count  = countf4;
-	myDRM_BottomCount = countbott;
-	myDRM_Brd1        = countb1;
-	myDRM_Brd2        = countb2;
-	myDRM_Brd3        = countb3;
-	myDRM_Brd4        = countb4;
-	myDRM_Brd5        = countb5;
-	myDRM_Brd6        = countb6;
-	myDRM_Brd7        = countb7;
-	myDRM_Brd8        = countb8;
-
-}
-
-/* -------------------------------------------------------------------------- */
 /*                        Topography Output to Stations                       */
 /* -------------------------------------------------------------------------- */
 
@@ -2930,10 +1939,7 @@ void topography_stations_init( mesh_t    *myMesh,
                 topoconstants_t  *ecp;
                 ecp    = myTopoSolver->topoconstants + topo_eindex;
 
-                myTopoStations[iStation].lambda = ecp->lambda;
-                myTopoStations[iStation].mu     = ecp->mu;
-
-                compute_tetra_localcoord ( point, elemp,myTopoStations[iStation].Der,
+                compute_tetra_localcoord ( point, elemp,
                 		                   myTopoStations[iStation].nodes_to_interpolate,
                 		                   myTopoStations[iStation].local_coord,
                 		                   xo, yo, zo, ecp->h );
@@ -2952,14 +1958,19 @@ void topography_stations_init( mesh_t    *myMesh,
 
 }
 
-void compute_tetra_localcoord ( vector3D_t point, elem_t *elemp, fvector_t *Der,
+void compute_tetra_localcoord ( vector3D_t point, elem_t *elemp,
 		                        int32_t *localNode, double *localCoord,
 		                        double xo, double yo, double zo, double h )
 {
 
 	int i;
 	double eta, psi, gamma;
-	double xp1, yp1, zp1;
+	double xp1, yp1, zp1, tol=-1.0e-5;
+
+//	double po;
+//
+//	if ( point.x[0]==42900.000000 && point.x[1]==49100.000000 && point.x[2]==3700.000000)
+//		po=98;
 
 
 	if ( ( ( xo <  theDomainLong_ns / 2.0  ) && ( yo <  theDomainLong_ew / 2.0 ) ) ||
@@ -2980,8 +1991,8 @@ void compute_tetra_localcoord ( vector3D_t point, elem_t *elemp, fvector_t *Der,
 				psi   = yp1 / h;
 				gamma = zp1 / h;
 
-				if ( ( ( 1.0 - eta - psi - gamma ) >=  0 ) &&
-					   ( 1.0 - eta - psi - gamma ) <=  1.0 ) {
+				if ( ( ( 1.0 - eta - psi - gamma ) >=  tol ) &&
+					 ( ( 1.0 - eta - psi - gamma ) <=  1.0 - tol ) && ( eta >= 0 ) && ( psi >= 0 ) && ( gamma >= 0) ) {
 
 					*localCoord       = eta;
 					*(localCoord + 1) = psi;
@@ -2991,22 +2002,6 @@ void compute_tetra_localcoord ( vector3D_t point, elem_t *elemp, fvector_t *Der,
 					*(localNode + 1)  = elemp->lnid[ 2 ];
 					*(localNode + 2)  = elemp->lnid[ 1 ];
 					*(localNode + 3)  = elemp->lnid[ 4 ];
-
-					Der[0].f[0] = -1.0 / h;
-					Der[0].f[1] = -1.0 / h;
-					Der[0].f[2] = -1.0 / h;
-
-					Der[1].f[0] =  0.0;
-					Der[1].f[1] =  1.0 / h;
-					Der[1].f[2] =  0.0;
-
-					Der[2].f[0] =  1.0 / h;
-					Der[2].f[1] =  0.0;
-					Der[2].f[2] =  0.0;
-
-					Der[3].f[0] =  0.0;
-					Der[3].f[1] =  0.0;
-					Der[3].f[2] =  1.0 / h;
 
 					return;
 				}
@@ -3022,8 +2017,8 @@ void compute_tetra_localcoord ( vector3D_t point, elem_t *elemp, fvector_t *Der,
 				psi   = -yp1 / h;
 				gamma =  zp1 / h;
 
-				if ( ( ( 1.0 - eta - psi - gamma ) >=  0 ) &&
-					   ( 1.0 - eta - psi - gamma ) <=  1.0 ) {
+				if ( ( ( 1.0 - eta - psi - gamma ) >=  tol ) &&
+					 ( ( 1.0 - eta - psi - gamma ) <=  1.0 - tol ) && ( eta >= 0 ) && ( psi >= 0 ) && ( gamma >= 0) ) {
 
 					*localCoord       = eta;
 					*(localCoord + 1) = psi;
@@ -3033,22 +2028,6 @@ void compute_tetra_localcoord ( vector3D_t point, elem_t *elemp, fvector_t *Der,
 					*(localNode + 1)  = elemp->lnid[ 1 ];
 					*(localNode + 2)  = elemp->lnid[ 2 ];
 					*(localNode + 3)  = elemp->lnid[ 7 ];
-
-					Der[0].f[0] =  1.0 / h;
-					Der[0].f[1] =  1.0 / h;
-					Der[0].f[2] = -1.0 / h;
-
-					Der[1].f[0] =  0.0;
-					Der[1].f[1] = -1.0 / h;
-					Der[1].f[2] =  0.0;
-
-					Der[2].f[0] = -1.0 / h;
-					Der[2].f[1] =  0.0;
-					Der[2].f[2] =  0.0;
-
-					Der[3].f[0] =  0.0;
-					Der[3].f[1] =  0.0;
-					Der[3].f[2] =  1.0 / h;
 
 					return;
 				}
@@ -3064,8 +2043,8 @@ void compute_tetra_localcoord ( vector3D_t point, elem_t *elemp, fvector_t *Der,
 				psi   = -yp1 / h;
 				gamma = -zp1 / h;
 
-				if ( ( ( 1.0 - eta - psi - gamma ) >=  0 ) &&
-					   ( 1.0 - eta - psi - gamma ) <=  1.0 ) {
+				if ( ( ( 1.0 - eta - psi - gamma ) >=  tol ) &&
+					 ( ( 1.0 - eta - psi - gamma ) <=  1.0 - tol ) && ( eta >= 0 ) && ( psi >= 0 ) && ( gamma >= 0) ) {
 
 					*localCoord       = eta;
 					*(localCoord + 1) = psi;
@@ -3075,23 +2054,6 @@ void compute_tetra_localcoord ( vector3D_t point, elem_t *elemp, fvector_t *Der,
 					*(localNode + 1)  = elemp->lnid[ 4 ];
 					*(localNode + 2)  = elemp->lnid[ 7 ];
 					*(localNode + 3)  = elemp->lnid[ 2 ];
-
-					Der[0].f[0] = -1.0 / h;
-					Der[0].f[1] =  1.0 / h;
-					Der[0].f[2] =  1.0 / h;
-
-					Der[1].f[0] =  0.0;
-					Der[1].f[1] = -1.0 / h;
-					Der[1].f[2] =  0.0;
-
-					Der[2].f[0] =  1.0 / h;
-					Der[2].f[1] =  0.0;
-					Der[2].f[2] =  0.0;
-
-					Der[3].f[0] =  0.0;
-					Der[3].f[1] =  0.0;
-					Der[3].f[2] = -1.0 / h;
-
 
 					return;
 				}
@@ -3107,8 +2069,8 @@ void compute_tetra_localcoord ( vector3D_t point, elem_t *elemp, fvector_t *Der,
 				psi   =  yp1 / h;
 				gamma = -zp1 / h;
 
-				if ( ( ( 1.0 - eta - psi - gamma ) >=  0 ) &&
-					   ( 1.0 - eta - psi - gamma ) <=  1.0 ) {
+				if ( ( ( 1.0 - eta - psi - gamma ) >=  tol ) &&
+					 ( ( 1.0 - eta - psi - gamma ) <=  1.0 - tol ) && ( eta >= 0 ) && ( psi >= 0 ) && ( gamma >= 0) ) {
 
 					*localCoord       = eta;
 					*(localCoord + 1) = psi;
@@ -3118,22 +2080,6 @@ void compute_tetra_localcoord ( vector3D_t point, elem_t *elemp, fvector_t *Der,
 					*(localNode + 1)  = elemp->lnid[ 7 ];
 					*(localNode + 2)  = elemp->lnid[ 4 ];
 					*(localNode + 3)  = elemp->lnid[ 1 ];
-
-					Der[0].f[0] =  1.0 / h;
-					Der[0].f[1] = -1.0 / h;
-					Der[0].f[2] =  1.0 / h;
-
-					Der[1].f[0] =  0.0;
-					Der[1].f[1] =  1.0 / h;
-					Der[1].f[2] =  0.0;
-
-					Der[2].f[0] = -1.0 / h;
-					Der[2].f[1] =  0.0;
-					Der[2].f[2] =  0.0;
-
-					Der[3].f[0] =  0.0;
-					Der[3].f[1] =  0.0;
-					Der[3].f[2] = -1.0 / h;
 
 					return;
 				}
@@ -3149,8 +2095,8 @@ void compute_tetra_localcoord ( vector3D_t point, elem_t *elemp, fvector_t *Der,
 				psi   = ( -xp1 - yp1 + zp1 ) / ( 2.0 * h );
 				gamma = (  xp1 - yp1 - zp1 ) / ( 2.0 * h );
 
-				if ( ( ( 1.0 - eta - psi - gamma ) >=  0 ) &&
-					   ( 1.0 - eta - psi - gamma ) <=  1.0 ) {
+				if ( ( ( 1.0 - eta - psi - gamma ) >=  tol ) &&
+					 ( ( 1.0 - eta - psi - gamma ) <=  1.0 - tol ) && ( eta >= 0 ) && ( psi >= 0 ) && ( gamma >= 0) ) {
 
 					*localCoord       = eta;
 					*(localCoord + 1) = psi;
@@ -3160,22 +2106,6 @@ void compute_tetra_localcoord ( vector3D_t point, elem_t *elemp, fvector_t *Der,
 					*(localNode + 1)  = elemp->lnid[ 4 ];
 					*(localNode + 2)  = elemp->lnid[ 7 ];
 					*(localNode + 3)  = elemp->lnid[ 1 ];
-
-					Der[0].f[0] = -1.0 / ( 2 * h );
-					Der[0].f[1] =  1.0 / ( 2 * h );
-					Der[0].f[2] = -1.0 / ( 2 * h );
-
-					Der[1].f[0] = -1.0 / ( 2 * h );
-					Der[1].f[1] = -1.0 / ( 2 * h );
-					Der[1].f[2] =  1.0 / ( 2 * h );
-
-					Der[2].f[0] =  1.0 / ( 2 * h );
-					Der[2].f[1] =  1.0 / ( 2 * h );
-					Der[2].f[2] =  1.0 / ( 2 * h );
-
-					Der[3].f[0] =  1.0 / ( 2 * h );
-					Der[3].f[1] = -1.0 / ( 2 * h );
-					Der[3].f[2] = -1.0 / ( 2 * h );
 
 					return;
 				}
@@ -3201,8 +2131,8 @@ void compute_tetra_localcoord ( vector3D_t point, elem_t *elemp, fvector_t *Der,
 				psi   = yp1 / h;
 				gamma = zp1 / h;
 
-				if ( ( ( 1.0 - eta - psi - gamma ) >=  0 ) &&
-					   ( 1.0 - eta - psi - gamma ) <=  1.0 ) {
+				if ( ( ( 1.0 - eta - psi - gamma ) >=  tol ) &&
+					 ( ( 1.0 - eta - psi - gamma ) <=  1.0 - tol ) && ( eta >= 0 ) && ( psi >= 0 ) && ( gamma >= 0) ) {
 
 					*localCoord       = eta;
 					*(localCoord + 1) = psi;
@@ -3212,22 +2142,6 @@ void compute_tetra_localcoord ( vector3D_t point, elem_t *elemp, fvector_t *Der,
 					*(localNode + 1)  = elemp->lnid[ 3 ];
 					*(localNode + 2)  = elemp->lnid[ 1 ];
 					*(localNode + 3)  = elemp->lnid[ 5 ];
-
-					Der[0].f[0] = -1.0 / h;
-					Der[0].f[1] =  0.0;
-					Der[0].f[2] =  0.0;
-
-					Der[1].f[0] =  0.0;
-					Der[1].f[1] =  1.0 / h;
-					Der[1].f[2] =  0.0;
-
-					Der[2].f[0] =  1.0 / h;
-					Der[2].f[1] = -1.0 / h;
-					Der[2].f[2] = -1.0 / h;
-
-					Der[3].f[0] =  0.0;
-					Der[3].f[1] =  0.0;
-					Der[3].f[2] =  1.0 / h;
 
 					return;
 				}
@@ -3243,8 +2157,8 @@ void compute_tetra_localcoord ( vector3D_t point, elem_t *elemp, fvector_t *Der,
 				psi   = ( -xp1 + yp1 - zp1 ) / h;
 				gamma =  zp1 / h;
 
-				if ( ( ( 1.0 - eta - psi - gamma ) >=  0 ) &&
-					   ( 1.0 - eta - psi - gamma ) <=  1.0 ) {
+				if ( ( ( 1.0 - eta - psi - gamma ) >=  tol ) &&
+					 ( ( 1.0 - eta - psi - gamma ) <=  1.0 - tol ) && ( eta >= 0 ) && ( psi >= 0 ) && ( gamma >= 0) ) {
 
 					*localCoord       = eta;
 					*(localCoord + 1) = psi;
@@ -3254,22 +2168,6 @@ void compute_tetra_localcoord ( vector3D_t point, elem_t *elemp, fvector_t *Der,
 					*(localNode + 1)  = elemp->lnid[ 2 ];
 					*(localNode + 2)  = elemp->lnid[ 3 ];
 					*(localNode + 3)  = elemp->lnid[ 6 ];
-
-					Der[0].f[0] =  0.0;
-					Der[0].f[1] = -1.0 / h;;
-					Der[0].f[2] =  0.0;
-
-					Der[1].f[0] = -1.0 / h;
-					Der[1].f[1] =  1.0 / h;
-					Der[1].f[2] = -1.0 / h;
-
-					Der[2].f[0] =  1.0 / h;
-					Der[2].f[1] =  0.0;
-					Der[2].f[2] =  0.0;
-
-					Der[3].f[0] =  0.0;
-					Der[3].f[1] =  0.0;
-					Der[3].f[2] =  1.0 / h;
 
 					return;
 				}
@@ -3285,8 +2183,8 @@ void compute_tetra_localcoord ( vector3D_t point, elem_t *elemp, fvector_t *Der,
 				psi   =  xp1 / h;
 				gamma = -zp1 / h;
 
-				if ( ( ( 1.0 - eta - psi - gamma ) >=  0 ) &&
-					   ( 1.0 - eta - psi - gamma ) <=  1.0 ) {
+				if ( ( ( 1.0 - eta - psi - gamma ) >=  tol ) &&
+					 ( ( 1.0 - eta - psi - gamma ) <=  1.0 - tol ) && ( eta >= 0 ) && ( psi >= 0 ) && ( gamma >= 0) ) {
 
 					*localCoord       = eta;
 					*(localCoord + 1) = psi;
@@ -3296,22 +2194,6 @@ void compute_tetra_localcoord ( vector3D_t point, elem_t *elemp, fvector_t *Der,
 					*(localNode + 1)  = elemp->lnid[ 5 ];
 					*(localNode + 2)  = elemp->lnid[ 6 ];
 					*(localNode + 3)  = elemp->lnid[ 0 ];
-
-					Der[0].f[0] = -1.0 / h;
-					Der[0].f[1] = -1.0 / h;
-					Der[0].f[2] =  1.0 / h;
-
-					Der[1].f[0] =  1.0 / h;
-					Der[1].f[1] =  0.0;
-					Der[1].f[2] =  0.0;
-
-					Der[2].f[0] =  0.0;
-					Der[2].f[1] =  1.0 / h;;
-					Der[2].f[2] =  0.0;
-
-					Der[3].f[0] =  0.0;
-					Der[3].f[1] =  0.0;
-					Der[3].f[2] = -1.0 / h;
 
 					return;
 				}
@@ -3327,8 +2209,8 @@ void compute_tetra_localcoord ( vector3D_t point, elem_t *elemp, fvector_t *Der,
 				psi   =  -yp1 / h;
 				gamma =  -zp1 / h;
 
-				if ( ( ( 1.0 - eta - psi - gamma ) >=  0 ) &&
-					   ( 1.0 - eta - psi - gamma ) <=  1.0 ) {
+				if ( ( ( 1.0 - eta - psi - gamma ) >=  tol ) &&
+					 ( ( 1.0 - eta - psi - gamma ) <=  1.0 - tol ) && ( eta >= 0 ) && ( psi >= 0 ) && ( gamma >= 0) ) {
 
 					*localCoord       = eta;
 					*(localCoord + 1) = psi;
@@ -3338,22 +2220,6 @@ void compute_tetra_localcoord ( vector3D_t point, elem_t *elemp, fvector_t *Der,
 					*(localNode + 1)  = elemp->lnid[ 5 ];
 					*(localNode + 2)  = elemp->lnid[ 7 ];
 					*(localNode + 3)  = elemp->lnid[ 3 ];
-
-					Der[0].f[0] = -1.0 / h;
-					Der[0].f[1] =  0.0;
-					Der[0].f[2] =  0.0;
-
-					Der[1].f[0] =  0.0;
-					Der[1].f[1] = -1.0 / h;
-					Der[1].f[2] =  0.0;
-
-					Der[2].f[0] =  1.0 / h;
-					Der[2].f[1] =  1.0 / h;
-					Der[2].f[2] =  1.0 / h;
-
-					Der[3].f[0] =  0.0;
-					Der[3].f[1] =  0.0;
-					Der[3].f[2] = -1.0 / h;
 
 					return;
 				}
@@ -3369,8 +2235,8 @@ void compute_tetra_localcoord ( vector3D_t point, elem_t *elemp, fvector_t *Der,
 				psi   = ( -xp1 + yp1 + zp1 ) / ( 2.0 * h );
 				gamma = (  xp1 - yp1 + zp1 ) / ( 2.0 * h );
 
-				if ( ( ( 1.0 - eta - psi - gamma ) >=  0 ) &&
-					   ( 1.0 - eta - psi - gamma ) <=  1.0 ) {
+				if ( ( ( 1.0 - eta - psi - gamma ) >=  tol ) &&
+					 ( ( 1.0 - eta - psi - gamma ) <=  1.0 - tol ) && ( eta >= 0 ) && ( psi >= 0 ) && ( gamma >= 0) ) {
 
 					*localCoord       = eta;
 					*(localCoord + 1) = psi;
@@ -3380,22 +2246,6 @@ void compute_tetra_localcoord ( vector3D_t point, elem_t *elemp, fvector_t *Der,
 					*(localNode + 1)  = elemp->lnid[ 6 ];
 					*(localNode + 2)  = elemp->lnid[ 3 ];
 					*(localNode + 3)  = elemp->lnid[ 5 ];
-
-					Der[0].f[0] = -1.0 / ( 2 * h );
-					Der[0].f[1] = -1.0 / ( 2 * h );
-					Der[0].f[2] = -1.0 / ( 2 * h );
-
-					Der[1].f[0] = -1.0 / ( 2 * h );
-					Der[1].f[1] =  1.0 / ( 2 * h );
-					Der[1].f[2] =  1.0 / ( 2 * h );
-
-					Der[2].f[0] =  1.0 / ( 2 * h );
-					Der[2].f[1] =  1.0 / ( 2 * h );
-					Der[2].f[2] = -1.0 / ( 2 * h );
-
-					Der[3].f[0] =  1.0 / ( 2 * h );
-					Der[3].f[1] = -1.0 / ( 2 * h );
-					Der[3].f[2] =  1.0 / ( 2 * h );
 
 					return;
 
@@ -3420,31 +2270,6 @@ void compute_tetra_localcoord ( vector3D_t point, elem_t *elemp, fvector_t *Der,
 
 }
 
-/*
- * Compute strain tensor of a given point in the tetrahedron.
- */
-tensor_t tetra_strain (fvector_t *u, fvector_t *Der) {
-
-    int i;
-
-    tensor_t strain = init_tensor();
-
-    /* Contribution of each node */
-    for (i = 0; i < 4; i++) {
-
-        strain.xx += Der[i].f[0] * u[i].f[0];
-        strain.yy += Der[i].f[1] * u[i].f[1];
-        strain.zz += Der[i].f[2] * u[i].f[2];
-
-        strain.xy += 0.5 * ( Der[i].f[1] * u[i].f[0] + Der[i].f[0] * u[i].f[1] );
-        strain.xz += 0.5 * ( Der[i].f[2] * u[i].f[0] + Der[i].f[0] * u[i].f[2] );
-        strain.yz += 0.5 * ( Der[i].f[2] * u[i].f[1] + Der[i].f[1] * u[i].f[2] );
-
-
-    } /* nodes contribution */
-
-    return strain;
-}
 
 int compute_tetra_displ (double *dis_x, double *dis_y, double *dis_z,
 						 double *vel_x, double *vel_y, double *vel_z,
@@ -3521,47 +2346,7 @@ int compute_tetra_displ (double *dis_x, double *dis_y, double *dis_z,
 			          + myTopoStations[statID].local_coord[1] * uz_10
 			          + myTopoStations[statID].local_coord[2] * uz_30;
 
-
-		/*  compute tetrahedra strains  */
-		fvector_t      u[4];
-
-		u[0].f[0]  = mySolver->tm1[ myTopoStations[statID].nodes_to_interpolate[0] ].f[0];
-		u[0].f[1]  = mySolver->tm1[ myTopoStations[statID].nodes_to_interpolate[0] ].f[1];
-		u[0].f[2]  = mySolver->tm1[ myTopoStations[statID].nodes_to_interpolate[0] ].f[2];
-
-		u[1].f[0]  = mySolver->tm1[ myTopoStations[statID].nodes_to_interpolate[1] ].f[0];
-		u[1].f[1]  = mySolver->tm1[ myTopoStations[statID].nodes_to_interpolate[1] ].f[1];
-		u[1].f[2]  = mySolver->tm1[ myTopoStations[statID].nodes_to_interpolate[1] ].f[2];
-
-		u[2].f[0]  = mySolver->tm1[ myTopoStations[statID].nodes_to_interpolate[2] ].f[0];
-		u[2].f[1]  = mySolver->tm1[ myTopoStations[statID].nodes_to_interpolate[2] ].f[1];
-		u[2].f[2]  = mySolver->tm1[ myTopoStations[statID].nodes_to_interpolate[2] ].f[2];
-
-		u[3].f[0]  = mySolver->tm1[ myTopoStations[statID].nodes_to_interpolate[3] ].f[0];
-		u[3].f[1]  = mySolver->tm1[ myTopoStations[statID].nodes_to_interpolate[3] ].f[1];
-		u[3].f[2]  = mySolver->tm1[ myTopoStations[statID].nodes_to_interpolate[3] ].f[2];
-
-		tensor_t strain = tetra_strain (u, myTopoStations[statID].Der  );
-		tensor_t stress = point_stress ( strain, myTopoStations[statID].mu, myTopoStations[statID].lambda );
-
-
-		/* Here I am using the velocity and acceleration variables to print out the stress components
-		 * In the former velocity field I am printing out the traction vector.
-		 * In the acceleration field, I am printing out the off diagonal stresses    */
-
-		*vel_x = stress.xx;
-		*vel_y = stress.yy;
-		*vel_z = stress.zz;
-
-/*		*vel_x = stress.xx * myTopoStations[statID].normal[0] + stress.xy * myTopoStations[statID].normal[1] + stress.xz * myTopoStations[statID].normal[2];
-		*vel_y = stress.xy * myTopoStations[statID].normal[0] + stress.yy * myTopoStations[statID].normal[1] + stress.yz * myTopoStations[statID].normal[2];
-		*vel_z = stress.xz * myTopoStations[statID].normal[0] + stress.yz * myTopoStations[statID].normal[1] + stress.zz * myTopoStations[statID].normal[2];*/
-
-		*accel_x = stress.xy;
-		*accel_y = stress.xz;
-		*accel_z = stress.yz;
-
-/*		   get velocities
+		 /* get velocities */
 
 		*vel_x =    ( *dis_x
 				  - ( vx_0   + myTopoStations[statID].local_coord[0] * vx_20
@@ -3578,7 +2363,7 @@ int compute_tetra_displ (double *dis_x, double *dis_y, double *dis_z,
 			                 + myTopoStations[statID].local_coord[1] * vz_10
 			                 + myTopoStations[statID].local_coord[2] * vz_30 ) ) / theDeltaT;
 
-		 get accelerations
+		/* get accelerations */
 
 		*accel_x  = ( *dis_x
 				  - 2.0 * ( vx_0   + myTopoStations[statID].local_coord[0] * vx_20
@@ -3602,7 +2387,7 @@ int compute_tetra_displ (double *dis_x, double *dis_y, double *dis_z,
 			                       + myTopoStations[statID].local_coord[2] * vz_30 )
 				  +       ( wz_0   + myTopoStations[statID].local_coord[0] * wz_20
 								   + myTopoStations[statID].local_coord[1] * wz_10
-								   + myTopoStations[statID].local_coord[2] * wz_30 ) ) / theDeltaTSquared;*/
+								   + myTopoStations[statID].local_coord[2] * wz_30 ) ) / theDeltaTSquared;
 
 		return 1;
 
