@@ -88,6 +88,7 @@ int8_t    topo_maxLevel();
 int find_topoAirOct              ( tick_t xTick, tick_t yTick, tick_t zTick,  double  ticksize );
 int layer_prop                   ( double east_m, double north_m, double depth_m, cvmpayload_t* payload, double ticksize, double theFact );
 int layer_Correctprop                   ( double east_m, double north_m, double depth_m, cvmpayload_t* payload );
+topometh_t get_topo_meth() ;
 
 /* ERASE LATER THESE FUNCTIONS, ARE JUST FOR A QUICK CHECKING*/
 void topo_DRM_init ( mesh_t *myMesh, mysolver_t *mySolver);

@@ -1359,7 +1359,6 @@ setrec( octant_t* leaf, double ticksize, void* data )
     g_props_min.Vp  = NAN;
     g_props_min.rho = NAN;
 
-
     for ( i_x = 0; i_x < n_points; i_x++ ) {
 
 	x_m = (Global.theXForMeshOrigin
@@ -4149,7 +4148,6 @@ solver_compute_force_topography( mysolver_t *solver,
 {
     if ( Param.includeTopography == YES ) {
         Timer_Start( "Compute addforces Topography" );
-//        compute_addforce_topo( mesh, solver, deltaT2 );
         compute_addforce_topoEffective( mesh, solver, deltaT2 );
         Timer_Stop( "Compute addforces Topography" );
     }
@@ -4216,6 +4214,7 @@ solver_compute_displacement( mysolver_t* solver, mesh_t* mesh )
         fvector_t        nodalForce = solver->force[nindex];
         const fvector_t* tm1Disp    = solver->tm1 + nindex;
         fvector_t*       tm2Disp    = solver->tm2 + nindex;
+        fvector_t*       tm3Disp    = solver->tm3 + nindex;
 
         /* total nodal forces */
         nodalForce.f[0] += np->mass2_minusaM[0] * tm1Disp->f[0]
@@ -4237,6 +4236,15 @@ solver_compute_displacement( mysolver_t* solver, mesh_t* mesh )
         /* Dorian. correct Displacement */
          // TODO: Think of a better place for this
         if ( np->mass_simple != 0 ) {
+
+            /* Save tm3 for accelerations */
+            if ( Param.printStationAccelerations == YES ) {
+
+                tm3Disp->f[0] = tm2Disp->f[0];
+                tm3Disp->f[1] = tm2Disp->f[1];
+                tm3Disp->f[2] = tm2Disp->f[2];
+            }
+
         	tm2Disp->f[0] = nodalForce.f[0] / np->mass_simple;
         	tm2Disp->f[1] = nodalForce.f[1] / np->mass_simple;
         	tm2Disp->f[2] = nodalForce.f[2] / np->mass_simple;
@@ -4245,17 +4253,13 @@ solver_compute_displacement( mysolver_t* solver, mesh_t* mesh )
         	tm2Disp->f[0] = 0.0;
         	tm2Disp->f[1] = 0.0;
         	tm2Disp->f[2] = 0.0;
+
+            tm3Disp->f[0] = 0.0;
+            tm3Disp->f[1] = 0.0;
+            tm3Disp->f[2] = 0.0;
         }
 
-        /* Save tm3 for accelerations */
-        if ( Param.printStationAccelerations == YES ) {
 
-            fvector_t* tm3Disp = solver->tm3 + nindex;
-
-            tm3Disp->f[0] = tm2Disp->f[0];
-            tm3Disp->f[1] = tm2Disp->f[1];
-            tm3Disp->f[2] = tm2Disp->f[2];
-        }
 
 
     } /* for (nindex ...): all my harbored nodes */
@@ -4445,11 +4449,6 @@ static void solver_run()
         solver_compute_force_damping( Global.mySolver, Global.myMesh, Global.theK1, Global.theK2 );
         solver_compute_force_gravity( Global.mySolver, Global.myMesh, step );
         solver_compute_force_nonlinear( Global.mySolver, Global.myMesh, Param.theDeltaTSquared );
-
-        /* ------------------ */
-        /* TODO: erase this later*/
-        //compute_addforce_topoDRM ( Global.myMesh,Global.mySolver, Param.theDeltaT, step, Global.theK1, Global.theK2);
-        /*----------*/
 
         Timer_Stop( "Compute Physics" );
 
@@ -6602,7 +6601,40 @@ compute_csi_eta_dzeta( octant_t* octant, vector3D_t pointcoords,
     localcoords->x[1] =  2*(yGlobal- center_y)/h;
     localcoords->x[2] =  2*(zGlobal- center_z)/h;
 
+    /* redefine local coordinates and nodes to interpolate if VT is on */
+
+	//FILE  *topoinfo = hu_fopen( "topoElem.txt", "w" );
+
+	if ( ( Param.includeTopography == YES ) && ( BelongstoTopography ( Global.myMesh, eindex) )
+		 && (get_topo_meth() == VT ) && (Param.drmImplement == NO) ) {
+		elem_t  *elemp;
+		edata_t *edata;
+
+		elemp  = &Global.myMesh->elemTable[eindex];
+		edata = (edata_t *)elemp->data;
+
+		/* Calculate the element's origin */
+		double xo = Global.myMesh->ticksize * octant->lx;
+		double yo = Global.myMesh->ticksize * octant->ly;
+		double zo = Global.myMesh->ticksize * octant->lz;
+
+		double aux[3] = {0};
+
+		compute_tetra_localcoord ( pointcoords, elemp,
+				localNodeID, aux, xo, yo, zo, h );
+
+		localcoords->x[0] = aux[0];
+		localcoords->x[1] = aux[1];
+		localcoords->x[2] = aux[2];
+
+		*(localNodeID + 4)=0;
+		*(localNodeID + 5)=0;
+		*(localNodeID + 6)=0;
+		*(localNodeID + 7)=0;
+	}
+
     return 1;
+
 }
 
 
@@ -6764,10 +6796,6 @@ void setup_stations_data()
 	XMALLOC_VAR_N( Param.myStations, station_t, Param.myNumberOfStations );
     }
 
-    int32_t    eindex, lnid;
-    elem_t     *elemp;
-    edata_t    *edata;
-
     for (iStation = 0; iStation < Param.theNumberOfStations; iStation++) {
 	stationCoords.x[0] = Param.theStationX[iStation];
 	stationCoords.x[1] = Param.theStationY[iStation];
@@ -6775,28 +6803,6 @@ void setup_stations_data()
 
 	if (search_point( stationCoords, &octant ) == 1) {
 	    Param.myStations[iLCStation].id = iStation;
-
-	    /* Dorian says. I need this to compute the strain tensor at the station location */
-	    Param.myStations[iLCStation].h  = Global.myMesh->ticksize * ( (tick_t)1 << (PIXELLEVEL - octant->level) );
-	    for ( eindex = 0; eindex < Global.myMesh->lenum  ; eindex++ ) {
-	    	lnid = Global.myMesh->elemTable[eindex].lnid[0];
-
-            if ( (Global.myMesh->nodeTable[lnid].x == octant->lx) &&
-                 (Global.myMesh->nodeTable[lnid].y == octant->ly) &&
-                 (Global.myMesh->nodeTable[lnid].z == octant->lz) ) {
-
-            	 elemp  = &Global.myMesh->elemTable[eindex];
-            	 edata = (edata_t *)elemp->data;
-
-            	 double mu;
-            	 double lambda;
-
-            	 mu_and_lambda(&mu, &lambda,edata, eindex);
-            	 Param.myStations[iLCStation].mu = mu;
-            	 Param.myStations[iLCStation].lambda = lambda;
-            }
-	    }
-
 	    Param.myStations[iLCStation].coords=stationCoords;
 	    sprintf(stationFile, "%s/station.%d",Param.theStationsDirOut,iStation);
 	    Param.myStations[iLCStation].fpoutputfile = hu_fopen( stationFile,"w" );
@@ -6856,8 +6862,7 @@ void setup_stations_data()
 	                "    Epsilon_XY      Sigma_XY"
 	                "    Epsilon_YZ      Sigma_YZ"
 	                "    Epsilon_XZ      Sigma_XZ"
-	                "        lambda            Fs"
-	                "             k",
+	                "        Fs     ",
 	                Param.myStations[iLCStation].fpoutputfile );
 	    }
 
@@ -6944,8 +6949,6 @@ interpolate_station_displacements( int32_t step )
 
         } else {
 
-        fvector_t      u[8];
-
         for (iPhi = 0; iPhi < 8; iPhi++) {
             phi[ iPhi ] = ( 1 + xi[0][iPhi]*localCoords.x[0] )
 		                * ( 1 + xi[1][iPhi]*localCoords.x[1] )
@@ -6954,16 +6957,7 @@ interpolate_station_displacements( int32_t step )
             dis_x += phi[iPhi] * Global.mySolver->tm1[ nodesToInterpolate[iPhi] ].f[0];
             dis_y += phi[iPhi] * Global.mySolver->tm1[ nodesToInterpolate[iPhi] ].f[1];
             dis_z += phi[iPhi] * Global.mySolver->tm1[ nodesToInterpolate[iPhi] ].f[2];
-
-            /* compute strain values */
-            /* get nodes values */
-            u[iPhi].f[0] =  Global.mySolver->tm1[ nodesToInterpolate[iPhi] ].f[0];
-            u[iPhi].f[1] =  Global.mySolver->tm1[ nodesToInterpolate[iPhi] ].f[1];
-            u[iPhi].f[2] =  Global.mySolver->tm1[ nodesToInterpolate[iPhi] ].f[2];
         }
-
-        tensor_t strain = point_strain ( u, localCoords.x[0], localCoords.x[1], localCoords.x[2], Param.myStations[iStation].h );
-        tensor_t stress = point_stress ( strain, Param.myStations[iStation].mu, Param.myStations[iStation].lambda );
 
         /*
          * Please DO NOT CHANGE the format for printing the displacements.
@@ -6981,7 +6975,7 @@ interpolate_station_displacements( int32_t step )
         if ( ( Param.printStationVelocities    == YES ) ||
              ( Param.printStationAccelerations == YES ) ) {
 
-/*            for (iPhi = 0; iPhi < 8; iPhi++) {
+            for (iPhi = 0; iPhi < 8; iPhi++) {
 
                 phi[ iPhi ] = ( 1 + xi[0][iPhi]*localCoords.x[0] )
                                     * ( 1 + xi[1][iPhi]*localCoords.x[1] )
@@ -6990,15 +6984,11 @@ interpolate_station_displacements( int32_t step )
                 dis_x -= phi[iPhi] * Global.mySolver->tm2[ nodesToInterpolate[iPhi] ].f[0];
                 dis_y -= phi[iPhi] * Global.mySolver->tm2[ nodesToInterpolate[iPhi] ].f[1];
                 dis_z -= phi[iPhi] * Global.mySolver->tm2[ nodesToInterpolate[iPhi] ].f[2];
-            }*/
+            }
 
-/*            vel_x = dis_x / Param.theDeltaT;
+            vel_x = dis_x / Param.theDeltaT;
             vel_y = dis_y / Param.theDeltaT;
-            vel_z = dis_z / Param.theDeltaT;*/
-
-            vel_x = stress.xx;
-            vel_y = stress.yy;
-            vel_z = stress.zz;
+            vel_z = dis_z / Param.theDeltaT;
 
             fprintf( Param.myStations[iStation].fpoutputfile,
                      " % 8e % 8e % 8e", vel_x, vel_y, vel_z );
@@ -7010,7 +7000,7 @@ interpolate_station_displacements( int32_t step )
 
         if ( Param.printStationAccelerations == YES ) {
 
-/*            for (iPhi = 0; iPhi < 8; iPhi++) {
+            for (iPhi = 0; iPhi < 8; iPhi++) {
 
                 phi[ iPhi ] = ( 1 + xi[0][iPhi]*localCoords.x[0] )
                                             * ( 1 + xi[1][iPhi]*localCoords.x[1] )
@@ -7023,15 +7013,11 @@ interpolate_station_displacements( int32_t step )
                 dis_x += phi[iPhi] * Global.mySolver->tm3[ nodesToInterpolate[iPhi] ].f[0];
                 dis_y += phi[iPhi] * Global.mySolver->tm3[ nodesToInterpolate[iPhi] ].f[1];
                 dis_z += phi[iPhi] * Global.mySolver->tm3[ nodesToInterpolate[iPhi] ].f[2];
-            }*/
+            }
 
-/*            acc_x = dis_x / Param.theDeltaTSquared;
+            acc_x = dis_x / Param.theDeltaTSquared;
             acc_y = dis_y / Param.theDeltaTSquared;
-            acc_z = dis_z / Param.theDeltaTSquared;*/
-
-            acc_x = stress.xy;
-            acc_y = stress.xz;
-            acc_z = stress.yz;
+            acc_z = dis_z / Param.theDeltaTSquared;
 
             fprintf( Param.myStations[iStation].fpoutputfile,
                      " % 8e % 8e % 8e", acc_x, acc_y, acc_z );
@@ -7389,19 +7375,6 @@ mesh_correct_properties( etree_t* cvm )
         edata = (edata_t*)elemp->data;
         lnid0 = Global.myMesh->elemTable[eindex].lnid[0];
 
-
-//		double po=90, xoo, yoo, zoo;
-
-//		xoo=(Global.myMesh->ticksize) * (double)Global.myMesh->nodeTable[lnid0].x;
-//		yoo=(Global.myMesh->ticksize) * (double)Global.myMesh->nodeTable[lnid0].y;
-//		zoo=(Global.myMesh->ticksize) * (double)Global.myMesh->nodeTable[lnid0].z;
-
-
-//		if (yoo == 1218.75 && xoo == 1000 && zoo == 156.25 ) {
-//			po=9090;
-//		}
-
-
         if ( Param.includeTopography == YES ) {
             if( topo_correctproperties( edata ) ) {
                 continue;
@@ -7419,15 +7392,6 @@ mesh_correct_properties( etree_t* cvm )
         vs  = 0;
         rho = 0;
         cnt = 0;
-
-        double xx,yy,zz,po;
-
-    	xx = (Global.myMesh->ticksize) * (double)Global.myMesh->nodeTable[lnid0].x + Global.theXForMeshOrigin;
-    	yy = (Global.myMesh->ticksize) * (double)Global.myMesh->nodeTable[lnid0].y + Global.theYForMeshOrigin;
-    	zz = (Global.myMesh->ticksize) * (double)Global.myMesh->nodeTable[lnid0].z + Global.theZForMeshOrigin;
-
-    	if ( (xx==1000) && (yy==1164.0625) && (zz=121.09375) )
-    		po=90;
 
         for (iNorth = 0; iNorth < numPoints; iNorth++) {
 
@@ -7475,8 +7439,6 @@ mesh_correct_properties( etree_t* cvm )
             }
         }
 
-//        fprintf(stderr, "Queried  points: %ld \n",cnt);
-//        fprintf(stdout, "Element: %d, out of: %d, Processor: %d \n",eindex, Global.myMesh->lenum, Global.myID );
         if (cnt != 0 ) {
         	edata->Vp  =  vp / cnt;
         	edata->Vs  =  vs / cnt;
@@ -7762,7 +7724,6 @@ int main( int argc, char** argv )
         output_stations_init(Param.parameters_input_file);
     }
 
-
     /* Initialize topography solver analysis structures */
     /* must be before solver_init() for proper treatment of the nodal mass */
     if ( Param.includeTopography == YES ) {
@@ -7788,12 +7749,6 @@ int main( int argc, char** argv )
         }
         nonlinear_stats(Global.myID, Global.theGroupSize);
     }
-
-    if ( Param.includeTopography == YES ) {
-    	/*TODO: this is a test. Erase later. Dorian */
-    	//topo_DRM_init( Global.myMesh, Global.mySolver);
-    }
-
     
     Timer_Start("Source Init");
     source_init(Param.parameters_input_file);

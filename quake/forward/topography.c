@@ -199,6 +199,10 @@ etreetype_t get_theetree_type() {
     return theEtreeType;
 }
 
+topometh_t get_topo_meth() {
+    return theTopoMethod;
+}
+
 int topo_correctproperties ( edata_t *edata )
 {
     if ( edata->Vp < 0) {
