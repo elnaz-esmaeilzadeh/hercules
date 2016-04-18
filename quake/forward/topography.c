@@ -821,30 +821,30 @@ layer_prop( double east_m, double north_m, double depth_m, cvmpayload_t* payload
 		bb = abs(Del3_SL);
 
 	/* este es h1 para discretizacion en los tres estratos  */
-	//double h1 = H + Del2 - ( aa + bb );
+	double h1 = H + Del2 - ( aa + bb );
 
 	/* este es h1 para discretizacion SOLO en el primer estrato  */
-	double h1 = H + Del1 - ( aa );
+	//double h1 = H + Del1 - ( aa );
 
 
 	z0 = Pelev;
 
 	/* este es z1 para discretizacion en los tres estratos  */
-	//z1 = thebase_zcoord + (Del1 + Del2) - h1/H * (thebase_zcoord - Pelev);
+	z1 = thebase_zcoord + (Del1 + Del2) - h1/H * (thebase_zcoord - Pelev);
 
 	/* este es z1 para discretizacion SOLO en el primer estrato  */
-	z1 = thebase_zcoord + (Del1) - h1/H * (thebase_zcoord - Pelev);
+	//z1 = thebase_zcoord + (Del1) - h1/H * (thebase_zcoord - Pelev);
 
 
 	double emin = ( (tick_t)1 << (PIXELLEVEL - theMaxoctlevel) ) * ticksize;
-	double source_sph = (east_m - The_hypocenter_long_deg) * (east_m - The_hypocenter_long_deg) +
+/*	double source_sph = (east_m - The_hypocenter_long_deg) * (east_m - The_hypocenter_long_deg) +
 						(north_m - The_hypocenter_lat_deg) * (north_m - The_hypocenter_lat_deg) +
 						(depth_m - The_hypocenter_deep) * (depth_m - The_hypocenter_deep);
 
-	source_sph = sqrt (source_sph);
+	source_sph = sqrt (source_sph); */
 
-	if ( ( ( depth_m >= z0  ) && ( depth_m < z1 ) ) || ( source_sph < ( theVsHS / theFact / 1.0 ) * 2.0  )  ) {
-
+	//if ( ( ( depth_m >= z0  ) && ( depth_m < z1 ) ) || ( source_sph < ( theVsHS / theFact / 1.0 ) * 2.0  )  ) {
+	if  ( ( depth_m >= z0  ) && ( depth_m < z1 ) )  {
 			payload->Vp = emin * theFact * theVpHS / theVsHS;
 			payload->Vs = emin * theFact;
 			payload->rho = therhoHS;
@@ -958,49 +958,49 @@ topography_initparameters ( const char *parametersin )
     /* read domain and source path from physics.in */
     /* =========================================== */
 
-    FILE* fp11 = fopen( parametersin, "r" );
-
-    if ( ( parsetext(fp11, "source_directory",    's', &source_dir ) != 0 ) )
-    {
-        fprintf( stderr,
-                 "Error parsing source_directory in topography module from %s\n",
-                 parametersin );
-        return -1;
-    }
-
-    fclose(fp11);
-
-    /* read source info */
-	sprintf( source_file,"%s/source.in", source_dir );
-
-	if ( ( fsource   = fopen ( source_file ,   "r") ) == NULL ) {
-	    fprintf(stderr, "Error opening source file in topography module\n" );
-	    return -1;
-	}
-
-	if ( (parsetext(fsource,"lonlat_or_cartesian", 'i',&LonLatParam) != 0) ){
-	    fprintf(stderr,
-		    "Err lonlat_or_cartesian in source.in point source parameters\n");
-	    return -1;
-	}
-
-	if( LonLatParam == 1 )  {
-
-	    if ( (parsetext(fsource,"hypocenter_x",       'd',&hypocenter_lat_deg  ) != 0) ||
-		     (parsetext(fsource,"hypocenter_y",       'd',&hypocenter_long_deg ) != 0) ||
-		     (parsetext(fsource,"hypocenter_depth_m", 'd',&hypocenter_depth_m  ) != 0) ){
-	    		fprintf(stderr, "Err hypocenter x or y:read_point_source\n");
-	    		return -1; }
-	} else {
-	      fprintf(stderr, "Err point-source coordinates must be Cartesian\n");
-	      return -1; }
-
-	The_hypocenter_lat_deg = hypocenter_lat_deg;
-	The_hypocenter_long_deg = hypocenter_long_deg;
-	The_hypocenter_deep = hypocenter_depth_m ;
-
-
-    fclose(fsource);
+//    FILE* fp11 = fopen( parametersin, "r" );
+//
+//    if ( ( parsetext(fp11, "source_directory",    's', &source_dir ) != 0 ) )
+//    {
+//        fprintf( stderr,
+//                 "Error parsing source_directory in topography module from %s\n",
+//                 parametersin );
+//        return -1;
+//    }
+//
+//    fclose(fp11);
+//
+//    /* read source info */
+//	sprintf( source_file,"%s/source.in", source_dir );
+//
+//	if ( ( fsource   = fopen ( source_file ,   "r") ) == NULL ) {
+//	    fprintf(stderr, "Error opening source file in topography module\n" );
+//	    return -1;
+//	}
+//
+//	if ( (parsetext(fsource,"lonlat_or_cartesian", 'i',&LonLatParam) != 0) ){
+//	    fprintf(stderr,
+//		    "Err lonlat_or_cartesian in source.in point source parameters\n");
+//	    return -1;
+//	}
+//
+//	if( LonLatParam == 1 )  {
+//
+//	    if ( (parsetext(fsource,"hypocenter_x",       'd',&hypocenter_lat_deg  ) != 0) ||
+//		     (parsetext(fsource,"hypocenter_y",       'd',&hypocenter_long_deg ) != 0) ||
+//		     (parsetext(fsource,"hypocenter_depth_m", 'd',&hypocenter_depth_m  ) != 0) ){
+//	    		fprintf(stderr, "Err hypocenter x or y:read_point_source\n");
+//	    		return -1; }
+//	} else {
+//	      fprintf(stderr, "Err point-source coordinates must be Cartesian\n");
+//	      return -1; }
+//
+//	The_hypocenter_lat_deg = hypocenter_lat_deg;
+//	The_hypocenter_long_deg = hypocenter_long_deg;
+//	The_hypocenter_deep = hypocenter_depth_m ;
+//
+//
+//    fclose(fsource);
 
     /* ======================== */
     /* ======================== */
