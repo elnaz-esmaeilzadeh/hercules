@@ -296,7 +296,7 @@ double point_elevation ( double xo, double yo ) {
 
 		double den = S_teta / theBR * S_teta / theBR + C_teta * C_teta ;
 
-		r_ell = theLy * sqrt ( 1.0 / den  );
+		r_ell = theLy / 2.0 * sqrt ( 1.0 / den  );
 
 		if ( R > r_ell )
 			zp = thebase_zcoord;
@@ -1302,6 +1302,10 @@ void topography_elements_count(int32_t myID, mesh_t *myMesh ) {
 		esize = edata->edgesize;
 		Vol   = esize * esize *esize;
 		
+		double po=90;
+		if (eindex==483621 || eindex==276164 )
+			po=89;
+
 		if ( ( Vp != -1 ) && ( topo_crossings ( xo, yo, zo, esize ) == 1 )  && (
 				( xo != 0.0 ) &&
 				( xo + esize != theDomainLong_ns ) &&
