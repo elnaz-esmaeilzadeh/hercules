@@ -1313,7 +1313,7 @@ void topography_elements_count(int32_t myID, mesh_t *myMesh ) {
 				( yo + esize != theDomainLong_ew ) ) ) {
 			/* Check for enclosed volume   */
 			TetraHVol ( xo, yo, zo, esize, aux_vol );
-			if ( ( aux_vol[0]==0 ) && ( aux_vol[1]==0 ) && ( aux_vol[2]==0 ) && ( aux_vol[3]==0 ) && ( aux_vol[4]==0 ) )  /* small enclosed volume */
+			if ( ( aux_vol[0]==0 ) && ( aux_vol[1]==0 ) && ( aux_vol[2]==0 ) && ( aux_vol[3]==0 ) && ( aux_vol[4]==0 ) && (theTopoMethod==VT) )  /* small enclosed volume */
 				get_airprops_topo( edata );  /* consider the element as an  air element */
 			else
 				count++;
