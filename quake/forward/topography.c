@@ -1302,25 +1302,32 @@ void topography_elements_count(int32_t myID, mesh_t *myMesh ) {
 		esize = edata->edgesize;
 		Vol   = esize * esize *esize;
 		
-		double po=90;
-		if (eindex==483621 || eindex==276164 )
-			po=89;
-
 		if ( ( Vp != -1 ) && ( topo_crossings ( xo, yo, zo, esize ) == 1 )  && (
 				( xo != 0.0 ) &&
 				( xo + esize != theDomainLong_ns ) &&
 				( yo != 0.0 ) &&
 				( yo + esize != theDomainLong_ew ) ) ) {
 			/* Check for enclosed volume   */
-			TetraHVol ( xo, yo, zo, esize, aux_vol );
-			if ( ( aux_vol[0]==0 ) && ( aux_vol[1]==0 ) && ( aux_vol[2]==0 ) && ( aux_vol[3]==0 ) && ( aux_vol[4]==0 ) && (theTopoMethod==VT) )  /* small enclosed volume */
-				get_airprops_topo( edata );  /* consider the element as an  air element */
+			if (theTopoMethod == VT) {
+				TetraHVol ( xo, yo, zo, esize, aux_vol );
+				if ( ( aux_vol[0]==0 ) && ( aux_vol[1]==0 ) && ( aux_vol[2]==0 ) && ( aux_vol[3]==0 ) && ( aux_vol[4]==0 ) )  /* small enclosed volume */
+					get_airprops_topo( edata );  /* consider the element as an  air element */
+				else
+					count++;
+			} else
+				count++;
+	    }
+
+/*			TetraHVol ( xo, yo, zo, esize, aux_vol );
+			if ( ( aux_vol[0]==0 ) && ( aux_vol[1]==0 ) && ( aux_vol[2]==0 ) && ( aux_vol[3]==0 ) && ( aux_vol[4]==0 ) && (theTopoMethod==VT) )   small enclosed volume
+				get_airprops_topo( edata );   consider the element as an  air element
 			else
 				count++;
-			}
+			}*/
+
+
     }
     		
-
     if ( count > myMesh-> lenum ) {
         fprintf(stderr,"Thread %d: topography_elements_count: "
                 "more elements than expected\n", myID);
