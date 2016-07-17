@@ -42,21 +42,19 @@
 
 /* Permanent */
 static toposolver_t       *myTopoSolver;
-//static int                ntp, np_ew, np_ns;
 static int8_t             theMaxoctlevel;
-static double             thebase_zcoord = 0.0, So, theDomainLong_ew, theDomainLong_ns;
-//static double             *theTopoInfo;
+static double             thebase_zcoord = 0.0, theDomainLong_ew, theDomainLong_ns;
 static double             theLy,theBR, theHR, theFLR, theSLR,theFLRaiR,theSLRaiR,
-                          theVs1R, theVs2R, theVsHS, theVpHS, therhoHS;
+                          theVs1R, theVs2R, theVsHS, theVpHS, therhoHS, theRotation=0.0;
 static etreetype_t        theEtreeType;
 static int32_t            myTopoElementsCount = 0;
 static int32_t            *myTopoElementsMapping;
 static topometh_t         theTopoMethod;
 static topostation_t      *myTopoStations;
 
-static double The_hypocenter_lat_deg = 0;
+/*static double The_hypocenter_lat_deg = 0;
 static double The_hypocenter_long_deg = 0;
-static double The_hypocenter_deep = 0;
+static double The_hypocenter_deep = 0;*/
 
 
 /* Quadrature rule for equilateral tetrahedron based upon Shunn, L. and Ham, F.
@@ -279,10 +277,17 @@ double point_to_plane( double xp, double yp, double zp, double xo, double yo, do
 double point_elevation ( double xo, double yo ) {
 
 
-	double R, r_ell, C_teta, S_teta, Lx, psi, zp, delH;
+	double R, r_ell, C_teta, S_teta, Lx, psi, zp, delH, xo_rot, yo_rot;
 
 	xo = xo - theDomainLong_ns / 2;
 	yo = yo - theDomainLong_ew / 2;
+
+	/* Transform to rotated coordinates  */
+	xo_rot = cos(theRotation) * xo - sin(theRotation)* yo;
+	yo_rot = sin(theRotation) * xo + cos(theRotation)* yo;
+
+	xo = xo_rot;
+	yo = yo_rot;
 
 	Lx = theBR * theLy;
 	delH = theHR * theLy;
@@ -937,74 +942,14 @@ topography_initparameters ( const char *parametersin )
 {
 
     FILE        *fp;
-    int 		my_Maxoctlevel, LonLatParam;
+    int 		my_Maxoctlevel;
     char        my_etree_model[64], my_fem_meth[64];
     double      my_thebase_zcoord,my_L_ew, my_L_ns, my_theLy, my_theBR, my_theHR, my_theFLR,
     			my_theSLR, my_theFLRaiR, my_theSLRaiR, my_theVs1R, my_theVs2R,
-    			my_theVsHS,my_theVpHS,my_therhoHS;
+    			my_theVsHS,my_theVpHS,my_therhoHS, my_theRotation;
     etreetype_t         my_etreetype;
     topometh_t          my_topo_method;
 
-
-    /* =========================================== */
-    /* read point source coordinates  */
-    /* =========================================== */
-    FILE *fsource;
-
-    char source_dir[256], source_file[256];
-    double hypocenter_lat_deg=0, hypocenter_long_deg=0, hypocenter_depth_m=0;
-
-    /* =========================================== */
-    /* read domain and source path from physics.in */
-    /* =========================================== */
-
-//    FILE* fp11 = fopen( parametersin, "r" );
-//
-//    if ( ( parsetext(fp11, "source_directory",    's', &source_dir ) != 0 ) )
-//    {
-//        fprintf( stderr,
-//                 "Error parsing source_directory in topography module from %s\n",
-//                 parametersin );
-//        return -1;
-//    }
-//
-//    fclose(fp11);
-//
-//    /* read source info */
-//	sprintf( source_file,"%s/source.in", source_dir );
-//
-//	if ( ( fsource   = fopen ( source_file ,   "r") ) == NULL ) {
-//	    fprintf(stderr, "Error opening source file in topography module\n" );
-//	    return -1;
-//	}
-//
-//	if ( (parsetext(fsource,"lonlat_or_cartesian", 'i',&LonLatParam) != 0) ){
-//	    fprintf(stderr,
-//		    "Err lonlat_or_cartesian in source.in point source parameters\n");
-//	    return -1;
-//	}
-//
-//	if( LonLatParam == 1 )  {
-//
-//	    if ( (parsetext(fsource,"hypocenter_x",       'd',&hypocenter_lat_deg  ) != 0) ||
-//		     (parsetext(fsource,"hypocenter_y",       'd',&hypocenter_long_deg ) != 0) ||
-//		     (parsetext(fsource,"hypocenter_depth_m", 'd',&hypocenter_depth_m  ) != 0) ){
-//	    		fprintf(stderr, "Err hypocenter x or y:read_point_source\n");
-//	    		return -1; }
-//	} else {
-//	      fprintf(stderr, "Err point-source coordinates must be Cartesian\n");
-//	      return -1; }
-//
-//	The_hypocenter_lat_deg = hypocenter_lat_deg;
-//	The_hypocenter_long_deg = hypocenter_long_deg;
-//	The_hypocenter_deep = hypocenter_depth_m ;
-//
-//
-//    fclose(fsource);
-
-    /* ======================== */
-    /* ======================== */
-    /* ======================== */
 
     /* Opens parametersin file */
 
@@ -1034,6 +979,7 @@ topography_initparameters ( const char *parametersin )
          ( parsetext(fp, "Vs2_ratio",               'd', &my_theVs2R               ) != 0) ||
          ( parsetext(fp, "VsHs",                    'd', &my_theVsHS               ) != 0) ||
          ( parsetext(fp, "VpHs",                    'd', &my_theVpHS               ) != 0) ||
+         ( parsetext(fp, "Rotation",                'd', &my_theRotation           ) != 0) ||
          ( parsetext(fp, "rhoHs",                   'd', &my_therhoHS              ) != 0)  )
     {
         fprintf( stderr,
@@ -1108,6 +1054,7 @@ topography_initparameters ( const char *parametersin )
 	theVsHS				= my_theVsHS;
 	theVpHS				= my_theVpHS;
 	therhoHS			= my_therhoHS;
+	theRotation         = my_theRotation * PI / 180.00;
 
     return 0;
 }
@@ -1115,7 +1062,7 @@ topography_initparameters ( const char *parametersin )
 void topo_init ( int32_t myID, const char *parametersin ) {
 
     int     int_message[3];
-    double  double_message[18];
+    double  double_message[16];
 
     /* Capturing data from file --- only done by PE0 */
     if (myID == 0) {
@@ -1145,18 +1092,14 @@ void topo_init ( int32_t myID, const char *parametersin ) {
     double_message[12]    = therhoHS;
     double_message[13]    = theFLRaiR;
     double_message[14]    = theSLRaiR;
-
-    double_message[15]    = The_hypocenter_long_deg;
-    double_message[16]    = The_hypocenter_lat_deg;
-    double_message[17]    = The_hypocenter_deep;
-
+    double_message[15]    = theRotation;
 
     int_message   [0]    = theMaxoctlevel;
     int_message   [1]    = (int)theEtreeType;
     int_message   [2]    = (int)theTopoMethod;
 
 
-    MPI_Bcast(double_message, 18, MPI_DOUBLE, 0, comm_solver);
+    MPI_Bcast(double_message, 16, MPI_DOUBLE, 0, comm_solver);
     MPI_Bcast(int_message,    3, MPI_INT,    0, comm_solver);
 
     thebase_zcoord       =  double_message[0];
@@ -1174,11 +1117,7 @@ void topo_init ( int32_t myID, const char *parametersin ) {
     therhoHS             =  double_message[12];
     theFLRaiR            =  double_message[13];
     theSLRaiR            =  double_message[14];
-
-    The_hypocenter_long_deg = double_message[15];
-    The_hypocenter_lat_deg  = double_message[16];
-    The_hypocenter_deep     = double_message[17];
-
+    theRotation          =  double_message[15];
 
     theMaxoctlevel       = int_message[0];
     theEtreeType         = int_message[1];
@@ -1317,14 +1256,6 @@ void topography_elements_count(int32_t myID, mesh_t *myMesh ) {
 			} else
 				count++;
 	    }
-
-/*			TetraHVol ( xo, yo, zo, esize, aux_vol );
-			if ( ( aux_vol[0]==0 ) && ( aux_vol[1]==0 ) && ( aux_vol[2]==0 ) && ( aux_vol[3]==0 ) && ( aux_vol[4]==0 ) && (theTopoMethod==VT) )   small enclosed volume
-				get_airprops_topo( edata );   consider the element as an  air element
-			else
-				count++;
-			}*/
-
 
     }
     		
