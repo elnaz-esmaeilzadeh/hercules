@@ -1425,7 +1425,7 @@ setrec( octant_t* leaf, double ticksize, void* data )
 			res = cvm_query( Global.theCVMEp, y_m, x_m, z_m, &g_props );
 		else {
 			double a = 250.0;
-			double b = 125.0;
+			double b = 0.0;
 			double H = 125.0;
 
 			double m = 2.0 * ( a + b - b * z_m /H );
@@ -7527,7 +7527,7 @@ mesh_correct_properties( etree_t* cvm )
                                 depth_m, &g_props );
             		else {
             			double a = 250.0;
-            			double b = 125.0;
+            			double b = 0.0;
             			double H = 125.0;
 
             			double m = 2.0 * ( a + b - b * depth_m /H );
