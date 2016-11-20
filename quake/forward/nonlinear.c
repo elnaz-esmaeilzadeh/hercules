@@ -1330,7 +1330,7 @@ double compute_hardening ( double gamma, double c, double Sy, double h, double e
 		if ( Sy == 0 )
 			H = c;
 		else
-			H = sqrt(2.0) * Sy;
+			H = Sy;
 	} else if ( theMaterialModel == DRUCKERPRAGER ) {
 		H = gamma * ( c + h * ep_bar);
 	} else {
@@ -1562,9 +1562,10 @@ void material_update ( nlconstants_t constants, tensor_t e_n, tensor_t ep, tenso
 			    double  H_nlin = sqrt(1.0/2.0) * H_kin/( c - Sy );  /* Remember that c=Su for the vonMises yielding criterion */
 			    double  G1     = mu + H_kin/2.0;
 
-			    Sy = sqrt(2.0)*Sy;
+			    Sy = sqrt(2.0)*Sy; // scale Sy to comply with the formulation for kinematic vonMises
 
 			    /* coefficients of the quartic function  */
+			    // Based on Auricchio and Tylor (1995) formualtion
 			    C1 = pow( 2.0 * mu * H_nlin, 2.0 );
 			    C2 = (4.0 * Sy * mu * H_nlin + 8.0 * mu * G1 ) * H_nlin;
 			    C3 = ( H_nlin * H_nlin ) * ( Sy * Sy - S_ss ) + 4.0 * G1 * G1 + 4.0 * H_nlin * Sy * ( mu + G1 );
