@@ -3539,6 +3539,15 @@ static void solver_init()
         double  yo       = Global.myMesh->ticksize * Global.myMesh->nodeTable[lnid0].y;
         double  zo       = Global.myMesh->ticksize * Global.myMesh->nodeTable[lnid0].z;
 
+        /* remove damping values for interior region     */
+        if ( ( yo >= 1000 ) && ( yo < 15000 ) && ( xo >= 1000) && ( xo < 15000 ) ) {
+        	ep->c3 = 0.0;
+        	ep->c4 = 0.0;
+        	a = 0.0;
+        	b = 0.0;
+        }
+
+
         if ( Param.includeTopography == YES ) {
         	toponodes_mass( eindex, nodesMass, M, xo, yo, zo );
         } else {
