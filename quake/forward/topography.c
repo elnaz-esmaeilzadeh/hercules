@@ -1336,7 +1336,7 @@ void topo_solver_init(int32_t myID, mesh_t *myMesh) {
     topography_elements_mapping ( myID, myMesh );
 
 
-    fprintf(stdout, "TopoElem=%d, MyID=%d\n", myTopoElementsCount, myID);
+    //fprintf(stdout, "TopoElem=%d, MyID=%d\n", myTopoElementsCount, myID);
 
     /* Memory allocation for mother structure */
     myTopoSolver = (toposolver_t *)malloc(sizeof(toposolver_t));
