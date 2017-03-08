@@ -7772,14 +7772,7 @@ int main( int argc, char** argv )
     Timer_Stop("Mesh Stats Print");
     Timer_Reduce("Mesh Stats Print", MAX | MIN, comm_solver);
 
-    /* Initialize the output planes */
-    if ( Param.theNumberOfPlanes != 0 ) {
-        planes_setup(Global.myID, &Param.thePlanePrintRate, Param.IO_pool_pe_count,
-		     Param.theNumberOfPlanes, Param.parameters_input_file, get_surface_shift(),
-		     Param.theSurfaceCornersLong, Param.theSurfaceCornersLat,
-		     Param.theDomainX, Param.theDomainY, Param.theDomainZ,
-		     Param.planes_input_file);
-    }
+
 
     if ( Param.theNumberOfStations !=0 ){
         output_stations_init(Param.parameters_input_file);
@@ -7793,6 +7786,15 @@ int main( int argc, char** argv )
             topography_stations_init(Global.myMesh, Param.myStations, Param.myNumberOfStations);
         }
 
+    }
+
+    /* Initialize the output planes */
+    if ( Param.theNumberOfPlanes != 0 ) {
+        planes_setup(Global.myID, &Param.thePlanePrintRate, Param.IO_pool_pe_count,
+		     Param.theNumberOfPlanes, Param.parameters_input_file, get_surface_shift(),
+		     Param.theSurfaceCornersLong, Param.theSurfaceCornersLat,
+		     Param.theDomainX, Param.theDomainY, Param.theDomainZ,
+		     Param.planes_input_file);
     }
 
     /* Initialize the solver, source and output structures */
