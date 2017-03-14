@@ -157,6 +157,40 @@ double get_thebase_topo() {
     return thebase_zcoord;
 }
 
+
+//returns YES if  element belongs to topography
+int isTopoElement (mesh_t *myMesh, int32_t eindex) {
+
+    int32_t topo_eindex;
+    elem_t  *elemp;
+    edata_t *edata;
+
+    /* return NO if topography is not considered */
+    if ( thebase_zcoord == 0 )
+    		return NO;
+
+    if ( theTopoMethod == FEM )
+    	return NO;
+
+    elemp = &myMesh->elemTable[eindex];
+    edata = (edata_t *)elemp->data;
+
+	for ( topo_eindex = 0; topo_eindex < myTopoElementsCount; topo_eindex++ ) {
+
+		int32_t          eindexT;
+
+		eindexT = myTopoElementsMapping[topo_eindex];
+
+		if ( eindexT == eindex )
+			return YES;
+
+	} /* for all topograhy elements */
+
+	return NO;
+}
+
+
+
 //returns YES if the element is air element ( Vp = -1 ), or if it composes the topography surface.
 int BelongstoTopography (mesh_t *myMesh, int32_t eindex) {
 

@@ -6654,7 +6654,7 @@ compute_csi_eta_dzeta( octant_t* octant, vector3D_t pointcoords,
 
 	//FILE  *topoinfo = hu_fopen( "topoElem.txt", "w" );
 
-	if ( ( Param.includeTopography == YES ) && ( BelongstoTopography ( Global.myMesh, eindex) )
+	if ( ( Param.includeTopography == YES ) && ( isTopoElement ( Global.myMesh, eindex) )
 		 && (get_topo_meth() == VT ) && (Param.drmImplement == NO) ) {
 		elem_t  *elemp;
 		edata_t *edata;

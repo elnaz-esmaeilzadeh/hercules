@@ -63,6 +63,7 @@ double get_thebase_topo();
 int    BelongstoTopography    (mesh_t *myMesh, int32_t eindex);
 etreetype_t get_theetree_type ();
 int    topo_correctproperties ( edata_t *edata );
+int    isTopoElement (mesh_t *myMesh, int32_t eindex);
 
 int    topo_toexpand            ( octant_t *leaf, double    ticksize, edata_t  *edata, double VsFactor );
 void   topo_init                ( int32_t myID, const char *parametersin );
