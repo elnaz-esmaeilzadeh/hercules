@@ -3559,7 +3559,6 @@ static void solver_init()
         double  yo       = Global.myMesh->ticksize * Global.myMesh->nodeTable[lnid0].y;
         double  zo       = Global.myMesh->ticksize * Global.myMesh->nodeTable[lnid0].z;
 
-
         /* remove damping values for interior region     */
         if ( ( yo >= 0.05*Param.theDomainY ) && ( yo < 0.95*Param.theDomainY  ) && ( xo >= 0.05*Param.theDomainX ) && ( xo < 0.95*Param.theDomainX  ) ) {
         	ep->c3 = 0.0;
@@ -7756,6 +7755,11 @@ int main( int argc, char** argv )
     	Timer_Reduce("Drm Init", MAX | MIN | AVERAGE , comm_solver);
     }
 
+    /* Initialize topography solver analysis structures */
+    /* must be before solver_init() for proper treatment of the nodal mass */
+    if ( Param.includeTopography == YES )
+        topo_solver_init(Global.myID, Global.myMesh);
+
     if (Param.theMeshOutFlag && DO_OUTPUT) {
         mesh_output();
     }
@@ -7778,15 +7782,10 @@ int main( int argc, char** argv )
         output_stations_init(Param.parameters_input_file);
     }
 
-    /* Initialize topography solver analysis structures */
-    /* must be before solver_init() for proper treatment of the nodal mass */
-    if ( Param.includeTopography == YES ) {
-        topo_solver_init(Global.myID, Global.myMesh);
-        if ( Param.theNumberOfStations !=0 ){
+    /* include additional info for topo stations */
+    if ( ( Param.includeTopography == YES ) && ( Param.theNumberOfStations !=0 ) ) {
             topography_stations_init(Global.myMesh, Param.myStations, Param.myNumberOfStations);
         }
-
-    }
 
     /* Initialize the output planes */
     if ( Param.theNumberOfPlanes != 0 ) {
