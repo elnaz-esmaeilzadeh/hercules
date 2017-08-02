@@ -7756,6 +7756,11 @@ int main( int argc, char** argv )
     	Timer_Reduce("Drm Init", MAX | MIN | AVERAGE , comm_solver);
     }
 
+    /* Initialize topography solver analysis structures */
+    /* must be before solver_init() for proper treatment of the nodal mass */
+    if ( Param.includeTopography == YES )
+        topo_solver_init(Global.myID, Global.myMesh);
+
     if (Param.theMeshOutFlag && DO_OUTPUT) {
         mesh_output();
     }
@@ -7773,19 +7778,13 @@ int main( int argc, char** argv )
     Timer_Reduce("Mesh Stats Print", MAX | MIN, comm_solver);
 
 
-
     if ( Param.theNumberOfStations !=0 ){
         output_stations_init(Param.parameters_input_file);
     }
 
-    /* Initialize topography solver analysis structures */
-    /* must be before solver_init() for proper treatment of the nodal mass */
-    if ( Param.includeTopography == YES ) {
-        topo_solver_init(Global.myID, Global.myMesh);
-        if ( Param.theNumberOfStations !=0 ){
-            topography_stations_init(Global.myMesh, Param.myStations, Param.myNumberOfStations);
-        }
-
+    /* include additional info for topo stations */
+    if ( ( Param.includeTopography == YES ) && ( Param.theNumberOfStations !=0 ) ) {
+    	topography_stations_init(Global.myMesh, Param.myStations, Param.myNumberOfStations);
     }
 
     /* Initialize the output planes */

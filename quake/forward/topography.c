@@ -362,7 +362,7 @@ double point_elevation ( double xo, double yo ) {
 double point_PlaneDist ( double xp, double yp, double zp ) {
 
 
-	double mesh_cz[4], sep=5, x_o, y_o, remi, remj;
+	double mesh_cz[4], sep=0.5, x_o, y_o, remi, remj;
 
 	zp = thebase_zcoord - zp; /* sea level elevation  */
 
@@ -1369,8 +1369,23 @@ void topo_solver_init(int32_t myID, mesh_t *myMesh) {
     topography_elements_count   ( myID, myMesh );
     topography_elements_mapping ( myID, myMesh );
 
+    char      filename_topo[256];
+	FILE     *TopoElements;
 
-    //fprintf(stdout, "TopoElem=%d, MyID=%d\n", myTopoElementsCount, myID);
+	// plot topo data
+
+	if ( myTopoElementsCount != 0  ) {
+	sprintf(filename_topo, "topo_elements.%d", myID);
+	TopoElements = hu_fopen ( filename_topo, "wb" );
+
+    fputs( "\n"
+           "# ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------  \n"
+           "#                                                                                        Tetrahedral partition of topographic elements :                                                                            \n"
+           "# ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------  \n"
+           "#       ID             xo                   yo                     zo                 esize             tetraVol_1          tetraVol_2          tetraVol_3          tetraVol_4          tetraVol_5              \n"
+           "# ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------  \n", TopoElements );
+
+   }
 
     /* Memory allocation for mother structure */
     myTopoSolver = (toposolver_t *)malloc(sizeof(toposolver_t));
@@ -1428,8 +1443,11 @@ void topo_solver_init(int32_t myID, mesh_t *myMesh) {
         if ( theTopoMethod == VT )
         	TetraHVol ( xo, yo, zo, esize, ecp->tetraVol );
 
+        fprintf( TopoElements, "%11d          %8.4f            %8.4f               %8.4f            %8.4f            %8.4f            %8.4f            %8.4f            %8.4f            %8.4f\n",
+        		 eindex, xo, yo, zo, esize, ecp->tetraVol[0], ecp->tetraVol[1], ecp->tetraVol[2], ecp->tetraVol[3], ecp->tetraVol[4]);
     } /* for all elements */
-
+	if ( myTopoElementsCount != 0  )
+		hu_fclosep( &TopoElements );
 }
 
 void compute_addforce_topoEffective ( mesh_t     *myMesh,
