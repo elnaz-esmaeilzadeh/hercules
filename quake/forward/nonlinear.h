@@ -105,6 +105,13 @@ typedef struct nlconstants_t {
                               In Drucker-Prager H = gamma(c + h*ep)  */
                           /*  In MohrCoulomb    H =     2(c + h*ep)cos(phi)  */
 
+    /* New variables for vMKH with Sy=0   */
+    double psi;           /* Hkin/mu ratio. Used in the first loading of the vonMoises nonlinear hardening model (vMNH)   */
+    int    loadflag[8];   /* loading flag for each Gauss point  */
+    double LoUnlo1[8];    /* loading sign at t-1  */
+    double Sv_max[8];     /* virgin surgface radius */
+
+
     double Sstrain0;      /* Defines the elastic range of the vonMises model. Sy=G*Sstrain0   */
 
     double fs[8];         /* F(sigma) */
@@ -231,11 +238,12 @@ tensor_t subtrac_tensors ( tensor_t A, tensor_t B);
 tensor_t copy_tensor     ( tensor_t original);
 tensor_t add_tensors     (tensor_t A, tensor_t B);
 tensor_t zero_tensor     ();
+double   ddot_tensors    (tensor_t A, tensor_t B);
 
 qptensors_t compute_qp_stresses ( qptensors_t strains, double mu, double lambda);
 qptensors_t subtrac_qptensors   ( qptensors_t A, qptensors_t B);
 
-double   compute_hardening           ( double gamma, double c, double Sy, double h, double ep_bar, double phi );
+double   compute_hardening           ( double gamma, double c, double Sy, double h, double ep_bar, double phi, double psi );
 double   compute_yield_surface_stateII ( double J3, double J2, double I1, double alpha, double phi, tensor_t Sigma );
 
 double   compute_dLambdaII           ( nlconstants_t constants, double fs, double eff_ps, double J2, double I1, double J2_st, double I1_st, double *po);
@@ -245,7 +253,7 @@ tensor_t compute_pstrain2            ( nlconstants_t constants, tensor_t pstrain
 							           double J2_st, double I1_st, double po );
 
 void material_update ( nlconstants_t constants, tensor_t e_n, tensor_t ep, tensor_t eta_n, double ep_barn, tensor_t sigma0, double dt,
-		               tensor_t *epl, tensor_t *eta, tensor_t *sigma, double *ep_bar, double *fs);
+		               tensor_t *epl, tensor_t *eta, tensor_t *sigma, double *ep_bar, double *fs, int *loadFlag, double *LoadDir, double *Sv);
 
 tensor_t ApproxGravity_tensor(double Szz, double phi, double h, double lz, double rho);
 
