@@ -246,7 +246,6 @@ double get_hardmod(double vs) {
 	return hrd;
 }
 
-
 double get_gamma_eff (double vs30, double zo)  {
 
 	double gamma_eff=0;
@@ -426,7 +425,11 @@ int32_t nonlinear_initparameters ( const char *parametersin,
         materialmodel = LINEAR;
     } else if ( strcasecmp(material_model, "vonMises") == 0 ) {
         materialmodel = VONMISES;
-    }  else if ( strcasecmp(material_model, "MohrCoulomb") == 0 ) {
+    } else if ( strcasecmp(material_model, "vonMises_khO") == 0 ) {
+        materialmodel = VONMISES_KHO;
+    } else if ( strcasecmp(material_model, "vonMises_khM") == 0 ) {
+        materialmodel = VONMISES_KHM;
+    } else if ( strcasecmp(material_model, "MohrCoulomb") == 0 ) {
         materialmodel = MOHR_COULOMB;
     } else if ( strcasecmp(material_model, "DruckerPrager") == 0 ) {
         materialmodel = DRUCKERPRAGER;
@@ -434,7 +437,7 @@ int32_t nonlinear_initparameters ( const char *parametersin,
     else {
         fprintf(stderr,
                 "Illegal material model for nonlinear analysis"
-                "(linear, vonMises, DruckerPrager): %s\n", material_model);
+                "(linear, vonMises, vonMises_khO, vonMises_khM, DruckerPrager, MohrCoulomb): %s\n", material_model);
         return -1;
     }
 
@@ -798,6 +801,15 @@ void nonlinear_solver_init(int32_t myID, mesh_t *myMesh, double depth) {
         (qpvectors_t *)calloc(myNonlinElementsCount, sizeof(qpvectors_t));
     myNonlinSolver->ep2 =
         (qpvectors_t *)calloc(myNonlinElementsCount, sizeof(qpvectors_t));
+    myNonlinSolver->LoUnlo_n =
+        (qpvectors_t *)calloc(myNonlinElementsCount, sizeof(qpvectors_t));
+    myNonlinSolver->Sv_max =
+        (qpvectors_t *)calloc(myNonlinElementsCount, sizeof(qpvectors_t));
+    myNonlinSolver->Sv_n =
+        (qpvectors_t *)calloc(myNonlinElementsCount, sizeof(qpvectors_t));
+    myNonlinSolver->psi_n =
+        (qpvectors_t *)calloc(myNonlinElementsCount, sizeof(qpvectors_t));
+
 
     if ( (myNonlinSolver->constants           == NULL) ||
          (myNonlinSolver->stresses            == NULL) ||
@@ -807,7 +819,11 @@ void nonlinear_solver_init(int32_t myID, mesh_t *myMesh, double depth) {
          (myNonlinSolver->alphastress1        == NULL) ||
          (myNonlinSolver->alphastress2        == NULL) ||
          (myNonlinSolver->pstrains1           == NULL) ||
-         (myNonlinSolver->pstrains2           == NULL) ) {
+         (myNonlinSolver->pstrains2           == NULL) ||
+         (myNonlinSolver->LoUnlo_n            == NULL) ||
+         (myNonlinSolver->Sv_max              == NULL) ||
+         (myNonlinSolver->Sv_n                == NULL) ||
+         (myNonlinSolver->psi_n               == NULL) ) {
 
         fprintf(stderr, "Thread %d: nonlinear_init: out of memory\n", myID);
         MPI_Abort(MPI_COMM_WORLD, ERROR);
@@ -854,44 +870,78 @@ void nonlinear_solver_init(int32_t myID, mesh_t *myMesh, double depth) {
         switch (theMaterialModel) {
 
             case LINEAR:
-                ecp->alpha    = 0.;
-                ecp->k        = 0.;
-                ecp->phi      = 0.;
-                ecp->beta     = 0.;
-                ecp->h        = 0.;
-                ecp->Sstrain0 = 0.;
+                ecp->alpha    = 0.0;
+               // ecp->k        = 0.0;
+                ecp->phi      = 0.0;
+                ecp->beta     = 0.0;
+                ecp->h        = 0.0;
+                ecp->Sstrain0 = 0.0;
                 break;
 
-            case VONMISES:
-            	ecp->c     = get_cohesion(elementVs);
-            	ecp->phi   = get_phi(elementVs);
+            case VONMISES_KHO:
+            	ecp->c         = get_cohesion(elementVs);
+            	ecp->phi       = 0.0;
             	ecp->dil_angle = 0.0;
 
-            	ecp->alpha = 0.;
-            	ecp->beta  = 0.;
-            	ecp->gamma = 1.0;
+            	ecp->alpha     = 0.0;
+            	ecp->beta      = 0.0;
+            	ecp->gamma     = 0.0;
 
-            	ecp->Sstrain0    = interpolate_property_value(elementVs, theGamma0);
+            	ecp->Sstrain0  = interpolate_property_value(elementVs, theGamma0);
+            	//ecp->k         = ecp->Sstrain0 * ecp->mu;
 
-            	if (ecp->Sstrain0 == 0)
-            		ecp->k     = ecp->c;
-            	else
-            		ecp->k     = ecp->Sstrain0 * ecp->mu;
+            	ecp->h         = 0.0;
+            	ecp->psi0      = interpolate_property_value(elementVs, thePsi);
+            	break;
+
+            case VONMISES_KHM:
+            	ecp->c         = get_cohesion(elementVs);
+            	ecp->phi       = 0.0;
+            	ecp->dil_angle = 0.0;
+
+            	ecp->alpha     = 0.0;
+            	ecp->beta      = 0.0;
+            	ecp->gamma     = 0.0;
+
+            	ecp->Sstrain0  = 0.0;
+            	//ecp->k         = 0.0;
+
+            	ecp->h         = 0.0;
+            	ecp->psi0      = interpolate_property_value(elementVs, thePsi);
+            	break;
+
+            case VONMISES:
+            	ecp->c         = get_cohesion(elementVs);
+            	ecp->phi       = 0.0;
+            	ecp->dil_angle = 0.0;
+
+
+            	ecp->alpha     = 0.0;
+            	ecp->beta      = 0.0;
+            	ecp->gamma     = 1.0;
+
+            	ecp->Sstrain0  = 0.0;
+        		//ecp->k         = ecp->c;
 
             	ecp->h         = 0; /*  no isotropic hardening  in von Mises model */
-            	ecp->psi       =  interpolate_property_value(elementVs, thePsi);
             	break;
+
             case DRUCKERPRAGER:
                 ecp->c         = get_cohesion(elementVs);
                 ecp->phi       = get_phi(elementVs);
                 ecp->dil_angle = get_dilatancy(elementVs);
-
-                ecp->alpha = get_alpha(elementVs, ecp->phi);
-                ecp->beta  = get_beta(elementVs);
-                ecp->gamma = get_gamma(elementVs,ecp->phi);
-
-                ecp->k         = ecp->gamma * ecp->c;
                 ecp->h         = get_hardmod(elementVs);
+
+                ecp->alpha     =  2.0 * sin(ecp->phi)       / ( sqrt(3.0) * ( 3.0 - sin(ecp->phi) ) );
+                ecp->beta      =  2.0 * sin(ecp->dil_angle) / ( sqrt(3.0) * ( 3.0 - sin(ecp->dil_angle) ) );
+                ecp->gamma     =  6.0 * cos(ecp->phi)       / ( sqrt(3.0) * ( 3.0 - sin(ecp->phi) ) );
+
+/*                ecp->alpha     = get_alpha(elementVs, ecp->phi);
+                ecp->beta      = get_beta(elementVs);
+                ecp->gamma     = get_gamma(elementVs,ecp->phi);*/
+
+                //ecp->k         = ecp->gamma * ecp->c;
+
                 ecp->Sstrain0  = 0.0;
 
             	break;
@@ -921,17 +971,6 @@ void nonlinear_solver_init(int32_t myID, mesh_t *myMesh, double depth) {
         		interpolate_property_value(elementVs, theStrainRates  );
         ecp->sensitivity =
         		interpolate_property_value(elementVs, theSensitivities );
-//        ecp->hardmodulus =
-//        		interpolate_property_value(elementVs, theHardeningModulus );
-
-//        if ( theApproxGeoState == NO ) {
-//            ecp->I1_st        =  -1.;
-//            ecp->J2square_st  =   0.;
-//        } else {
-//            ecp->I1_st        = -S_zz * ( 3.0 - 2.0 * sin ( ecp->phi ) );
-//            ecp->J2square_st  =  S_zz * S_zz * sin ( ecp->phi ) * sin ( ecp->phi ) / 3.0;
-//        }
-
 
     } /* for all elements */
 
@@ -1306,10 +1345,13 @@ double compute_yield_surface_stateII ( double J3, double J2, double I1, double a
 
 	double Yf=0., p, q, r, teta, Rmc, s1, s3;
 
-	if ( ( theMaterialModel == VONMISES ) || ( theMaterialModel == DRUCKERPRAGER ) ) {
-		Yf = alpha * I1 + sqrt( J2 );
+	if ( ( theMaterialModel == VONMISES ) || ( theMaterialModel == DRUCKERPRAGER ) ||
+	     ( theMaterialModel == VONMISES ) || ( theMaterialModel == VONMISES )) {
+		if ( theMaterialModel == DRUCKERPRAGER )
+			Yf = alpha * I1 + sqrt( J2 );
+		else
+			Yf = sqrt( J2 ); // alpha must be zero in any vonMises model
 	} else {
-
 		p = (1./3.) * I1;
 		q = 2.0 * pow( J2, 1.5 );
 		r = -3.0 * sqrt(3.0) * (J3);
@@ -1347,6 +1389,19 @@ double compute_hardening ( double gamma, double c, double Sy, double h, double e
 	double H=0.;
 
 	if ( theMaterialModel == VONMISES ) {
+		H = c;
+	} else if ( theMaterialModel == VONMISES_KHO ) {
+		H = Sy;
+	} else if ( theMaterialModel == VONMISES_KHM ) { // no elastic region in vonMisesKinHard_Modified
+		H = 0.0;
+	} else if ( theMaterialModel == DRUCKERPRAGER ) {
+		H = gamma * ( c + h * ep_bar);
+	}	else {
+		H = 2.0 * ( c + h * ep_bar) * cos(phi);
+	}
+
+
+/*	if ( theMaterialModel == VONMISES ) {
 		if ( Sy == 0 && psi == 0)
 			H = c;
 		else
@@ -1355,78 +1410,83 @@ double compute_hardening ( double gamma, double c, double Sy, double h, double e
 		H = gamma * ( c + h * ep_bar);
 	} else {
 		H = 2.0 * ( c + h * ep_bar) * cos(phi);
-	}
+	}*/
 
 	return H;
 
 }
 
 
-/*
-double compute_dLambdaII ( nlconstants_t constants, double fs, double eff_ps, double J2, double I1, double J2_st, double I1_st, double *po) {
+void MatUpd_vMKH (double J2_pr, tensor_t dev_pr, double psi, double c, tensor_t eta_n, double mu, double Sy,
+		tensor_t *epl, tensor_t ep, double *ep_bar, double ep_barn, tensor_t *eta, tensor_t *sigma, tensor_t stresses,
+		double *fs) {
 
-	double phi_pt, s, c, kappa, mu, beta, alpha, tanpsi_min, tanpsi, FsT, delta=0;   variables needed for the plastic strain update
+	double C1, C2, C3, C4, C5, S_ss, S_aa, S_sa, dl, H_kin, H_nlin, G1;
+	int i;
 
-	if ( thePlasticityModel == RATE_DEPENDANT ) {
-		double factor      = fs / constants.k;
-		double strainRate  = constants.strainrate;
-		double sensitivity = constants.sensitivity;
-		double oneOverM    = 1.0 / sensitivity;
+    S_ss    = 2.0 * J2_pr;
+    S_aa    = 2.0 * tensor_J2 ( eta_n ); /* eta_n is already deviatoric */
+    S_sa    = 2.0 * combtensor_J2(eta_n, dev_pr);
 
-		return strainRate * pow(factor, oneOverM);
-	}
+     H_kin  = psi * mu;
+     H_nlin = sqrt(1.0/2.0) * H_kin/( c - Sy );  /* Remember that c=Su for the vonMises yielding criterion */
+     G1     = mu + H_kin/2.0;
 
-	 Dorian: Rate independent plastic multiplier computation stage.
-	 This expression is exact for the Drucker-Prager material model with Linear hardening Rule
+    /* coefficients of the quartic function  */
+    // Based on Auricchio and Tylor (1995) formulation
+    C1 = pow( 2.0 * mu * H_nlin, 2.0 );
+    C2 = (4.0 * Sy * mu * H_nlin + 8.0 * mu * G1 ) * H_nlin;
+    C3 = ( H_nlin * H_nlin ) * ( Sy * Sy - S_ss ) + 4.0 * G1 * G1 + 4.0 * H_nlin * Sy * ( mu + G1 );
+    C4 = 2.0 * H_nlin * ( Sy * Sy + S_sa - S_ss ) + 4.0 * Sy * G1;
+    C5 = Sy*Sy - S_aa + 2.0 * S_sa - S_ss;
 
-	s      = constants.h;
-	c      = constants.k;
-	mu     = constants.mu;
-	beta   = constants.beta;
-	alpha  = constants.alpha;
+    /* roots finder */
+    double coeff[5] = { C5, C4, C3, C2, C1 };
+    double z[8];
 
-	kappa  = ( constants.lambda + 2. * mu / 3. );
-	phi_pt = sqrt ( 1/2. + 3.0 * beta * beta );
+    gsl_poly_complex_workspace * w = gsl_poly_complex_workspace_alloc (5);
+    gsl_poly_complex_solve (coeff, 5, w, z);
+    gsl_poly_complex_workspace_free (w);
 
-	tanpsi_min = mu / ( 9.0 * kappa * beta );
-	tanpsi     = sqrt(J2 + J2_st) / ( I1 + I1_st - c / alpha );
+    /* find the minimum positive root */
+    dl  = FLT_MAX;
 
-	FsT = fs - c - s * eff_ps;
+    for (i = 0; i < 4; i++) {
+    	if ( ( z[2*i] >= 0.0 ) && ( abs(z[2*i+1]) <= 1E-10 ) && ( z[2*i] < dl ) )
+    		dl = z[2*i];
+    }
 
-	if ( FsT < 0 )
-		return 0.;
+    /* Sanity check. Should not get here !!!  */
+    if ( dl == FLT_MAX ) {
+        fprintf(stderr,"Material update error: "
+                "could not find a positive root for von Mises with kinematic hardening\n");
+        MPI_Abort(MPI_COMM_WORLD, ERROR);
+        exit(1);
+    }
 
-	if ( theMaterialModel == VONMISES ) {
+    double T_lambda = 1.0 / ( 1.0 + H_nlin * dl );
+    tensor_t Zo = scaled_tensor( eta_n, T_lambda );
+    tensor_t Z  = subtrac_tensors( dev_pr, Zo );
 
-		delta = FsT / ( constants.mu + s * phi_pt );
+    double magZ = sqrt( 2.0 * tensor_J2 ( Z ) );
+    tensor_t   n = scaled_tensor( Z, 1.0 / magZ );
 
-	} else if ( ( tanpsi < 0 ) || ( tanpsi > tanpsi_min ) ) {
+    /* updated variables */
+    *epl    = add_tensors(ep, scaled_tensor( n, dl ) );              /* Updated plastic strains  */
+    *ep_bar = ep_barn + dl;                                          /* Updated plastic equivalent strain  */
+    *eta    = add_tensors( scaled_tensor( eta_n, T_lambda ), scaled_tensor( n, H_kin * T_lambda * dl ) ); /* Updated backstress tensor */
 
-		delta = FsT / ( constants.mu + 9.0 * kappa * constants.alpha * constants.beta + s * phi_pt );
+    *sigma  = subtrac_tensors( stresses, scaled_tensor( n , 2.0 * mu * dl ) );  /* Updated stresses tensor */
 
-	} else {
-		FsT = alpha * ( I1 + I1_st ) - c - s * eff_ps;
-		delta = FsT / ( 9.0 * kappa * constants.alpha * constants.beta + s * phi_pt );
-		*po   = ( ( I1 + I1_st ) - 9.0 * kappa * beta * delta ) / 3.0;
+    /*  updated yield function. Must be ZERO */
+    tensor_t Sdev = subtrac_tensors( dev_pr, scaled_tensor( n , 2.0 * mu * dl ) );
+    *fs           = sqrt( 2.0 * tensor_J2( subtrac_tensors( Sdev,*eta ) ) ) - Sy;
 
-
-		Sanity Check
-		if ( ( *po < 0.0 ) )  {
-		 this should not happen
-            fprintf(stderr, "Thread po = %8e in: nonlinear_compute_dLambda:\n"
-                    "\t Negative pressure capacity at the apex of the Drucker-Prager cone \n", *po);
-            MPI_Abort(MPI_COMM_WORLD, ERROR);
-            exit(1);
-
-		}
-	}
-	return delta;
 }
-*/
 
 
 void material_update ( nlconstants_t constants, tensor_t e_n, tensor_t ep, tensor_t eta_n,  double ep_barn, tensor_t sigma0, double dt,
-		               tensor_t *epl, tensor_t *eta, tensor_t *sigma, double *ep_bar, double *fs, int *loadFlag, double *LoadDir, double *Sv ) {
+		tensor_t *epl, tensor_t *eta, tensor_t *sigma, double *ep_bar, double *fs ) {
 	/* INPUTS:
 	 * constants: Material constants
 	 * e_n      : Total strain tensor
@@ -1434,7 +1494,7 @@ void material_update ( nlconstants_t constants, tensor_t e_n, tensor_t ep, tenso
 	 * ep_barn  : equivalent plastic strain at t-1. Used to compute the predictor hardening function
 	 * sigma0   : Approximated self-weight tensor.
 	 * dt       : Time step
-	 * eta_n  : backstress tensor at t-a. Used to compute the predictor state in vonMises kinematics
+	 * eta_n    : backstress tensor at t-a. Used to compute the predictor state in vonMises kinematics
 	 *
 	 * OUTPUTS:
 	 * fs       : Updated yield function value
@@ -1444,11 +1504,8 @@ void material_update ( nlconstants_t constants, tensor_t e_n, tensor_t ep, tenso
 	 * ep_bar   : Updated equivalent hardening variable
 	 */
 
-	double phi_pt, c, h, kappa, mu, Sy, beta, alpha, gamma, phi, dil, Fs_pr, Lambda, dLambda=0.0,
-			Tol_sigma = 5e-10, cond1, cond2, dep_bar, psi0,
-			C1, C2, C3, C4, C5; /*  variables needed for the plastic strain update */
-
-	int i;
+	double c, h, kappa, mu, Sy, beta, alpha, gamma, phi, dil, Fs_pr, Lambda, dLambda=0.0,
+		   Tol_sigma = 5e-10, cond1, cond2, dep_bar, psi0;
 
 	h      = constants.h;
 	c      = constants.c;
@@ -1465,9 +1522,9 @@ void material_update ( nlconstants_t constants, tensor_t e_n, tensor_t ep, tenso
 	gamma  = constants.gamma;
 	Sy     = constants.Sstrain0*mu;
 
-	psi0   = constants.psi;
+	psi0   = constants.psi0;
 
-	phi_pt = gamma / (3.0*beta);
+	//phi_pt = gamma / (3.0*beta);
 
 	/* ---------      get the stress predictor tensor      ---------*/
 	tensor_t estrain     = subtrac_tensors ( e_n, ep );             /* strain predictor   */
@@ -1479,193 +1536,189 @@ void material_update ( nlconstants_t constants, tensor_t e_n, tensor_t ep, tenso
 	double   oct_pr  = tensor_octahedral ( I1_pr );
 	tensor_t dev_pr  = tensor_deviator ( sigma_trial, oct_pr );
 
-	if ( theMaterialModel == VONMISES )
-		dev_pr = subtrac_tensors ( dev_pr, eta_n );       /* Subtract the backstress tensor   */
-
 	double   J2_pr   = tensor_J2 ( dev_pr );
 	double   J3_pr   = tensor_J3 (dev_pr);
 	tensor_t dfds_pr = compute_dfds ( dev_pr, J2_pr, beta );
 	vect1_t  sigma_ppal;
 
+	/*  check predictor state */
+	dev_pr = subtrac_tensors ( dev_pr, eta_n );        // Subtract backstress tensor
+	Fs_pr = compute_yield_surface_stateII ( J3_pr, J2_pr, I1_pr, alpha, phi, sigma_trial) - compute_hardening(gamma,c,Sy, h,ep_barn,phi, psi0); /* Fs predictor */
+
+	if ( Fs_pr < 0.0 ) {
+		*epl    = copy_tensor(ep);
+		*sigma  = copy_tensor(stresses); /* return stresses without self-weight  */
+		*ep_bar = ep_barn;
+		*fs     = Fs_pr;
+		return;
+	}
+
+	// corrector stage
 	if ( ( theMaterialModel == VONMISES ) || ( theMaterialModel == DRUCKERPRAGER ) ){
+		Sy   = 0.0;
+		psi0 = 0.0;
 
-		Fs_pr = compute_yield_surface_stateII ( J3_pr, J2_pr, I1_pr, alpha, phi, sigma_trial) - compute_hardening(gamma,c,Sy, h,ep_barn,phi, psi0); /* Fs predictor */
+		dLambda = Fs_pr / ( mu + 9.0 * kappa * alpha * beta + h * gamma * gamma ); // ep_bar=gamma*dLambda as in Souza ec., (8.106)
 
-		if ( Fs_pr < 0.0 ) {
-			*epl    = copy_tensor(ep);
-			*sigma  = copy_tensor(stresses); /* return stresses without self-weight  */
-			*ep_bar = ep_barn;
-			*fs     = Fs_pr;
-			return;
-		}
+		/* Updated plastic strains */
+		epl->xx = ep.xx +  dLambda * dfds_pr.xx;
+		epl->yy = ep.yy +  dLambda * dfds_pr.yy;
+		epl->zz = ep.zz +  dLambda * dfds_pr.zz;
+		epl->xy = ep.xy +  dLambda * dfds_pr.xy;
+		epl->yz = ep.yz +  dLambda * dfds_pr.yz;
+		epl->xz = ep.xz +  dLambda * dfds_pr.xz;
 
-		if ( Sy == 0 && psi0 == 0) {
+		/* Updated stresses */
+		estrain     = subtrac_tensors ( e_n, *epl );
+		stresses    = point_stress ( estrain, mu, Lambda );
+		*sigma      = stresses;
+		stresses    = add_tensors ( stresses, sigma0 );
 
-			dLambda = Fs_pr / ( mu + 9.0 * kappa * alpha * beta + h * gamma * gamma );
+		/* updated invariants*/
+		double I1     = tensor_I1 ( stresses );
+		double oct    = tensor_octahedral ( I1 );
+		tensor_t dev  = tensor_deviator ( stresses, oct );
+		double J2     = tensor_J2 ( dev );
+		double J3     = tensor_J3 ( dev );
 
-			/* Updated plastic strains */
-			epl->xx = ep.xx +  dLambda * dfds_pr.xx;
-			epl->yy = ep.yy +  dLambda * dfds_pr.yy;
-			epl->zz = ep.zz +  dLambda * dfds_pr.zz;
-			epl->xy = ep.xy +  dLambda * dfds_pr.xy;
-			epl->yz = ep.yz +  dLambda * dfds_pr.yz;
-			epl->xz = ep.xz +  dLambda * dfds_pr.xz;
+		/* Updated equivalent plastic strain */
+		*ep_bar = ep_barn + dLambda * gamma;
 
-			/* Updated stresses */
-			estrain     = subtrac_tensors ( e_n, *epl );
-			stresses    = point_stress ( estrain, mu, Lambda );
-			*sigma      = stresses;
-			stresses    = add_tensors ( stresses, sigma0 );
+		/* Updated yield function  */
+		*fs = compute_yield_surface_stateII ( J3, J2, I1, alpha, phi, stresses) - compute_hardening(gamma,c,Sy, h,*ep_bar,phi, psi0);
 
-			/* updated invariants*/
-			double I1     = tensor_I1 ( stresses );
-			double oct    = tensor_octahedral ( I1 );
-			tensor_t dev  = tensor_deviator ( stresses, oct );
-			double J2     = tensor_J2 ( dev );
-			double J3     = tensor_J3 ( dev );
+		/* check for apex zone in DP model */
+		if (  theMaterialModel == DRUCKERPRAGER  ){
 
-			/* Updated equivalent plastic strain */
-			*ep_bar = ep_barn + dLambda * gamma;
+			double Imin = I1_pr - 9.0 * kappa * beta / mu * sqrt(J2_pr);
+			double Imax = I1_pr + sqrt(J2_pr)/alpha;
 
-			/* Updated yield function value  */
-			*fs = compute_yield_surface_stateII ( J3, J2, I1, alpha, phi, stresses) - compute_hardening(gamma,c,Sy, h,*ep_bar,phi, psi0);
+			if ( (I1 < Imin) || (I1 > Imax) || (sqrt(J2_pr) - mu * dLambda < 0.0) ) { /*return to the apex  */
 
-			/* check for apex zone in DP model */
-			if (  theMaterialModel == DRUCKERPRAGER  ){
+				dLambda = (  compute_yield_surface_stateII ( 0.0, 0.0, I1_pr, alpha, phi, sigma_trial ) - compute_hardening(gamma,c,Sy,h,ep_barn,phi, psi0) ) / ( 9.0 * kappa * alpha * beta  + h * gamma * gamma );
 
-				double Imin = I1_pr - 9.0 * kappa * beta / mu * sqrt(J2_pr);
-				double Imax = I1_pr + sqrt(J2_pr)/alpha;
+				/* Updated equivalent plastic strain */
+				*ep_bar = ep_barn + dLambda * gamma;
 
-				if ( (I1 < Imin) || (I1 > Imax) || (sqrt(J2_pr) - mu * dLambda < 0.0) ) { /*return to the apex  */
+				double Skk = I1_pr - 9.0 * kappa * beta * dLambda;
 
-					dep_bar = (  compute_yield_surface_stateII ( 0.0, 0.0, I1_pr, alpha, phi, sigma_trial ) - compute_hardening(gamma,c,Sy,h,ep_barn,phi, psi0) ) / ( 9.0 * kappa * alpha * beta / gamma + h * gamma );
+				/* Updated stresses:
+				 * It must be isotropic at the apex*/
+				stresses.xx    = Skk/3.0;
+				stresses.yy    = Skk/3.0;
+				stresses.zz    = Skk/3.0;
+				stresses.xy    = 0.0;
+				stresses.xz    = 0.0;
+				stresses.yz    = 0.0;
+				*sigma      = subtrac_tensors ( stresses, sigma0 ); /* Sigma is still isotropic since sigma0 is isotropic */
 
-					/* Updated equivalent plastic strain */
-					*ep_bar = ep_barn + dep_bar;
+				double Skk_rlt = tensor_I1 ( *sigma );  /* Relative trace. */
 
-					double Skk = I1_pr - 9.0 * kappa * beta / gamma * dep_bar;
+				/* Updated strains */
+				estrain.xx = Skk_rlt / (3.0 * kappa);
+				estrain.yy = Skk_rlt / (3.0 * kappa);
+				estrain.zz = Skk_rlt / (3.0 * kappa);
+				estrain.xy = 0.0;
+				estrain.xz = 0.0;
+				estrain.yz = 0.0;
 
-					/* Updated stresses:
-					 * It must be isotropic at the apex*/
-					stresses.xx    = Skk/3.0;
-					stresses.yy    = Skk/3.0;
-					stresses.zz    = Skk/3.0;
-					stresses.xy    = 0.0;
-					stresses.xz    = 0.0;
-					stresses.yz    = 0.0;
-					*sigma      = subtrac_tensors ( stresses, sigma0 ); /* Sigma is still isotropic since sigma0 is isotropic */
+				*epl  = subtrac_tensors ( e_n, estrain );
 
-					double Skk_rlt = tensor_I1 ( *sigma );  /* Relative trace. */
-
-					/* Updated strains */
-					estrain.xx = Skk_rlt / (3.0 * kappa);
-					estrain.yy = Skk_rlt / (3.0 * kappa);
-					estrain.zz = Skk_rlt / (3.0 * kappa);
-					estrain.xy = 0.0;
-					estrain.xz = 0.0;
-					estrain.yz = 0.0;
-
-					*epl  = subtrac_tensors ( e_n, estrain );
-
-					*fs = alpha * Skk - compute_hardening(gamma,c,Sy,h,*ep_bar,phi,psi0);
-				}
+				*fs = alpha * Skk - compute_hardening(gamma,c,Sy,h,*ep_bar,phi,psi0);
 			}
-		} else { /* must be kinematic von Mises  */
+		}
+	} else if ( theMaterialModel == VONMISES_KHM || theMaterialModel == VONMISES_KHO ) { /* must be kinematic von Mises  */
 
-			   /* compute coefficients of the quartic function */
-			    dev_pr = add_tensors ( dev_pr, eta_n );       /* restore deviatoric predictor    */
-                J2_pr   = tensor_J2 ( dev_pr );
+		/* compute coefficients of the quartic function */
+		dev_pr = add_tensors ( dev_pr, eta_n );       /* restore deviatoric predictor    */
+		J2_pr   = tensor_J2 ( dev_pr );
+		Sy      = sqrt(2.0)*Sy;                      // scale Sy to comply with the formulation for kinematic vonMises
 
-			    double S_ss    = 2.0 * J2_pr;
-			    double S_aa    = 2.0 * tensor_J2 ( eta_n ); /* eta_n is already deviatoric */
-			    double S_sa    = 2.0 * combtensor_J2(eta_n, dev_pr);
+		MatUpd_vMKH ( J2_pr,  dev_pr,  psi0,  c,  eta_n,  mu,  Sy, epl,  ep,  ep_bar,  ep_barn,  eta,  sigma,  stresses, fs) ;
 
-			    double  H_kin  = psi0 * mu;
-			    double  H_nlin = sqrt(1.0/2.0) * H_kin/( c - Sy );  /* Remember that c=Su for the vonMises yielding criterion */
-			    double  G1     = mu + H_kin/2.0;
+		/* ================================================================ */
+		/*  check for unloading. Only for vonMises_Modified (VONMISES_KHM)  */
+		if ( theMaterialModel == VONMISES_KHM ) {
 
-			    Sy = sqrt(2.0)*Sy;        // scale Sy to comply with the formulation for kinematic vonMises
-
-			    /* coefficients of the quartic function  */
-			    // Based on Auricchio and Tylor (1995) formualtion
-			    C1 = pow( 2.0 * mu * H_nlin, 2.0 );
-			    C2 = (4.0 * Sy * mu * H_nlin + 8.0 * mu * G1 ) * H_nlin;
-			    C3 = ( H_nlin * H_nlin ) * ( Sy * Sy - S_ss ) + 4.0 * G1 * G1 + 4.0 * H_nlin * Sy * ( mu + G1 );
-			    C4 = 2.0 * H_nlin * ( Sy * Sy + S_sa - S_ss ) + 4.0 * Sy * G1;
-			    C5 = Sy*Sy - S_aa + 2.0 * S_sa - S_ss;
-
-			    /* roots finder */
-			    double coeff[5] = { C5, C4, C3, C2, C1 };
-			    double z[8];
-
-			    gsl_poly_complex_workspace * w = gsl_poly_complex_workspace_alloc (5);
-			    gsl_poly_complex_solve (coeff, 5, w, z);
-			    gsl_poly_complex_workspace_free (w);
-
-			    /* find the minimum positive root */
-			    double dl  = FLT_MAX;
-
-			    for (i = 0; i < 4; i++) {
-			    	if ( ( z[2*i] >= 0.0 ) && ( abs(z[2*i+1]) <= 1E-10 ) && ( z[2*i] < dl ) )
-			    		dl = z[2*i];
-			    }
-
-			    /* Sanity check. Should not get here !!!  */
-			    if ( dl == FLT_MAX ) {
-			        fprintf(stderr,"Material update error: "
-			                "could not find a positive root for von Mises with kinematic hardening\n");
-			        MPI_Abort(MPI_COMM_WORLD, ERROR);
-			        exit(1);
-			    }
-
-			    double T_lambda = 1.0 / ( 1.0 + H_nlin * dl );
-			    tensor_t Zo = scaled_tensor( eta_n, T_lambda );
-			    tensor_t Z  = subtrac_tensors( dev_pr, Zo );
-
-			    double magZ = sqrt( 2.0 * tensor_J2 ( Z ) );
-			    tensor_t   n = scaled_tensor( Z, 1.0 / magZ );
-
-			    /* updated variables */
-			    *epl    = add_tensors(ep, scaled_tensor( n, dl ) );              /* Updated plastic strains  */
-			    *ep_bar = ep_barn + dl;                                          /* Updated plastic equivalent strain  */
-			    *eta    = add_tensors( scaled_tensor( eta_n, T_lambda ), scaled_tensor( n, H_kin * T_lambda * dl ) ); /* Updated backstress tensor */
-
-			    *sigma  = subtrac_tensors( stresses, scaled_tensor( n , 2.0 * mu * dl ) );  /* Updated stresses tensor */
-
-			    /*  updated yield function. Must be ZERO */
-			    tensor_t Sdev = subtrac_tensors( dev_pr, scaled_tensor( n , 2.0 * mu * dl ) );
-			    *fs           = sqrt( 2.0 * tensor_J2( subtrac_tensors( Sdev,*eta ) ) ) - Sy;
-
-			    /*  check for unloading. ONLY FOR Sy=0 material     */
-
-			    if (Sy == 0) {
-
-			    	double dir    =  ddot_tensors ( Sdev, *eta);
-			    	double tao_v  =  sqrt( 2.0 * tensor_J2( subtrac_tensors( Sdev,*eta ) ) );
-
-			    	if ( *loadFlag == 0 ) {
-			    		*loadFlag = 1;
-			    		*LoadDir  = dir/abs(dir);
-			    		if ( *Sv < tao_v )
-			    			*Sv       = tao_v;
-			    	}
+			if ( Sy != 0.0 ) {
+				fprintf(stderr,
+						"vonMisesKinematic_Modified: "
+						"Sy > 0.  This models does not support any elastic zone \n");
+				MPI_Abort(MPI_COMM_WORLD, ERROR);
+				exit(1);
+			}
 
 
 
 
-
-
-
-
-
-			    }
-
-
-
-
-			    return;
 		}
 
+/*
+		double S_ss    = 2.0 * J2_pr;
+		double S_aa    = 2.0 * tensor_J2 ( eta_n );  eta_n is already deviatoric
+		double S_sa    = 2.0 * combtensor_J2(eta_n, dev_pr);
+
+		double  H_kin  = psi0 * mu;
+		double  H_nlin = sqrt(1.0/2.0) * H_kin/( c - Sy );   Remember that c=Su for the vonMises yielding criterion
+		double  G1     = mu + H_kin/2.0;
+
+		 coefficients of the quartic function
+		// Based on Auricchio and Tylor (1995) formualtion
+		C1 = pow( 2.0 * mu * H_nlin, 2.0 );
+		C2 = (4.0 * Sy * mu * H_nlin + 8.0 * mu * G1 ) * H_nlin;
+		C3 = ( H_nlin * H_nlin ) * ( Sy * Sy - S_ss ) + 4.0 * G1 * G1 + 4.0 * H_nlin * Sy * ( mu + G1 );
+		C4 = 2.0 * H_nlin * ( Sy * Sy + S_sa - S_ss ) + 4.0 * Sy * G1;
+		C5 = Sy*Sy - S_aa + 2.0 * S_sa - S_ss;
+
+		 roots finder
+		double coeff[5] = { C5, C4, C3, C2, C1 };
+		double z[8];
+
+		gsl_poly_complex_workspace * w = gsl_poly_complex_workspace_alloc (5);
+		gsl_poly_complex_solve (coeff, 5, w, z);
+		gsl_poly_complex_workspace_free (w);
+
+		 find the minimum positive root
+		double dl  = FLT_MAX;
+
+		for (i = 0; i < 4; i++) {
+			if ( ( z[2*i] >= 0.0 ) && ( abs(z[2*i+1]) <= 1E-10 ) && ( z[2*i] < dl ) )
+				dl = z[2*i];
+		}
+
+		 Sanity check. Should not get here !!!
+		if ( dl == FLT_MAX ) {
+			fprintf(stderr,"Material update error: "
+					"could not find a positive root for von Mises with kinematic hardening\n");
+			MPI_Abort(MPI_COMM_WORLD, ERROR);
+			exit(1);
+		}
+
+		double T_lambda = 1.0 / ( 1.0 + H_nlin * dl );
+		tensor_t Zo = scaled_tensor( eta_n, T_lambda );
+		tensor_t Z  = subtrac_tensors( dev_pr, Zo );
+
+		double magZ = sqrt( 2.0 * tensor_J2 ( Z ) );
+		tensor_t   n = scaled_tensor( Z, 1.0 / magZ );
+
+		 updated variables
+		*epl    = add_tensors(ep, scaled_tensor( n, dl ) );               Updated plastic strains
+		*ep_bar = ep_barn + dl;                                           Updated plastic equivalent strain
+		*eta    = add_tensors( scaled_tensor( eta_n, T_lambda ), scaled_tensor( n, H_kin * T_lambda * dl ) );  Updated backstress tensor
+
+		*sigma  = subtrac_tensors( stresses, scaled_tensor( n , 2.0 * mu * dl ) );   Updated stresses tensor
+
+		  updated yield function. Must be ZERO
+		tensor_t Sdev = subtrac_tensors( dev_pr, scaled_tensor( n , 2.0 * mu * dl ) );
+		*fs           = sqrt( 2.0 * tensor_J2( subtrac_tensors( Sdev,*eta ) ) ) - Sy;
+*/
+
+
+
+
+
+
+		return;
 	} else { /* Must be MohrCoulomb soil */
 
 		/* Spectral decomposition of the sigma_trial tensor*/
@@ -1703,7 +1756,7 @@ void material_update ( nlconstants_t constants, tensor_t e_n, tensor_t ep, tenso
 			}
 
 			/* set the spectral decomposition flag to 1 to avoid double computation  */
-		   // flagSpecDec = 1;
+			// flagSpecDec = 1;
 		}
 
 		Fs_pr = compute_yield_surface_stateII ( J3_pr, J2_pr, I1_pr, alpha, phi, sigma_trial) - compute_hardening(gamma,c,Sy,h,ep_barn,phi,psi0);
@@ -1756,7 +1809,7 @@ void material_update ( nlconstants_t constants, tensor_t e_n, tensor_t ep, tenso
 			}
 		}
 
-/*		 Tension cutoff check
+		/*		 Tension cutoff check
 		if ( (theTensionCutoff == YES) && ( sigma_ppal.x > 0 ) )  {
 
 			 Perform tension-cutoff
@@ -1764,13 +1817,13 @@ void material_update ( nlconstants_t constants, tensor_t e_n, tensor_t ep, tenso
 
 			 get updated stress tensor "sigma"
 			stressRecomp = specRecomp(sigma_ppal, n1, n2, n3);
-			*sigma  = subtrac_tensors(stressRecomp,sigma0);
+		 *sigma  = subtrac_tensors(stressRecomp,sigma0);
 
 			estrain = elastic_strains (*sigma, mu, kappa);
-			*epl  = subtrac_tensors ( e_n, estrain );
+		 *epl  = subtrac_tensors ( e_n, estrain );
 
 			 updated invariants
-			*fs = sigma_ppal.x;
+		 *fs = sigma_ppal.x;
 			return;
 		}
 		 Done tension cutoff check  */
@@ -3057,17 +3110,16 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
 		nlconstants_t *enlcons;
 
 		double         h;          /* Element edge-size in meters   */
-		double         alpha, k;   /* Drucker-Prager constants      */
+		//double         alpha, k;   /* Drucker-Prager constants      */
 		double         mu, lambda; /* Elasticity material constants */
-		double		   hrd;        /* Hardening Modulus  */
-		double         beta;       /* Plastic flow rule constant */
+		//double		   hrd;        /* Hardening Modulus  */
+		//double         beta;       /* Plastic flow rule constant */
 		double         XI, QC;
 		fvector_t      u[8];
 		qptensors_t   *stresses, *tstrains, *pstrains1, *pstrains2, *alphastress1, *alphastress2;
-		qpvectors_t   *epstr1, *epstr2;
+		qpvectors_t   *epstr1, *epstr2,   *psi_n,   *lounlo_n,   *Sv_n,   *Sv_max;
 
 		/* Capture data from the element and mesh */
-
 		eindex = myNonlinElementsMapping[nl_eindex];
 
 		elemp = &myMesh->elemTable[eindex];
@@ -3080,10 +3132,11 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
 
 		mu     = enlcons->mu;
 		lambda = enlcons->lambda;
-		alpha  = enlcons->alpha;
-		beta   = enlcons->beta;
-		k      = enlcons->k;
-		hrd    = enlcons->h;
+		//alpha  = enlcons->alpha;
+		//beta   = enlcons->beta;
+		//k      = enlcons->k;
+		//hrd    = enlcons->h;
+
 
 		/* Capture the current state in the element */
 		tstrains     = myNonlinSolver->strains      + nl_eindex;
@@ -3094,6 +3147,12 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
 		alphastress2 = myNonlinSolver->alphastress2 + nl_eindex;   /* Current  backstress tensor  */
 		epstr1       = myNonlinSolver->ep1          + nl_eindex;
 		epstr2       = myNonlinSolver->ep2          + nl_eindex;
+
+		psi_n        = myNonlinSolver->psi_n        + nl_eindex;
+		lounlo_n     = myNonlinSolver->LoUnlo_n     + nl_eindex;
+		Sv_n         = myNonlinSolver->Sv_n         + nl_eindex;
+		Sv_max       = myNonlinSolver->Sv_max       + nl_eindex;
+
 
 		/* Capture displacements */
 		if ( get_displacements(mySolver, elemp, u) == 0 ) {
@@ -3130,7 +3189,7 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
 					sigma0 = zero_tensor();
 
 					material_update ( *enlcons,           tstrains->qp[i],      pstrains1->qp[i], alphastress1->qp[i], epstr1->qv[i], sigma0, theDeltaT,
-						           &pstrains2->qp[i], &alphastress2->qp[i], &stresses->qp[i], &epstr2->qv[i],      &enlcons->fs[i], &enlcons->loadflag[i], &enlcons->LoUnlo1[i], &enlcons->Sv_max[i]);
+						           &pstrains2->qp[i], &alphastress2->qp[i], &stresses->qp[i], &epstr2->qv[i],  &enlcons->fs[i]);
 
 			}
 		} /* for all quadrature points */
