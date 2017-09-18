@@ -38,7 +38,7 @@ typedef enum {
      * allows one to initially evaluate the levels of deformation and serves
      * for comparisons with the corresponding elastoplastic runs.
      */
-    LINEAR = 0, VONMISES, VONMISES_KHO, VONMISES_KHM, DRUCKERPRAGER, MOHR_COULOMB
+    LINEAR = 0, VONMISES_EP, VONMISES_KHO, VONMISES_KHM, DRUCKERPRAGER, MOHR_COULOMB
 
 } materialmodel_t;
 
@@ -124,6 +124,7 @@ typedef struct nlsolver_t {
 	nlconstants_t *constants;
 	qptensors_t   *stresses;
 	qptensors_t   *strains;
+	qptensors_t   *strains1;      // total strains at t-1
 	qptensors_t   *pstrains1;
 	qptensors_t   *pstrains2;
 	qptensors_t   *alphastress1;
@@ -252,12 +253,12 @@ tensor_t compute_pstrain2            ( nlconstants_t constants, tensor_t pstrain
 							           tensor_t dfds, double dLambda, double dt, double J2, double I1,
 							           double J2_st, double I1_st, double po );
 
-void material_update ( nlconstants_t constants, tensor_t e_n, tensor_t ep, tensor_t eta_n, double ep_barn, tensor_t sigma0, double dt,
-		               tensor_t *epl, tensor_t *eta, tensor_t *sigma, double *ep_bar, double *fs );
+void material_update ( nlconstants_t constants, tensor_t e_n, tensor_t e_n1, tensor_t ep, tensor_t eta_n, double ep_barn, tensor_t sigma0, double dt,
+		               tensor_t *epl, tensor_t *eta, tensor_t *sigma, double *ep_bar, double *fs, double *psi_n, double *loadunl_n, double *Tao_n, double *Tao_max );
 
-void MatUpd_vMKH (double J2_pr, tensor_t dev_pr, double psi, double c, tensor_t eta_n, double mu, double Sy,
+void MatUpd_vMKH (double J2_pr, tensor_t dev_pr, double psi, double c, tensor_t eta_n, tensor_t e_n1, double mu, double Lambda, double Sy,
 		tensor_t *epl, tensor_t ep, double *ep_bar, double ep_barn, tensor_t *eta, tensor_t *sigma, tensor_t stresses,
-		double *fs);
+		double *fs, double *psi_n, double *loadunl_n, double *Tao_n, double *Tao_max );
 
 tensor_t ApproxGravity_tensor(double Szz, double phi, double h, double lz, double rho);
 
