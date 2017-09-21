@@ -163,24 +163,7 @@ double get_alpha(double vs, double phi) {
     return alpha;
 }
 
-/*
- * Returns the value of the constant kay in Drucker-Prager's material
- * model
- */
-//double get_kay(double vs, double phi) {
-//
-//    double k, c;
-//
-//    c     = interpolate_property_value(vs, theAlphaCohes);
-//    k     = 6. * c * cos(phi) / ( sqrt(3.0) * ( 3. - sin(phi) ) );
-//
-//    return k;
-//}
 
-/*
- * Returns the value of the constant gamma in Drucker-Prager's material
- * model
- */
 double get_gamma(double vs, double phi) {
 
     double gamma;
@@ -1404,17 +1387,6 @@ double compute_hardening ( double gamma, double c, double Sy, double h, double e
 	}
 
 
-/*	if ( theMaterialModel == VONMISES ) {
-		if ( Sy == 0 && psi == 0)
-			H = c;
-		else
-			H = Sy;
-	} else if ( theMaterialModel == DRUCKERPRAGER ) {
-		H = gamma * ( c + h * ep_bar);
-	} else {
-		H = 2.0 * ( c + h * ep_bar) * cos(phi);
-	}*/
-
 	return H;
 
 }
@@ -1499,10 +1471,11 @@ void MatUpd_vMKH (double J2_pr, tensor_t dev_pr, double psi, double Su, tensor_t
 	/*  check for unloading. Only for vonMises_Modified (VONMISES_KHM)  */
 	if ( theMaterialModel == VONMISES_KHM ) {
 
-	    double loadunl = 2.0 * combtensor_J2(n, Z);
-	    double Tao_v   = sqrt(  tensor_J2( subtrac_tensors( Sdev,*eta ) )  );
+	    double loadunl = 2.0 * combtensor_J2(n, *eta);
+	    double Tao_v   = sqrt(  tensor_J2( Sdev )  );
 
-	    if (  ((*loadunl_n) * loadunl < 0.0) &&  ((*Tao_n) > (*Tao_max))  ){
+
+	    if (  ((*loadunl_n) * loadunl < 0.0) &&  ((*Tao_n) >= (*Tao_max))  ){
 
             *Tao_max  =  *Tao_n;
 
@@ -1514,9 +1487,9 @@ void MatUpd_vMKH (double J2_pr, tensor_t dev_pr, double psi, double Su, tensor_t
         	double   oct_n1  = tensor_octahedral ( I1_n1 );
         	tensor_t dev_n1  = tensor_deviator ( stresses_n1, oct_n1 );
 
-        	double   Tao_e   = tensor_J2 ( dev_n1 );
+        	double   Tao_e   = sqrt( tensor_J2 ( dev_n1 ) );
 
-            *psi_n       = log10( ( Su + *Tao_max ) / ( Su - *Tao_max ) ) * Su / ( Tao_e - *Tao_max );
+            *psi_n       = log( ( Su + *Tao_max ) / ( Su - *Tao_max ) ) * Su / ( Tao_e - *Tao_max );
 
             H_kin  = (*psi_n) * mu;
             H_nlin = sqrt(1.0/2.0) * H_kin/( Su - Sy );  /* Remember that c=Su for the vonMises yielding criterion */
@@ -1571,6 +1544,9 @@ void MatUpd_vMKH (double J2_pr, tensor_t dev_pr, double psi, double Su, tensor_t
             /*  updated yield function. Must be ZERO */
             tensor_t Sdev = subtrac_tensors( dev_pr, scaled_tensor( n , 2.0 * mu * dl ) );
             *fs           = sqrt( 2.0 * tensor_J2( subtrac_tensors( Sdev,*eta ) ) ) - Sy;
+            loadunl       = 2.0 * combtensor_J2(n, *eta);
+            Tao_v         = sqrt(  tensor_J2( Sdev )  );
+            *Tao_max      = MAX(Tao_v, (*Tao_n) );
 
 	    } else {
 
@@ -1578,8 +1554,10 @@ void MatUpd_vMKH (double J2_pr, tensor_t dev_pr, double psi, double Su, tensor_t
 
 	    }
 
+
 	    *loadunl_n = loadunl; // update load-unload condition
-	    *Tao_n     = sqrt( tensor_J2( subtrac_tensors( Sdev,*eta ) ) ); // update tao_n
+	    *Tao_n     = Tao_v; // update tao_n
+
 
 	}
 
@@ -1736,7 +1714,7 @@ void material_update ( nlconstants_t constants, tensor_t e_n, tensor_t e_n1, ten
 		J2_pr   = tensor_J2 ( dev_pr );
 		Sy      = sqrt(2.0)*Sy;                      // scale Sy to comply with the formulation for vonMises kinematic
 
-		MatUpd_vMKH ( J2_pr,  dev_pr,  psi0,  c,  eta_n,  e_n1, mu,  Lambda,  Sy, epl,  ep,  ep_bar,  ep_barn,  eta,  sigma,  stresses, fs,  psi_n,  loadunl_n,  Tao_n,  Tao_max);
+		MatUpd_vMKH ( J2_pr,  dev_pr,  psi0,  c,  eta_n,  e_n1, mu,  Lambda,  Sy, epl,  ep,  ep_bar,  ep_barn,  eta,  sigma,  stresses, fs,  psi_n,  loadunl_n,  Tao_n,  Tao_max );
 		return;
 
 	} else { /* Must be MohrCoulomb soil */

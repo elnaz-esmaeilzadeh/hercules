@@ -260,6 +260,7 @@ void MatUpd_vMKH (double J2_pr, tensor_t dev_pr, double psi, double c, tensor_t 
 		tensor_t *epl, tensor_t ep, double *ep_bar, double ep_barn, tensor_t *eta, tensor_t *sigma, tensor_t stresses,
 		double *fs, double *psi_n, double *loadunl_n, double *Tao_n, double *Tao_max );
 
+
 tensor_t ApproxGravity_tensor(double Szz, double phi, double h, double lz, double rho);
 
 
