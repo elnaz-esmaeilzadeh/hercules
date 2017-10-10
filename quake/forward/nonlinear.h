@@ -272,7 +272,11 @@ void MatUpd_vMBA (double Su, double G, double Lambda, double psi, double m, doub
 		         tensor_t e_n, tensor_t e_n1, tensor_t *sigma_ref, tensor_t *sigma,
 		         double substepTol) ;
 
-double getHardening(double kappa, double psi, double m, double G);
+double getHardening (double kappa, double psi, double m, double G);
+double get_kappa    ( tensor_t Sdev, tensor_t Sref, double Tol, double Su, double kn, double G );
+void EvalSubStep    (tensor_t  sigma_n, tensor_t De, tensor_t De_dev, double De_vol, double Dt, tensor_t *sigma_ref,
+		             tensor_t *sigma_up, double kappa_n, double G, double Lambda, double Su,
+		             double psi, double m, double substepTol, double *kappa_up, double *ErrB, double *ErrS);
 
 
 tensor_t ApproxGravity_tensor(double Szz, double phi, double h, double lz, double rho);

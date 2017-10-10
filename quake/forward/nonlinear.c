@@ -1473,8 +1473,8 @@ void MatUpd_vMBA (double Su, double G, double Lambda, double psi, double m, doub
  	* kappa         : Updated hardening variable
     * Sref          : Updated reference deviator stress tensor          */
 
-	double   Dt, T, Dtmin, kappa_n, load_unload, Den1, Den2;
-	tensor_t sigma_n, Num;
+	double   Dt, T, Dtmin, kappa_n, load_unload, Den1, Den2, kappa_up, ErrB, ErrS;
+	tensor_t sigma_n, sigma_up, Num;
 
 	Dt 	  = 1.0;
 	T     = 0.0;
@@ -1504,17 +1504,111 @@ void MatUpd_vMBA (double Su, double G, double Lambda, double psi, double m, doub
 		Num  = add_tensors ( scaled_tensor( sigma_n, (1.0+kappa_n) ), scaled_tensor( (subtrac_tensors (sigma_n , *sigma_ref) ) ,kappa_n*(1.0+kappa_n) ) );
 
 		load_unload = -ddot_tensors(Num,De) / (Den1 + Den2);
-
 	}
+
+	if ( load_unload > 0 ) {
+	    kappa_n    = FLT_MAX;
+	    *sigma_ref = copy_tensor( Sdev_n1 );
+	}
+
+	EvalSubStep (  sigma_n,  De,  De_dev,  De_vol, Dt,  sigma_ref,  &sigma_up,  kappa_n,
+			       G,        Lambda,  Su,  psi,  m,  substepTol, &kappa_up,  &ErrB,  &ErrS);
+
+
+	double Emax = 0;
+	int    step_max = 0;
+
+
+
+/*	Emax = 0;  								done**
+	step_emax = 0;
+	if Err_B > Stol % begin sub-stepping
+	    xi_sup=0;
+	    kappa_o = kappa_n;
+	    for i=1:NoSubSteps
+
+
+	        while(  Err_B > Stol  )
+
+	            Dt_sup = min(xi_sup*Dt,1-T);
+	            xi = max([0.9*sqrt(Stol/(max(Err_B))),0.1]);
+	            Dt = max(xi*Dt, Dtmin);
+	            Dt = min(Dt, 1-T);
+
+	            % compute state for xi_sup (xi_sup=xi extrapolated)
+	            if Dt_sup > Dt
+	                [kappa, sigma, Err_S, Err_B] = evalSubStep(sigma_n, De, De_dev,De_vol, Dt_sup, Son, Su, kappa_n, A, G, K, h, m, Tol, FncType);
+	            end
+
+	            if Err_B > Stol
+	                [kappa, sigma, Err_S, Err_B] = evalSubStep(sigma_n, De, De_dev,De_vol, Dt, Son, Su, kappa_n, A, G, K, h, m, Tol, FncType);
+
+	                xi_sup = 0; %forget about xi_sup
+	            else
+	                Dt=Dt_sup;
+	            end
+
+	            if  (Dt == Dtmin)
+	                break;
+	            end
+
+	        end
+
+	        if Dt==Dtmin && Err_B > Stol
+	            if Err_B > Emax
+	                Emax = Err_B;
+	                step_emax = i;
+	            end
+	% %             warning(['Reached Dtmin with Err_B=' num2str(Err_B) 'and Err_S=' num2str(Err_S) ', Stol=' num2str(Stol) '. step=' num2str(step) '. Increase number of sub-steps or reduce the error tolerance']);
+	        end
+
+
+	        % update initial  values
+	        sigma_n = sigma;
+	        kappa_n = kappa;
+	        Sd      = sigma - trace(sigma)/3*eye(3,3);
+	        kappa   = get_kappa2(Sd,Son, Tol, Su, kappa_o, G);
+	        T       = T + Dt;
+
+
+	        % update inner time
+	        if T==1
+	            if step_emax ~= 0
+	                warning(['Reached Err_B=' num2str(Emax)  ' at sub-step=' num2str(step_emax) ' of step=' num2str(step) '. Tol=' num2str(Stol) '. Dtmin=' num2str(Dtmin) '. Increase number of sub-steps or reduce the error tolerance']);
+	            end
+	            return;
+	        end
+
+	        % obtain size for the next increment
+	        xi_sup = min(0.9*sqrt(Stol/Err_B),1.1);
+
+	        Err_B = 1E10;
+
+
+	    end
+
+	    if i==NoSubSteps
+	                        NoSubSteps = ceil(1.2*NoSubSteps)  % double the number of sub-steps
+
+	        warning(['Reached max number of sub-steps. Pseudo-time T:'  num2str(T) '. step=' num2str(step) '. Increase number of sub-steps or reduce the error tolerance']);
+	    end
+
+
+	end*/
+
+
+
 
 }
 
 
-void EvalSubStep (tensor_t  sigma_n, tensor_t De, tensor_t De_dev, double De_vol, double Dt, tensor_t *sigma_ref,
-		          double kappa_n, double G, double Lambda, double psi, double m, double substepTol) {
+void EvalSubStep (tensor_t  sigma_n, tensor_t De, tensor_t De_dev, double De_vol,
+		          double Dt, tensor_t *sigma_ref, tensor_t *sigma_up, double kappa_n,
+		          double G, double Lambda, double Su, double psi, double m, double substepTol,
+		          double *kappa_up, double *ErrB, double *ErrS) {
 
-	tensor_t Sdev_0, DSdev1, Sdev1, Dsigma1;
-	double   H_n, psi1, K;
+	tensor_t Sdev_0, DSdev1, DSdev2, Sdev1, Sdev2, Dsigma1, Dsigma2, Dss;
+	double   H_n, H_n2, xi1, xi2, K, kappa1, kappa2, Tol=1E-05;
 
 	K       = Lambda + 2.0 * G / 3;
 	De 		= scaled_tensor(De,Dt);
@@ -1524,19 +1618,38 @@ void EvalSubStep (tensor_t  sigma_n, tensor_t De, tensor_t De_dev, double De_vol
 	/* get sigma_n deviatoric */
 	Sdev_0   = tensor_deviator( sigma_n, tensor_octahedral ( tensor_I1 ( sigma_n ) ) );
 	H_n      = getHardening( kappa_n, psi, m, G);
-	psi1     = 2.0 * G / ( 1.0 + 3.0 * G / H_n );
+	xi1      = 2.0 * G / ( 1.0 + 3.0 * G / H_n );
 
-	DSdev1   = scaled_tensor(De_dev,psi1);
-	Sdev1    = add_tensors(Sdev_0, DSdev1);
+	DSdev1   = scaled_tensor( De_dev,xi1 );
+	Sdev1    = add_tensors( Sdev_0, DSdev1 );
 	Dsigma1  = add_tensors( isotropic_tensor(K * De_vol), Sdev1 );
+	kappa1   = get_kappa( Sdev1, *sigma_ref, Tol, Su, kappa_n, G );
 
+	/* get second set of values */
+	H_n2     = getHardening( kappa1, psi, m, G );
+	xi2      = 2.0 * G / ( 1.0 + 3.0 * G / H_n2 );
 
+	DSdev2   = scaled_tensor( De_dev,xi2 );
+	Sdev2    = add_tensors( Sdev_0, DSdev2 );
+	kappa2   = get_kappa( Sdev2, *sigma_ref, Tol, Su, kappa_n, G );
+	Dsigma2  = add_tensors( isotropic_tensor(K * De_vol), Sdev2 );
 
+	*sigma_up = add_tensors (  add_tensors( sigma_n, isotropic_tensor(K*De_vol) ),
+			                   add_tensors( scaled_tensor(DSdev1,0.5), scaled_tensor(DSdev2,0.5) ) );
+	*kappa_up = (kappa1+kappa2)/2;
 
+	/* compute errors */
+	Dss       =  subtrac_tensors(Dsigma2,Dsigma1);
+	*ErrS     =  sqrt(2.0 *  tensor_J2 ( Dss ) ) / sqrt(2.0 *  tensor_J2 ( *sigma_up ) );
+
+	double R  = sqrt(8/3)*Su;
+
+	tensor_t SmSo = subtrac_tensors( add_tensors( scaled_tensor(DSdev1,0.5), scaled_tensor(DSdev2,0.5) ), *sigma_ref );
+	tensor_t S1   = add_tensors    ( add_tensors( scaled_tensor(DSdev1,0.5), scaled_tensor(DSdev2,0.5) ), scaled_tensor(SmSo,*kappa_up) );
+
+	*ErrB         = abs( sqrt( ddot_tensors(S1,S1) ) - R ) / R;
 
 }
-
-
 
 
 /*function [kappa, sigma, Err_S, Err_B] = evalSubStep(sigma_n, De, De_dev,De_vol, Dt, Son, Su, kappa_n, A, G, K, h, m, Tol,  FncType)
@@ -1629,7 +1742,7 @@ end*/
 
 double get_kappa( tensor_t Sdev, tensor_t Sref, double Tol, double Su, double kn, double G ) {
 
-	double R, Fk;
+	double R, Fk, Dk, Jk;
 	tensor_t SmSo, S1;
 
 	R = sqrt(8.0/3.0) * Su;
@@ -1642,7 +1755,15 @@ double get_kappa( tensor_t Sdev, tensor_t Sref, double Tol, double Su, double kn
 
 	Fk   = sqrt(ddot_tensors(S1,S1)) - R;
 
-	return Fk;
+	while ( abs(Fk) > Tol ) {
+		Jk   = ddot_tensors(SmSo,S1)/(sqrt(ddot_tensors(S1,S1)));
+		Dk   = -Fk / Dk;
+		kn   = kn + Dk;
+		S1   = add_tensors(Sdev, scaled_tensor(SmSo,kn));
+		Fk   = sqrt(ddot_tensors(S1,S1)) - R;
+	}
+
+	return kn;
 
 }
 
