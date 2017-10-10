@@ -35,6 +35,7 @@
 #define  QC  qc = 0.577350269189 /* sqrt(3.0)/3.0; */
 
 #define MAX(a, b) ((a)>(b)?(a):(b))
+#define MIN(a, b) ((a)<(b)?(a):(b))
 
 #define  XI  xi[3][8] = { {-1,  1, -1,  1, -1,  1, -1, 1} , \
                           {-1, -1,  1,  1, -1, -1,  1, 1} , \
@@ -294,7 +295,7 @@ void nonlinear_init( int32_t     myID,
                      double      theEndT )
 {
     double  double_message[2];
-    int     int_message[7];
+    int     int_message[8];
 
     /* Capturing data from file --- only done by PE0 */
     if (myID == 0) {
@@ -317,9 +318,10 @@ void nonlinear_init( int32_t     myID,
     int_message[4] = (int)theApproxGeoState;
     int_message[5] = (int)theNonlinearFlag;
     int_message[6] = (int)theTensionCutoff;
+    int_message[7] = (int)theNoSubsteps;
 
     MPI_Bcast(double_message, 2, MPI_DOUBLE, 0, comm_solver);
-    MPI_Bcast(int_message,    7, MPI_INT,    0, comm_solver);
+    MPI_Bcast(int_message,    8, MPI_INT,    0, comm_solver);
 
     theGeostaticLoadingT  = double_message[0];
     theGeostaticCushionT  = double_message[1];
@@ -331,6 +333,7 @@ void nonlinear_init( int32_t     myID,
     theApproxGeoState     = int_message[4];
     theNonlinearFlag      = int_message[5];
     theTensionCutoff      = int_message[6];
+    theNoSubsteps         = int_message[7];
 
     /* allocate table of properties for all other PEs */
 
@@ -344,6 +347,7 @@ void nonlinear_init( int32_t     myID,
         theBetaDilatancy    = (double*)malloc(sizeof(double) * thePropertiesCount);
         theGamma0           = (double*)malloc(sizeof(double) * thePropertiesCount);
         thePsi              = (double*)malloc(sizeof(double) * thePropertiesCount);
+        theM                = (double*)malloc(sizeof(double) * thePropertiesCount);
     }
 
     /* Broadcast table of properties */
@@ -356,6 +360,7 @@ void nonlinear_init( int32_t     myID,
     MPI_Bcast(theBetaDilatancy,    thePropertiesCount, MPI_DOUBLE, 0, comm_solver);
     MPI_Bcast(theGamma0,           thePropertiesCount, MPI_DOUBLE, 0, comm_solver);
     MPI_Bcast(thePsi,              thePropertiesCount, MPI_DOUBLE, 0, comm_solver);
+    MPI_Bcast(theM,                thePropertiesCount, MPI_DOUBLE, 0, comm_solver);
 }
 
 /*
@@ -1454,7 +1459,7 @@ double compute_hardening ( double gamma, double c, double Sy, double h, double e
 /*   Material update function for (1994) Borja & Amies models    */
 void MatUpd_vMBA (double Su, double G, double Lambda, double psi, double m, double *kappa,
 		         tensor_t e_n, tensor_t e_n1, tensor_t *sigma_ref, tensor_t *sigma,
-		         double substepTol) {
+		         double substepTol, int *FlagTolSubSteps, int *FlagNoSubSteps, double *ErrMax) {
 
 
 /*	 INPUTS:
@@ -1473,11 +1478,9 @@ void MatUpd_vMBA (double Su, double G, double Lambda, double psi, double m, doub
  	* kappa         : Updated hardening variable
     * Sref          : Updated reference deviator stress tensor          */
 
-	double   Dt, T, Dtmin, kappa_n, load_unload, Den1, Den2, kappa_up, ErrB, ErrS;
-	tensor_t sigma_n, sigma_up, Num;
+	double   Dt=1.0, T=0.0, Dtmin, Dt_sup, kappa_n, load_unload, Den1, Den2, kappa_up, ErrB, ErrS, Tol=1E-3, xi, xi_sup, kappa_o;
+	tensor_t sigma_n, sigma_up, Num, Sdev;
 
-	Dt 	  = 1.0;
-	T     = 0.0;
 	Dtmin = Dt/theNoSubsteps;
 
 	/* At  this point *sigma and *kappa have the information at t-1 */
@@ -1488,7 +1491,7 @@ void MatUpd_vMBA (double Su, double G, double Lambda, double psi, double m, doub
 	tensor_t Sdev_n1   = tensor_deviator( *sigma, tensor_octahedral ( tensor_I1 ( *sigma ) ) );
 
 	/* deviatoric reference stress  */
-	tensor_t Sdev_ref   = tensor_deviator( *sigma_ref, tensor_octahedral ( tensor_I1 ( *sigma_ref ) ) );
+	//tensor_t Sdev_ref   = tensor_deviator( *sigma_ref, tensor_octahedral ( tensor_I1 ( *sigma_ref ) ) );
 
 	/* total strain increment and deviatoric strain increment */
 	tensor_t De       = subtrac_tensors ( e_n, e_n1 );
@@ -1515,89 +1518,74 @@ void MatUpd_vMBA (double Su, double G, double Lambda, double psi, double m, doub
 			       G,        Lambda,  Su,  psi,  m,  substepTol, &kappa_up,  &ErrB,  &ErrS);
 
 
-	double Emax = 0;
-	int    step_max = 0;
+	double Emax     = 0;
+	int    step_Emax = -1, i;
+
+	if ( ErrB > Tol ) { // begin sub-stepping
+		xi_sup  = 0.0;
+		kappa_o = kappa_n;
+
+	    for (i = 0; i < theNoSubsteps ; i++) {
+
+	    	while ( ErrB > Tol ) {
+
+	    		Dt_sup = MIN( xi_sup * Dt, 1-T );
+	    		xi     = MAX( 0.9 * sqrt(Tol / ErrB), 0.10 );
+	    		Dt     = MAX( xi * Dt, Dtmin );
+	    		Dt     = MIN( Dt, 1 - T );
+
+	    		/*  compute state for xi_sup (xi_sup is an extrapolated value of xi)  */
+	    		if ( Dt_sup > Dt ) {
+	    			EvalSubStep (  sigma_n,  De,      De_dev,  De_vol, Dt_sup,  sigma_ref,  &sigma_up,  kappa_n,
+	    					       G,        Lambda,  Su,      psi,    m,       substepTol, &kappa_up,  &ErrB,  &ErrS );
+	    		}
+
+	    		if ( ErrB > Tol ) {
+	    			EvalSubStep ( sigma_n,  De,  De_dev,  De_vol, Dt,  sigma_ref,  &sigma_up,  kappa_n,
+	    					      G,        Lambda,  Su,  psi,    m,   substepTol, &kappa_up,  &ErrB,  &ErrS);
+	    			xi_sup = 0.0;  // forget previous xi_sup
+	    		} else
+	    			Dt = Dt_sup;
+
+	    		if ( Dt == Dtmin )
+	    			break;
+	    	}
 
 
+	        if ( (Dt == Dtmin) && (ErrB > Tol) ) {
+	            if (ErrB > Emax) {
+	            	*ErrMax = ErrB;
+	                step_Emax = i;
+	                //fprintf(stdout,"Exceeded error tolerance at the bounding surface. ErrB:%f, Tol:%f \n", ErrB, Tol );
+	            }
+	        }
 
-/*	Emax = 0;  								done**
-	step_emax = 0;
-	if Err_B > Stol % begin sub-stepping
-	    xi_sup=0;
-	    kappa_o = kappa_n;
-	    for i=1:NoSubSteps
-
-
-	        while(  Err_B > Stol  )
-
-	            Dt_sup = min(xi_sup*Dt,1-T);
-	            xi = max([0.9*sqrt(Stol/(max(Err_B))),0.1]);
-	            Dt = max(xi*Dt, Dtmin);
-	            Dt = min(Dt, 1-T);
-
-	            % compute state for xi_sup (xi_sup=xi extrapolated)
-	            if Dt_sup > Dt
-	                [kappa, sigma, Err_S, Err_B] = evalSubStep(sigma_n, De, De_dev,De_vol, Dt_sup, Son, Su, kappa_n, A, G, K, h, m, Tol, FncType);
-	            end
-
-	            if Err_B > Stol
-	                [kappa, sigma, Err_S, Err_B] = evalSubStep(sigma_n, De, De_dev,De_vol, Dt, Son, Su, kappa_n, A, G, K, h, m, Tol, FncType);
-
-	                xi_sup = 0; %forget about xi_sup
-	            else
-	                Dt=Dt_sup;
-	            end
-
-	            if  (Dt == Dtmin)
-	                break;
-	            end
-
-	        end
-
-	        if Dt==Dtmin && Err_B > Stol
-	            if Err_B > Emax
-	                Emax = Err_B;
-	                step_emax = i;
-	            end
-	% %             warning(['Reached Dtmin with Err_B=' num2str(Err_B) 'and Err_S=' num2str(Err_S) ', Stol=' num2str(Stol) '. step=' num2str(step) '. Increase number of sub-steps or reduce the error tolerance']);
-	        end
-
-
-	        % update initial  values
-	        sigma_n = sigma;
-	        kappa_n = kappa;
-	        Sd      = sigma - trace(sigma)/3*eye(3,3);
-	        kappa   = get_kappa2(Sd,Son, Tol, Su, kappa_o, G);
+	        /* Update initial values  */
+	        sigma_n = copy_tensor(sigma_up);
+	        kappa_n = kappa_up;
+	        Sdev    = tensor_deviator( sigma_n, tensor_octahedral ( tensor_I1 ( sigma_n ) ) );
+	        *kappa  = get_kappa(  Sdev,  *sigma_ref,  Tol,  Su,  kappa_o ,  G );
+	        *sigma  = copy_tensor(sigma_up);
 	        T       = T + Dt;
 
+	        if ( T == 1 ) {
+	        	if ( step_Emax != -1 ) {
+	        		*FlagTolSubSteps = 1;
+	        	}
+	        	return;
+	        }
+	        xi_sup = MIN(0.9*sqrt(Tol/ErrB),1.1);
+	        ErrB   = 1E10;
+	    }
 
-	        % update inner time
-	        if T==1
-	            if step_emax ~= 0
-	                warning(['Reached Err_B=' num2str(Emax)  ' at sub-step=' num2str(step_emax) ' of step=' num2str(step) '. Tol=' num2str(Stol) '. Dtmin=' num2str(Dtmin) '. Increase number of sub-steps or reduce the error tolerance']);
-	            end
-	            return;
-	        end
-
-	        % obtain size for the next increment
-	        xi_sup = min(0.9*sqrt(Stol/Err_B),1.1);
-
-	        Err_B = 1E10;
-
-
-	    end
-
-	    if i==NoSubSteps
-	                        NoSubSteps = ceil(1.2*NoSubSteps)  % double the number of sub-steps
-
-	        warning(['Reached max number of sub-steps. Pseudo-time T:'  num2str(T) '. step=' num2str(step) '. Increase number of sub-steps or reduce the error tolerance']);
-	    end
-
-
-	end*/
-
-
-
+	    if ( i == theNoSubsteps - 1 ) { // reached maximum sub-steps
+	    		*FlagNoSubSteps = 1.0;
+	    		return;
+	    }
+	} else {
+		*kappa = kappa_up;
+		*sigma  = copy_tensor(sigma_up);
+	}
 
 }
 
@@ -1608,7 +1596,7 @@ void EvalSubStep (tensor_t  sigma_n, tensor_t De, tensor_t De_dev, double De_vol
 		          double *kappa_up, double *ErrB, double *ErrS) {
 
 	tensor_t Sdev_0, DSdev1, DSdev2, Sdev1, Sdev2, Dsigma1, Dsigma2, Dss;
-	double   H_n, H_n2, xi1, xi2, K, kappa1, kappa2, Tol=1E-05;
+	double   H_n, H_n2, xi1, xi2, K, kappa1, kappa2, Tol=1E-03;
 
 	K       = Lambda + 2.0 * G / 3;
 	De 		= scaled_tensor(De,Dt);
@@ -1642,12 +1630,12 @@ void EvalSubStep (tensor_t  sigma_n, tensor_t De, tensor_t De_dev, double De_vol
 	Dss       =  subtrac_tensors(Dsigma2,Dsigma1);
 	*ErrS     =  sqrt(2.0 *  tensor_J2 ( Dss ) ) / sqrt(2.0 *  tensor_J2 ( *sigma_up ) );
 
-	double R  = sqrt(8/3)*Su;
+	double R  = Su * sqrt(8.0/3.0);
 
-	tensor_t SmSo = subtrac_tensors( add_tensors( scaled_tensor(DSdev1,0.5), scaled_tensor(DSdev2,0.5) ), *sigma_ref );
-	tensor_t S1   = add_tensors    ( add_tensors( scaled_tensor(DSdev1,0.5), scaled_tensor(DSdev2,0.5) ), scaled_tensor(SmSo,*kappa_up) );
+	tensor_t SmSo = subtrac_tensors( add_tensors( scaled_tensor(Sdev1,0.5), scaled_tensor(Sdev2,0.5) ), *sigma_ref );
+	tensor_t S1   = add_tensors    ( add_tensors( scaled_tensor(Sdev1,0.5), scaled_tensor(Sdev2,0.5) ), scaled_tensor(SmSo,*kappa_up) );
 
-	*ErrB         = abs( sqrt( ddot_tensors(S1,S1) ) - R ) / R;
+	*ErrB         = fabs( sqrt( ddot_tensors(S1,S1) ) - R ) / R;
 
 }
 
@@ -1755,13 +1743,17 @@ double get_kappa( tensor_t Sdev, tensor_t Sref, double Tol, double Su, double kn
 
 	Fk   = sqrt(ddot_tensors(S1,S1)) - R;
 
-	while ( abs(Fk) > Tol ) {
+	while ( fabs(Fk) > Tol ) {
 		Jk   = ddot_tensors(SmSo,S1)/(sqrt(ddot_tensors(S1,S1)));
-		Dk   = -Fk / Dk;
+		Dk   = -Fk / Jk;
 		kn   = kn + Dk;
 		S1   = add_tensors(Sdev, scaled_tensor(SmSo,kn));
 		Fk   = sqrt(ddot_tensors(S1,S1)) - R;
 	}
+
+	if ( kn < 0 )
+		kn = 100 * G;
+
 
 	return kn;
 
@@ -1853,7 +1845,7 @@ void MatUpd_vMFA (double J2_pr, tensor_t dev_pr, double psi, double Su, tensor_t
     dl  = FLT_MAX;
 
     for (i = 0; i < 4; i++) {
-    	if ( ( z[2*i] >= 0.0 ) && ( abs(z[2*i+1]) <= 1E-10 ) && ( z[2*i] < dl ) )
+    	if ( ( z[2*i] >= 0.0 ) && ( fabs(z[2*i+1]) <= 1E-10 ) && ( z[2*i] < dl ) )
     		dl = z[2*i];
     }
 
@@ -1933,7 +1925,7 @@ void MatUpd_vMFA (double J2_pr, tensor_t dev_pr, double psi, double Su, tensor_t
             dl  = FLT_MAX;
 
             for (i = 0; i < 4; i++) {
-            	if ( ( z2[2*i] >= 0.0 ) && ( abs(z2[2*i+1]) <= 1E-10 ) && ( z2[2*i] < dl ) )
+            	if ( ( z2[2*i] >= 0.0 ) && ( fabs(z2[2*i+1]) <= 1E-10 ) && ( z2[2*i] < dl ) )
             		dl = z2[2*i];
             }
 
@@ -1984,7 +1976,8 @@ void MatUpd_vMFA (double J2_pr, tensor_t dev_pr, double psi, double Su, tensor_t
 
 
 void material_update ( nlconstants_t constants, tensor_t e_n, tensor_t e_n1, tensor_t ep, tensor_t eta_n,  double ep_barn, tensor_t sigma0, double dt,
-		tensor_t *epl, tensor_t *eta, tensor_t *sigma, double *ep_bar, double *fs, double *psi_n, double *loadunl_n, double *Tao_n, double *Tao_max, double *kp, tensor_t *sigma_ref) {
+		tensor_t *epl, tensor_t *eta, tensor_t *sigma, double *ep_bar, double *fs, double *psi_n, double *loadunl_n, double *Tao_n, double *Tao_max, double *kp, tensor_t *sigma_ref,
+		int *flagTolSubSteps, int *flagNoSubSteps, double *ErrBA) {
 	/* INPUTS:
 	 * constants: Material constants
 	 * e_n      : Total strain tensor
@@ -2139,11 +2132,7 @@ void material_update ( nlconstants_t constants, tensor_t e_n, tensor_t e_n1, ten
 
 	}  else if ( theMaterialModel == VONMISES_BAE || theMaterialModel == VONMISES_BAH ) {
 
-
-		MatUpd_vMBA ( c,  mu,  Lambda, psi0,  m,  kp,  e_n,  e_n1, sigma_ref, sigma , 1E-05 );
-
-
-
+		MatUpd_vMBA ( c,  mu,  Lambda, psi0,  m,  kp,  e_n,  e_n1, sigma_ref, sigma , 1E-05, flagTolSubSteps, flagNoSubSteps, ErrBA );
 		return;
 
 	} else { /* Must be MohrCoulomb soil */
@@ -2217,7 +2206,7 @@ void material_update ( nlconstants_t constants, tensor_t e_n, tensor_t e_n1, ten
 			cond2 = sigma_ppal.y - sigma_ppal.z;
 			double p_trial = ( sigma_ppal_trial.x + sigma_ppal_trial.y + sigma_ppal_trial.z )/3.0;
 
-			if ( (cond1 <= 0.0 ) && ( abs(cond1) >= Tol_sigma)  ) { /* return to the apex */
+			if ( (cond1 <= 0.0 ) && ( fabs(cond1) >= Tol_sigma)  ) { /* return to the apex */
 				if (theTensionCutoff == YES) {
 					sigma_ppal.x = 0.0;
 					sigma_ppal.y = 0.0;
@@ -2225,7 +2214,7 @@ void material_update ( nlconstants_t constants, tensor_t e_n, tensor_t e_n1, ten
 					*ep_bar      = 0.0; /* Todo: should think in a correct way to compute it when the tension cutoff option is on  */
 				} else
 					BOX87_l(ep_barn, p_trial, phi, dil, h, c, kappa, &sigma_ppal, ep_bar);
-			} else if ( (cond2 <= 0.0) && (abs(cond2) >= Tol_sigma) ){
+			} else if ( (cond2 <= 0.0) && (fabs(cond2) >= Tol_sigma) ){
 				if (theTensionCutoff == YES) {
 					sigma_ppal.x = 0.0;
 					sigma_ppal.y = 0.0;
@@ -3408,10 +3397,6 @@ void compute_addforce_nl (mesh_t     *myMesh,
         mu     = ec.mu;
         lambda = ec.lambda;
 
-//        int kk=0;
-//        if ( (nl_eindex==462) )
-//        	kk=89;
-
 //        if ( theMaterialModel == LINEAR ) {
 
             stresses = myNonlinSolver->stresses[nl_eindex];
@@ -3617,9 +3602,26 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
 				else
 					sigma0 = zero_tensor();
 
-					material_update ( *enlcons,           tstrains->qp[i],      tstrains1->qp[i],   pstrains1->qp[i],  alphastress1->qp[i], epstr1->qv[i],   sigma0,        theDeltaT,
-						              &pstrains2->qp[i],  &alphastress2->qp[i], &stresses->qp[i],   &epstr2->qv[i],    &enlcons->fs[i],     &psi_n->qv[i],
-						              &lounlo_n->qv[i], &Sv_n->qv[i], &Sv_max->qv[i], &kappa->qv[i], &Sref->qp[i] );
+				int flagTolSubSteps=0, flagNoSubSteps=0;
+				double ErrBA=0;
+				double po=90;
+
+				if (i==1 && eindex == 16760 && step == 121)
+					po=89;
+
+				material_update ( *enlcons,           tstrains->qp[i],      tstrains1->qp[i],   pstrains1->qp[i],  alphastress1->qp[i], epstr1->qv[i],   sigma0,        theDeltaT,
+						          &pstrains2->qp[i],  &alphastress2->qp[i], &stresses->qp[i],   &epstr2->qv[i],    &enlcons->fs[i],     &psi_n->qv[i],
+						          &lounlo_n->qv[i], &Sv_n->qv[i], &Sv_max->qv[i], &kappa->qv[i], &Sref->qp[i], &flagTolSubSteps, &flagNoSubSteps, &ErrBA);
+
+				if ( ( theMaterialModel == VONMISES_BAE || theMaterialModel == VONMISES_BAH ) ) {
+					if (flagTolSubSteps==1)
+						fprintf(stdout,"Exceeded Error Tolerance:%f at GP:%d, eindex: %d, step: %d \n", ErrBA, i, eindex, step);
+
+					if (flagNoSubSteps==1)
+						fprintf(stdout,"Exceeded number of sub-steps at GP:%d, eindex: %d -- INCREASE SUBSTEPS NUMBER \n", i, eindex);
+				}
+
+
 			}
 		} /* for all quadrature points */
 	} /* for all nonlinear elements */

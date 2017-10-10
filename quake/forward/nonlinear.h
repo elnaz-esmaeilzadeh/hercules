@@ -262,7 +262,8 @@ tensor_t compute_pstrain2            ( nlconstants_t constants, tensor_t pstrain
 							           double J2_st, double I1_st, double po );
 
 void material_update ( nlconstants_t constants, tensor_t e_n, tensor_t e_n1, tensor_t ep, tensor_t eta_n, double ep_barn, tensor_t sigma0, double dt,
-		               tensor_t *epl, tensor_t *eta, tensor_t *sigma, double *ep_bar, double *fs, double *psi_n, double *loadunl_n, double *Tao_n, double *Tao_max, double *kp, tensor_t *sigma_ref );
+		               tensor_t *epl, tensor_t *eta, tensor_t *sigma, double *ep_bar, double *fs, double *psi_n, double *loadunl_n, double *Tao_n,
+		               double *Tao_max, double *kp, tensor_t *sigma_ref,  int *flagTolSubSteps, int *flagNoSubSteps, double *ErrBA );
 
 void MatUpd_vMFA (double J2_pr, tensor_t dev_pr, double psi, double c, tensor_t eta_n, tensor_t e_n1, double mu, double Lambda, double Sy,
 		tensor_t *epl, tensor_t ep, double *ep_bar, double ep_barn, tensor_t *eta, tensor_t *sigma, tensor_t stresses,
@@ -270,7 +271,7 @@ void MatUpd_vMFA (double J2_pr, tensor_t dev_pr, double psi, double c, tensor_t 
 
 void MatUpd_vMBA (double Su, double G, double Lambda, double psi, double m, double *kappa,
 		         tensor_t e_n, tensor_t e_n1, tensor_t *sigma_ref, tensor_t *sigma,
-		         double substepTol) ;
+		         double substepTol, int *FlagSubSteps, int *FlagNoSubSteps, double *ErrMax) ;
 
 double getHardening (double kappa, double psi, double m, double G);
 double get_kappa    ( tensor_t Sdev, tensor_t Sref, double Tol, double Su, double kn, double G );
