@@ -1478,10 +1478,11 @@ void MatUpd_vMBA (double Su, double G, double Lambda, double psi, double m, doub
  	* kappa         : Updated hardening variable
     * Sref          : Updated reference deviator stress tensor          */
 
-	double   Dt=1.0, T=0.0, Dtmin, Dt_sup, kappa_n, load_unload, Den1, Den2, kappa_up, ErrB, ErrS, Tol=1E-3, xi, xi_sup, kappa_o;
+	double   Dt=1.0, T=0.0, Dtmin, Dt_sup, kappa_n, load_unload, Den1, Den2, kappa_up, ErrB, ErrS, Tol=1E-5, xi, xi_sup, kappa_o, 	K ;
 	tensor_t sigma_n, sigma_up, Num, Sdev;
 
 	Dtmin = Dt/theNoSubsteps;
+	K     = Lambda + 2.0 * G / 3.0;
 
 	/* At  this point *sigma and *kappa have the information at t-1 */
 	kappa_n = *kappa;
@@ -1498,20 +1499,30 @@ void MatUpd_vMBA (double Su, double G, double Lambda, double psi, double m, doub
 	double   De_vol   = tensor_I1 ( De );
 	tensor_t De_dev   = tensor_deviator( De, tensor_octahedral ( De_vol ) );
 
-	/*	unloading check */
-	if ( kappa_n == FLT_MAX )
-			load_unload = -1.0;
-	else {
-		Den1 = ddot_tensors(sigma_n, subtrac_tensors (sigma_n , *sigma_ref));
-		Den2 = kappa_n * ( ddot_tensors(subtrac_tensors (sigma_n , *sigma_ref), subtrac_tensors (sigma_n , *sigma_ref)) );
-		Num  = add_tensors ( scaled_tensor( sigma_n, (1.0+kappa_n) ), scaled_tensor( (subtrac_tensors (sigma_n , *sigma_ref) ) ,kappa_n*(1.0+kappa_n) ) );
+
+		Den1 = ddot_tensors(Sdev_n1, subtrac_tensors (Sdev_n1 , *sigma_ref));
+		Den2 = kappa_n * ( ddot_tensors(subtrac_tensors (Sdev_n1 , *sigma_ref), subtrac_tensors (Sdev_n1 , *sigma_ref)) );
+		Num  = add_tensors ( scaled_tensor( Sdev_n1, (1.0+kappa_n) ), scaled_tensor( (subtrac_tensors (Sdev_n1 , *sigma_ref) ) ,kappa_n*(1.0+kappa_n) ) );
 
 		load_unload = -ddot_tensors(Num,De) / (Den1 + Den2);
-	}
+	//}
 
 	if ( load_unload > 0 ) {
-	    kappa_n    = FLT_MAX;
+		*kappa = get_kappaUnLo(  Sdev_n1,  De_dev,  Tol,  Su,  1E+09,  G,  psi,  m, ErrMax );
 	    *sigma_ref = copy_tensor( Sdev_n1 );
+
+		/* get sigma_n deviatoric */
+		double H_n      = getHardening( *kappa, psi, m, G);
+		double xi1      = 2.0 * G / ( 1.0 + 3.0 * G / H_n );
+		tensor_t DSdev  = scaled_tensor( De_dev, xi1 );
+
+		double popo = tensor_J2(DSdev);
+		if (isnan(popo) || isinf(popo))
+			fprintf(stdout," NAN at unloading: %f.  \n",popo);
+
+		*sigma          = add_tensors (  add_tensors( sigma_n, isotropic_tensor(K * De_vol) ),  DSdev  );
+		return;
+
 	}
 
 	EvalSubStep (  sigma_n,  De,  De_dev,  De_vol, Dt,  sigma_ref,  &sigma_up,  kappa_n,
@@ -1549,6 +1560,7 @@ void MatUpd_vMBA (double Su, double G, double Lambda, double psi, double m, doub
 
 	    		if ( Dt == Dtmin )
 	    			break;
+
 	    	}
 
 
@@ -1556,7 +1568,6 @@ void MatUpd_vMBA (double Su, double G, double Lambda, double psi, double m, doub
 	            if (ErrB > Emax) {
 	            	*ErrMax = ErrB;
 	                step_Emax = i;
-	                //fprintf(stdout,"Exceeded error tolerance at the bounding surface. ErrB:%f, Tol:%f \n", ErrB, Tol );
 	            }
 	        }
 
@@ -1572,6 +1583,9 @@ void MatUpd_vMBA (double Su, double G, double Lambda, double psi, double m, doub
 	        	if ( step_Emax != -1 ) {
 	        		*FlagTolSubSteps = 1;
 	        	}
+	    		double popo = tensor_J2(Sdev);
+	    		if (isnan(popo) || isinf(popo))
+	    			fprintf(stdout," NAN at T=1 exit J2= %f.  \n",popo);
 	        	return;
 	        }
 	        xi_sup = MIN(0.9*sqrt(Tol/ErrB),1.1);
@@ -1580,11 +1594,17 @@ void MatUpd_vMBA (double Su, double G, double Lambda, double psi, double m, doub
 
 	    if ( i == theNoSubsteps - 1 ) { // reached maximum sub-steps
 	    		*FlagNoSubSteps = 1.0;
+	    		double popo = tensor_J2(Sdev);
+	    		if (isnan(popo) || isinf(popo))
+	    			fprintf(stdout," NAN when reaching Maxsubsteps J2=%f.  \n",popo);
 	    		return;
 	    }
 	} else {
 		*kappa = kappa_up;
 		*sigma  = copy_tensor(sigma_up);
+		double popo = tensor_J2(Sdev);
+		if (isnan(popo) || isinf(popo))
+			fprintf(stdout," NAN without substepping J2=%f, kappa=%f.  \n",popo, kappa_up);
 	}
 
 }
@@ -1598,7 +1618,7 @@ void EvalSubStep (tensor_t  sigma_n, tensor_t De, tensor_t De_dev, double De_vol
 	tensor_t Sdev_0, DSdev1, DSdev2, Sdev1, Sdev2, Dsigma1, Dsigma2, Dss;
 	double   H_n, H_n2, xi1, xi2, K, kappa1, kappa2, Tol=1E-03;
 
-	K       = Lambda + 2.0 * G / 3;
+	K       = Lambda + 2.0 * G / 3.0;
 	De 		= scaled_tensor(De,Dt);
 	De_dev 	= scaled_tensor(De_dev,Dt);
 	De_vol 	= De_vol * Dt;
@@ -1640,44 +1660,6 @@ void EvalSubStep (tensor_t  sigma_n, tensor_t De, tensor_t De_dev, double De_vol
 }
 
 
-/*function [kappa, sigma, Err_S, Err_B] = evalSubStep(sigma_n, De, De_dev,De_vol, Dt, Son, Su, kappa_n, A, G, K, h, m, Tol,  FncType)
-
-De      = De     * Dt;
-De_dev  = De_dev * Dt;
-De_vol  = De_vol * Dt;
-
-Sdev_o = sigma_n - trace(sigma_n)/3*eye(3,3);
-
-H_n = getHardening(FncType, kappa_n, h, m, G, A, Tol);
-psi1 = 2*G / (1+3*G/H_n);
-
-DSdev1  = psi1*De_dev;
-Sdev1   = Sdev_o + DSdev1;
-Dsigma1 = K*De_vol*eye(3,3) + DSdev1;
-kappa1  = get_kappa2(Sdev1,Son, Tol, Su, kappa_n,G);
-
-%%get second set of values
-H_n2   = getHardening(FncType, kappa1, h, m, G, A, Tol);
-psi2   = 2*G / (1+3*G/H_n2);
-DSdev2 = psi2*De_dev;
-Sdev2  = Sdev_o + DSdev2;
-kappa2 = get_kappa2(Sdev2,Son, Tol, Su, kappa_n,G);
-Dsigma2  =  K*De_vol*eye(3,3) + DSdev2;
-
-sigma  = sigma_n + K*De_vol*eye(3,3) + (DSdev2+DSdev1)/2;
-kappa  = (kappa1+kappa2)/2;
-
-%compute errors
-Dss = Dsigma2 - Dsigma1;
-Err_S = sqrt(sum(sum(Dss.*Dss)))/(sqrt(sum(sum(sigma.*sigma))));
-
-R     = sqrt(8/3)*Su;
-SmSo  = (Sdev1+Sdev2)/2 - Son;
-S1    = (Sdev1+Sdev2)/2 + kappa * SmSo;
-Err_B = abs(sqrt(sum(sum(S1.*S1))) - R)/R;
-
-end*/
-
 
 double getHardening(double kappa, double psi, double m, double G) {
 
@@ -1695,102 +1677,123 @@ double getHardening(double kappa, double psi, double m, double G) {
 	return H;
 }
 
-/*
-function H = getHardening(FncType, kappa_n, h, m, mu, A, Tol)
 
-if FncType == 0 % exponential funtion
-
-%      H = h*(kappa_n^m) + kappa_n*exp(A*kappa_n);
-    H = h*(kappa_n^m) ;
-else
-
-    if FncType == 1  % hyperbolic funtion
-        if kappa_n==inf
-            H = inf;
-        else
-            H = 3*mu*(kappa_n^2)/(1+2*kappa_n); % hyperbolic funtion
-        end
-    else
-        if FncType == 2  % Davidenkov model
-            tetha = get_tetha(kappa_n,A, 0, Tol);
-            H = 3*mu* ((1+tetha)/(1+tetha+A)*(1+1/tetha)^A-1);
-
-%             H = kappa_n*exp(A*kappa_n);
-
-        else
-            error('Hardening funtion not recognized');
-        end
-    end
-
-
-end
-
-
-end*/
 
 double get_kappa( tensor_t Sdev, tensor_t Sref, double Tol, double Su, double kn, double G ) {
 
-	double R, Fk, Dk, Jk;
+	double R, Fk, Dk, Jk, kappa;
 	tensor_t SmSo, S1;
 
+	kappa = kn;
 	R = sqrt(8.0/3.0) * Su;
 
-	if ( kn == FLT_MAX )
-		kn = 100 * G;
-
 	SmSo = subtrac_tensors(Sdev,Sref);
-	S1   = add_tensors(Sdev, scaled_tensor(SmSo,kn));
+	S1   = add_tensors(Sdev, scaled_tensor(SmSo,kappa));
 
 	Fk   = sqrt(ddot_tensors(S1,S1)) - R;
 
 	while ( fabs(Fk) > Tol ) {
-		Jk   = ddot_tensors(SmSo,S1)/(sqrt(ddot_tensors(S1,S1)));
-		Dk   = -Fk / Jk;
-		kn   = kn + Dk;
-		S1   = add_tensors(Sdev, scaled_tensor(SmSo,kn));
-		Fk   = sqrt(ddot_tensors(S1,S1)) - R;
+		Jk     = ddot_tensors(SmSo,S1)/(sqrt(ddot_tensors(S1,S1)));
+		Dk     = -Fk / Jk;
+		kappa  = kappa + Dk;
+		S1     = add_tensors(Sdev, scaled_tensor(SmSo,kappa));
+		Fk     = sqrt(ddot_tensors(S1,S1)) - R;
 	}
 
-	if ( kn < 0 )
-		kn = 100 * G;
+	if ( kappa < 0)
+		kappa = kn;
 
-
-	return kn;
+	return kappa;
 
 }
 
-/*function kappa = get_kappa2(Sdev,Son, Tol, Su, kn,mu)
+double get_kappaUnLo( tensor_t Sn, tensor_t De, double Tol, double Su, double kn, double G, double psi, double m, double *Err ) {
 
-R = sqrt(8/3)*Su;
+	double R, Fk, Dk, Jk, A, B, C, Hk, Psik, Dpsi_Dk, kappa, kappa1, kappa2, alpha, phi;
+	int    i, cnt=0, cnt_max=100;
 
-if kn==inf
-    kn=100*mu;
-end
+	kappa = kn;
+	R     = sqrt(8.0/3.0) * Su;
 
-SmSo = Sdev-Son;
-S1   = Sdev + kn * SmSo;
-Fk   = sqrt(sum(sum(S1.*S1))) - R;
+	A = ddot_tensors(Sn,Sn);
+	B = 2.0 * ddot_tensors(Sn,De);
+	C = ddot_tensors(De,De);
 
-while(abs(Fk)>Tol)
+	/* ========== Improve kn value =========== */
 
-    Jk   = sum(sum(SmSo.*S1))/sqrt(sum(sum(S1.*S1)));
+	kappa1 = (-B + sqrt( B*B - 4.0*C*(A-R*R) ) ) / (2 * C);
+	kappa2 = (-B - sqrt( B*B - 4.0*C*(A-R*R) ) ) / (2 * C);
 
-    Dk  = -Fk/Jk;
-    kn  = kn + Dk;
+	phi  = MAX(kappa1,kappa2);
 
-    S1   = Sdev + kn * SmSo;
-    Fk   = sqrt(sum(sum(S1.*S1))) - R;
+    /* Sanity check. Should not get here !!!  */
+    if ( phi < 0.0 ) {
+        fprintf(stderr,"Material update error: "
+                "negative kappa at unloading:%f \n",kappa);
+        MPI_Abort(MPI_COMM_WORLD, ERROR);
+        exit(1);
+    }
 
-end
+    alpha = 2.0 * G * psi * G / phi;
+    Fk    = alpha * (pow(kn,(m+1))) + (alpha-psi*G)*(pow(kn,m)) - 3.0 * G;
+    for (i = 0; i < 50; i++) {
+	     Jk  = ( m + 1 ) * alpha * ( pow(kn,m) ) + m * ( alpha - psi * G ) * ( pow(kn,(m-1)) );
+	     Dk = -Fk/Jk;
+	     kn  = kn + Dk;
+	     if ( kn < 0 )
+	    	 break;
+	     Fk    = alpha * (pow(kn,(m+1))) + (alpha-psi*G)*(pow(kn,m)) - 3.0 * G;
+    }
 
-if kn<0
-    kn=0;
-end
+    if ( kn > 0 && fabs(Fk) < Tol ) {
+    	kappa = kn;
+    	*Err = Fk;
+    	return kappa;
+    }
 
-kappa = kn;
+    if ( kn > 0  )
+    	kappa = kn;
+    /* ========== Improve kn value =========== */
+
+	Hk = getHardening( kappa, psi, m, G);
+	Psik = 2.0 * G / ( 1.0 + 3.0 * G / Hk );
+	Fk   = A + B * ( 1.0 + kappa ) * Psik + C * pow( ( ( 1 + kappa ) * Psik ), 2 ) - pow(R,2);
+
+	while ( fabs(Fk) > Tol ) {
+
+		if ( theMaterialModel == VONMISES_BAE )
+			Dpsi_Dk = ( 6.0 / ( pow( ( 3.0 + Hk / G ),2 ) ) ) * ( m * psi*G * ( pow(kappa,(m-1)) ) );
+		else
+			Dpsi_Dk = ( 6.0 / ( pow( ( 3.0 + Hk / G ),2 ) ) ) * ( 6.0 * G * kappa * (1.0 + 3.0 * kappa) / (pow( ( 1.0 + 2.0 * kappa ), 2) ) );
 
 
-end*/
+		Jk   =  B * Psik + B * kappa * Dpsi_Dk + 2.0 * C * (1.0 + kappa) * Psik * ( (1.0 + kappa) * Dpsi_Dk + Psik );
+		Dk   = -Fk / Jk;
+		kappa   = kappa + Dk;
+
+		Hk   = getHardening( kappa, psi, m, G);
+		Psik = 2.0 * G / ( 1.0 + 3.0 * G / Hk );
+		Fk   = A + B * ( 1.0 + kappa ) * Psik + C * pow( ( ( 1 + kappa ) * Psik ), 2 ) - pow(R,2);
+		cnt  = cnt + 1;
+
+		if (cnt > cnt_max)
+			break;
+
+	}
+
+    if ( cnt > cnt_max ) {
+        fprintf(stdout," Minimum error found at unloading: %f. Error allowed=%f  \n",Fk, Tol);
+    }
+
+    if ( kappa < 0 ) {
+        fprintf(stdout," Found negative kappa at unloading: %f.  \n", kappa );
+    }
+
+
+	*Err = Fk;
+	return kappa;
+
+}
 
 
 
@@ -3563,7 +3566,7 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
 		/* initialize kappa */
 		if ( ( theMaterialModel == VONMISES_BAE  ||  theMaterialModel == VONMISES_BAH ) && ( step == 0 ) ){
 			for (i = 0; i < 8; i++) {
-				kappa->qv[i] = FLT_MAX;
+				kappa->qv[i] = 1E+06;
 			}
 		}
 
@@ -3606,7 +3609,7 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
 				double ErrBA=0;
 				double po=90;
 
-				if (i==1 && eindex == 16760 && step == 121)
+				if (i==4 && eindex == 14653 && ( step == 286 || step == 86 ) )
 					po=89;
 
 				material_update ( *enlcons,           tstrains->qp[i],      tstrains1->qp[i],   pstrains1->qp[i],  alphastress1->qp[i], epstr1->qv[i],   sigma0,        theDeltaT,
@@ -3619,6 +3622,9 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
 
 					if (flagNoSubSteps==1)
 						fprintf(stdout,"Exceeded number of sub-steps at GP:%d, eindex: %d -- INCREASE SUBSTEPS NUMBER \n", i, eindex);
+
+					//if (step>110)
+						//fprintf(stdout,"stuck at GP:%d, eindex: %d, step: %d \n", i, eindex, step);
 				}
 
 
