@@ -1497,8 +1497,6 @@ void MatUpd_vMBA (double Su, double G, double Lambda, double psi, double m, doub
 	/* deviatoric stress at t-1. At  this point *sigma has the information at t-1  */
 	tensor_t Sdev_n1   = tensor_deviator( *sigma, tensor_octahedral ( tensor_I1 ( *sigma ) ) );
 
-	/* deviatoric reference stress  */
-	//tensor_t Sdev_ref   = tensor_deviator( *sigma_ref, tensor_octahedral ( tensor_I1 ( *sigma_ref ) ) );
 
 	/* total strain increment and deviatoric strain increment */
 	tensor_t De       = subtrac_tensors ( e_n, e_n1 );
@@ -1510,8 +1508,7 @@ void MatUpd_vMBA (double Su, double G, double Lambda, double psi, double m, doub
 		Den2 = kappa_n * ( ddot_tensors(subtrac_tensors (Sdev_n1 , *sigma_ref), subtrac_tensors (Sdev_n1 , *sigma_ref)) );
 		Num  = add_tensors ( scaled_tensor( Sdev_n1, (1.0+kappa_n) ), scaled_tensor( (subtrac_tensors (Sdev_n1 , *sigma_ref) ) ,kappa_n*(1.0+kappa_n) ) );
 
-		load_unload = -ddot_tensors(Num,De) / (Den1 + Den2);
-	//}
+		load_unload = -ddot_tensors(Num,De_dev) / (Den1 + Den2);
 
 	if ( load_unload > 0 ) {
 		*kappa = get_kappaUnLo(  Sdev_n1,  De_dev,  theErrorTol,  Su,  1E+15,  G,  psi,  m, ErrMax );
@@ -1522,12 +1519,12 @@ void MatUpd_vMBA (double Su, double G, double Lambda, double psi, double m, doub
 		double xi1      = 2.0 * G / ( 1.0 + 3.0 * G / H_n );
 		tensor_t DSdev  = scaled_tensor( De_dev, xi1 );
 
-/*		double popo = tensor_J2(DSdev);
+		double popo = tensor_J2(DSdev);
 		if (isnan(popo) || isinf(popo)) {
 			fprintf(stdout," NAN at unloading: %f.  \n",popo);
-	        MPI_Abort(MPI_COMM_WORLD, ERROR);
-	        exit(1);
-		}*/
+	       // MPI_Abort(MPI_COMM_WORLD, ERROR);
+	        //exit(1);
+		}
 
 		*sigma          = add_tensors (  add_tensors( sigma_n, isotropic_tensor(K * De_vol) ),  DSdev  );
 		return;
@@ -1599,10 +1596,11 @@ void MatUpd_vMBA (double Su, double G, double Lambda, double psi, double m, doub
 	        	}
 	    		double popo = tensor_J2(Sdev);
 	    		if (isnan(popo) || isinf(popo)) {
-	    			fprintf(stdout," NAN at T=1 exit J2= %f.  \n",popo);
+	    			fprintf(stdout," NAN or INF at T=1. J2= %f.  \n",popo);
 	    	        MPI_Abort(MPI_COMM_WORLD, ERROR);
 	    	        exit(1);
 	    		}
+	    		*ErrMax = ErrB;
 	        	return;
 	        }
 	        xi_sup = MIN(0.9*sqrt(theErrorTol/ErrB),1.1);
@@ -1613,15 +1611,17 @@ void MatUpd_vMBA (double Su, double G, double Lambda, double psi, double m, doub
 	    		*FlagNoSubSteps = 1.0;
 	    		double popo = tensor_J2(Sdev);
 	    		if (isnan(popo) || isinf(popo)) {
-	    			fprintf(stdout," NAN when reaching Maxsubsteps J2=%f.  \n",popo);
+	    			fprintf(stdout," NAN or INF when reaching Maxsubsteps. J2=%f.  \n",popo);
 	    	        MPI_Abort(MPI_COMM_WORLD, ERROR);
 	    	        exit(1);
 	    		}
+	    		*ErrMax = ErrB;
 	    		return;
 	    }
 	} else {
 		*kappa = kappa_up;
 		*sigma  = copy_tensor(sigma_up);
+		*ErrMax = ErrB;
 		double popo = tensor_J2(*sigma);
 		if (isnan(popo) || isinf(popo)) {
 			fprintf(stdout," NAN without substepping J2=%f, kappa=%f.  sxx=%f, syy=%f, szz=%f"
@@ -1705,7 +1705,7 @@ double getHardening(double kappa, double psi, double m, double G) {
 
 double get_kappa( tensor_t Sdev, tensor_t Sref, double Tol, double Su, double kn, double G ) {
 
-	double R, Fk, Dk, Jk, kappa, cnt=0, cnt_max=100;
+	double R, Fk, Dk, Jk, kappa, cnt=0, cnt_max=200;
 	tensor_t SmSo, S1;
 
 	kappa = kn;
@@ -1736,8 +1736,8 @@ double get_kappa( tensor_t Sdev, tensor_t Sref, double Tol, double Su, double kn
 
 double get_kappaUnLo( tensor_t Sn, tensor_t De, double Tol, double Su, double kn, double G, double psi, double m, double *Err ) {
 
-	double R, Fk, Dk, Jk, A, B, C, Hk, Psik, Dpsi_Dk, kappa, kappa1, kappa2, alpha, phi;
-	int    i, cnt=0, cnt_max=100;
+	double R, Fk, Gk, Dk, Jk, A, B, C, Hk, Psik, Dpsi_Dk, kappa, kappa1, kappa2, alpha, phi;
+	int    i, cnt=0, cnt_max=200;
 
 	kappa = kn;
 	R     = sqrt(8.0/3.0) * Su;
@@ -1747,6 +1747,7 @@ double get_kappaUnLo( tensor_t Sn, tensor_t De, double Tol, double Su, double kn
 	C = ddot_tensors(De,De);
 
 	/* ========== Improve kn value =========== */
+
 
 	if ( ( B*B - 4.0*C*(A-R*R) ) > 0 ) {
 
@@ -1763,16 +1764,34 @@ double get_kappaUnLo( tensor_t Sn, tensor_t De, double Tol, double Su, double kn
 			exit(1);
 		}
 
-		alpha = 2.0 * G * psi * G / phi;
-		Fk    = alpha * (pow(kn,(m+1))) + (alpha-psi*G)*(pow(kn,m)) - 3.0 * G;
-		for (i = 0; i < 50; i++) {
-			Jk  = ( m + 1 ) * alpha * ( pow(kn,m) ) + m * ( alpha - psi * G ) * ( pow(kn,(m-1)) );
-			Dk = -Fk/Jk;
-			kn  = kn + Dk;
-			if ( kn < 0 )
-				break;
+		if ( theMaterialModel == VONMISES_BAE ) {
+			alpha = 2.0 * G * psi * G / phi;
 			Fk    = alpha * (pow(kn,(m+1))) + (alpha-psi*G)*(pow(kn,m)) - 3.0 * G;
+			for (i = 0; i < 100; i++) {
+				Jk  = ( m + 1 ) * alpha * ( pow(kn,m) ) + m * ( alpha - psi * G ) * ( pow(kn,(m-1)) );
+				Dk = -Fk/Jk;
+				kn  = kn + Dk;
+				if ( kn < 0 || fabs(Fk) < theErrorTol )
+					break;
+				Fk    = alpha * (pow(kn,(m+1))) + (alpha-psi*G)*(pow(kn,m)) - 3.0 * G;
+			}
+		} else {
+			Gk   = kn * kn / ( 1.0 + kn *kn );
+			Fk   = Gk * ( 1 + kn - phi / (2*G) ) - phi / ( 2 * G );
+
+			for (i = 0; i < 100; i++) {
+				Jk  = Gk + ( 1.0 + kn ) * 2.0 * kn / ( pow( (1.0 + kn * kn),2 ) );
+				Dk = -Fk/Jk;
+				kn  = kn + Dk;
+
+				Gk   = kn * kn / ( 1.0 + kn *kn );
+				Fk   = Gk * ( 1 + kn - phi / (2*G) ) - phi / ( 2 * G );
+
+				if ( kn < 0 || fabs(Fk) < theErrorTol )
+					break;
+			}
 		}
+
 
 		if ( kn > 0 && fabs(Fk) < theErrorTol ) {
 			kappa = kn;
@@ -1783,8 +1802,11 @@ double get_kappaUnLo( tensor_t Sn, tensor_t De, double Tol, double Su, double kn
 		if ( kn > 0  )
 			kappa = kn;
 	}
-    /* ========== Improve kn value =========== */
+	/* ========================= */
 
+
+
+	/* ================= try this if we could not improve =========== */
 	Hk = getHardening( kappa, psi, m, G);
 	Psik = 2.0 * G / ( 1.0 + 3.0 * G / Hk );
 	Fk   = A + B * ( 1.0 + kappa ) * Psik + C * pow( ( ( 1 + kappa ) * Psik ), 2 ) - pow(R,2);
@@ -1811,13 +1833,17 @@ double get_kappaUnLo( tensor_t Sn, tensor_t De, double Tol, double Su, double kn
 
 	}
 
-    if ( cnt > cnt_max ) {
+	/*    if ( cnt > cnt_max ) {
         fprintf(stdout," Minimum error found at unloading: %f. Error allowed=%f  \n",Fk, theErrorTol);
-    }
+    }*/
 
-    if ( kappa < 0 ) {
-        fprintf(stdout," Found negative kappa at unloading: %f.  \n", kappa );
-    }
+	if ( kappa < 0 ) {
+		fprintf(stdout," =*=*=*=* CHECK FOR UNSTABLE BEHAVIOR =*=*=*=* \n"
+				"Found negative kappa at unloading: %f. Making kappa=0  \n", kappa );
+		kappa=0;
+		//MPI_Abort(MPI_COMM_WORLD, ERROR);
+		//exit(1);
+	}
 
 
 	*Err = Fk;
@@ -3647,11 +3673,12 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
 						          &lounlo_n->qv[i], &Sv_n->qv[i], &Sv_max->qv[i], &kappa->qv[i], &Sref->qp[i], &flagTolSubSteps, &flagNoSubSteps, &ErrBA);
 
 				if ( ( theMaterialModel == VONMISES_BAE || theMaterialModel == VONMISES_BAH ) ) {
-					if (flagTolSubSteps==1)
-						fprintf(stdout,"Exceeded Error Tolerance:%f at GP:%d, eindex: %d, step: %d \n", ErrBA, i, eindex, step);
+					enlcons->fs[i] = ErrBA;
+					//if (flagTolSubSteps==1)
+					//	fprintf(stdout,"Exceeded Error Tolerance:%f at GP:%d, eindex: %d, step: %d \n", ErrBA, i, eindex, step);
 
-					if (flagNoSubSteps==1)
-						fprintf(stdout,"Exceeded number of sub-steps at GP:%d, eindex: %d -- INCREASE SUBSTEPS NUMBER \n", i, eindex);
+					//if (flagNoSubSteps==1)
+					//	fprintf(stdout,"Exceeded number of sub-steps at GP:%d, eindex: %d -- INCREASE SUBSTEPS NUMBER \n", i, eindex);
 
 					//if (step>110)
 						//fprintf(stdout,"stuck at GP:%d, eindex: %d, step: %d \n", i, eindex, step);
