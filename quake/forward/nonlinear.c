@@ -2087,14 +2087,14 @@ void material_update ( nlconstants_t constants, tensor_t e_n, tensor_t e_n1, ten
 	double   I1_pr   = tensor_I1 ( sigma_trial );
 	double   oct_pr  = tensor_octahedral ( I1_pr );
 	tensor_t dev_pr  = tensor_deviator ( sigma_trial, oct_pr );
+    dev_pr           = subtrac_tensors ( dev_pr, eta_n );        /* Subtract backstress tensor  */
 
-	double   J2_pr   = tensor_J2 ( dev_pr );
+    double   J2_pr   = tensor_J2 ( dev_pr );
 	double   J3_pr   = tensor_J3 (dev_pr);
 	tensor_t dfds_pr = compute_dfds ( dev_pr, J2_pr, beta );
 	vect1_t  sigma_ppal;
 
 	/*  check predictor state */
-	dev_pr = subtrac_tensors ( dev_pr, eta_n );        // Subtract backstress tensor
 	Fs_pr = compute_yield_surface_stateII ( J3_pr, J2_pr, I1_pr, alpha, phi, sigma_trial) - compute_hardening(gamma,c,Sy, h,ep_barn,phi, psi0); /* Fs predictor */
 
 	if ( Fs_pr < Tol_sigma ) {
@@ -3665,8 +3665,10 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
 				double ErrBA=0;
 				double po=90;
 
-				if (i==2 && eindex == 14701 && ( step == 262 ) )
+				if (i==7 && eindex == 21827 && ( step == 68 ) ) {
 					po=89;
+					//enlcons->Sstrain0=0;
+				}
 
 				material_update ( *enlcons,           tstrains->qp[i],      tstrains1->qp[i],   pstrains1->qp[i],  alphastress1->qp[i], epstr1->qv[i],   sigma0,        theDeltaT,
 						          &pstrains2->qp[i],  &alphastress2->qp[i], &stresses->qp[i],   &epstr2->qv[i],    &enlcons->fs[i],     &psi_n->qv[i],
