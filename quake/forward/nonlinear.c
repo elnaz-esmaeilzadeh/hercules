@@ -63,6 +63,11 @@ static double               *theBetaDilatancy;
 static double               *theGamma0;
 static double               *thePsi;
 static double               *theM;
+static double               *theTheta1;
+static double               *theTheta2;
+static double               *theTheta3;
+static double               *theTheta4;
+static double               *theTheta5;
 static double                theGeostaticLoadingT = 0;
 static double                theErrorTol          = 1E-03;
 static double                theGeostaticCushionT = 0;
@@ -351,6 +356,11 @@ void nonlinear_init( int32_t     myID,
         theGamma0           = (double*)malloc(sizeof(double) * thePropertiesCount);
         thePsi              = (double*)malloc(sizeof(double) * thePropertiesCount);
         theM                = (double*)malloc(sizeof(double) * thePropertiesCount);
+        theTheta1	 	    = (double*)malloc( sizeof(double) * thePropertiesCount);
+        theTheta2	 	    = (double*)malloc( sizeof(double) * thePropertiesCount);
+        theTheta3	 	    = (double*)malloc( sizeof(double) * thePropertiesCount);
+        theTheta4	 	    = (double*)malloc( sizeof(double) * thePropertiesCount);
+        theTheta5	 	    = (double*)malloc( sizeof(double) * thePropertiesCount);
     }
 
     /* Broadcast table of properties */
@@ -364,6 +374,11 @@ void nonlinear_init( int32_t     myID,
     MPI_Bcast(theGamma0,           thePropertiesCount, MPI_DOUBLE, 0, comm_solver);
     MPI_Bcast(thePsi,              thePropertiesCount, MPI_DOUBLE, 0, comm_solver);
     MPI_Bcast(theM,                thePropertiesCount, MPI_DOUBLE, 0, comm_solver);
+    MPI_Bcast(theTheta1,           thePropertiesCount, MPI_DOUBLE, 0, comm_solver);
+    MPI_Bcast(theTheta2,           thePropertiesCount, MPI_DOUBLE, 0, comm_solver);
+    MPI_Bcast(theTheta3,           thePropertiesCount, MPI_DOUBLE, 0, comm_solver);
+    MPI_Bcast(theTheta4,           thePropertiesCount, MPI_DOUBLE, 0, comm_solver);
+    MPI_Bcast(theTheta5,           thePropertiesCount, MPI_DOUBLE, 0, comm_solver);
 }
 
 /*
@@ -428,6 +443,8 @@ int32_t nonlinear_initparameters ( const char *parametersin,
         materialmodel = VONMISES_BAE;
     }  else if ( strcasecmp(material_model, "vonMises_baH") == 0 ) {
         materialmodel = VONMISES_BAH;
+    } else if ( strcasecmp(material_model, "vonMises_GQH") == 0 ) {
+        materialmodel = VONMISES_GQH;
     } else if ( strcasecmp(material_model, "MohrCoulomb") == 0 ) {
         materialmodel = MOHR_COULOMB;
     } else if ( strcasecmp(material_model, "DruckerPrager") == 0 ) {
@@ -437,7 +454,7 @@ int32_t nonlinear_initparameters ( const char *parametersin,
         fprintf(stderr,
                 "Illegal material model for nonlinear analysis \n"
                 "(linear, vonMises_ep (Elasto-plastic), vonMises_FA (Frederick-Armstrong), vonMises_FAM (Frederick-Armstrong modified), \n "
-                "vonMises_BAE (Borja-Aimes exponential), vonMises_BAH (Borja-Aimes hyperbolic), DruckerPrager, MohrCoulomb): %s\n", material_model);
+                "vonMises_BAE (Borja-Aimes exponential), vonMises_BAH (Borja-Aimes hyperbolic), vonMises_GQH (Groholski et al GQH model), DruckerPrager, MohrCoulomb): %s\n", material_model);
         return -1;
     }
 
@@ -508,7 +525,7 @@ int32_t nonlinear_initparameters ( const char *parametersin,
     theTensionCutoff      = tensioncutoff;
     theNoSubsteps         = no_substeps;
 
-    auxiliar             = (double*)malloc( sizeof(double) * thePropertiesCount * 10 );
+    auxiliar             = (double*)malloc( sizeof(double) * thePropertiesCount * 15 );
     theVsLimits          = (double*)malloc( sizeof(double) * thePropertiesCount );
     theAlphaCohes        = (double*)malloc( sizeof(double) * thePropertiesCount );
     theKayPhis           = (double*)malloc( sizeof(double) * thePropertiesCount );
@@ -519,6 +536,12 @@ int32_t nonlinear_initparameters ( const char *parametersin,
     theGamma0            = (double*)malloc( sizeof(double) * thePropertiesCount );
     thePsi 				 = (double*)malloc( sizeof(double) * thePropertiesCount );
     theM 				 = (double*)malloc( sizeof(double) * thePropertiesCount );
+    theTheta1	 	     = (double*)malloc( sizeof(double) * thePropertiesCount );
+    theTheta2	 	     = (double*)malloc( sizeof(double) * thePropertiesCount );
+    theTheta3	 	     = (double*)malloc( sizeof(double) * thePropertiesCount );
+    theTheta4	 	     = (double*)malloc( sizeof(double) * thePropertiesCount );
+    theTheta5	 	     = (double*)malloc( sizeof(double) * thePropertiesCount );
+
 
     if ( parsedarray( fp, "material_properties_list", thePropertiesCount * 10, auxiliar ) != 0) {
         fprintf(stderr, "Error parsing nonlinear material properties list from %s\n", parametersin);
@@ -526,16 +549,22 @@ int32_t nonlinear_initparameters ( const char *parametersin,
     }
 
     for ( row = 0; row < thePropertiesCount; row++) {
-        theVsLimits[row]          = auxiliar[ row * 10     ];
-        theAlphaCohes[row]        = auxiliar[ row * 10 + 1 ];
-        theKayPhis[row]           = auxiliar[ row * 10 + 2 ];
-        theStrainRates[row]       = auxiliar[ row * 10 + 3 ];
-        theSensitivities[row]     = auxiliar[ row * 10 + 4 ];
-        theHardeningModulus[row]  = auxiliar[ row * 10 + 5 ];
-        theBetaDilatancy[row]     = auxiliar[ row * 10 + 6 ];
-        theGamma0[row]            = auxiliar[ row * 10 + 7 ];
-        thePsi[row]               = auxiliar[ row * 10 + 8 ];
-        theM[row]                 = auxiliar[ row * 10 + 9 ];
+        theVsLimits[row]          = auxiliar[ row * 15     ];
+        theAlphaCohes[row]        = auxiliar[ row * 15 + 1 ];
+        theKayPhis[row]           = auxiliar[ row * 15 + 2 ];
+        theStrainRates[row]       = auxiliar[ row * 15 + 3 ];
+        theSensitivities[row]     = auxiliar[ row * 15 + 4 ];
+        theHardeningModulus[row]  = auxiliar[ row * 15 + 5 ];
+        theBetaDilatancy[row]     = auxiliar[ row * 15 + 6 ];
+        theGamma0[row]            = auxiliar[ row * 15 + 7 ];
+        thePsi[row]               = auxiliar[ row * 15 + 8 ];
+        theM[row]                 = auxiliar[ row * 15 + 9 ];
+        theTheta1[row]            = auxiliar[ row * 15 + 10 ];
+        theTheta2[row]            = auxiliar[ row * 15 + 11 ];
+        theTheta3[row]            = auxiliar[ row * 15 + 12 ];
+        theTheta4[row]            = auxiliar[ row * 15 + 13 ];
+        theTheta5[row]            = auxiliar[ row * 15 + 14 ];
+
     }
 
     theNonlinearFlag = 1;
