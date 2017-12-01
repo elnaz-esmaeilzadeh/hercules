@@ -543,7 +543,7 @@ int32_t nonlinear_initparameters ( const char *parametersin,
     theTheta5	 	     = (double*)malloc( sizeof(double) * thePropertiesCount );
 
 
-    if ( parsedarray( fp, "material_properties_list", thePropertiesCount * 10, auxiliar ) != 0) {
+    if ( parsedarray( fp, "material_properties_list", thePropertiesCount * 15, auxiliar ) != 0) {
         fprintf(stderr, "Error parsing nonlinear material properties list from %s\n", parametersin);
         return -1;
     }
@@ -980,6 +980,30 @@ void nonlinear_solver_init(int32_t myID, mesh_t *myMesh, double depth) {
             	ecp->h         = 0.0;
             	ecp->psi0      = 0.0;
             	break;
+
+            case VONMISES_GQH:
+            	ecp->c         = get_cohesion(elementVs);
+            	ecp->phi       = 0.0;
+            	ecp->dil_angle = 0.0;
+
+            	ecp->alpha     = 0.0;
+            	ecp->beta      = 0.0;
+            	ecp->gamma     = 0.0;
+
+            	ecp->Sstrain0  = 0.0;
+            	ecp->m         = 0.0;
+
+            	ecp->h         = 0.0;
+            	ecp->psi0      = 0.0;
+
+            	ecp->thetaGQH[0] = interpolate_property_value(elementVs, theTheta1);
+            	ecp->thetaGQH[1] = interpolate_property_value(elementVs, theTheta2);
+            	ecp->thetaGQH[2] = interpolate_property_value(elementVs, theTheta3);
+            	ecp->thetaGQH[3] = interpolate_property_value(elementVs, theTheta4);
+            	ecp->thetaGQH[4] = interpolate_property_value(elementVs, theTheta5);
+
+            	break;
+
 
             case VONMISES_EP:
             	ecp->c         = get_cohesion(elementVs);
@@ -1714,6 +1738,82 @@ void EvalSubStep (tensor_t  sigma_n, tensor_t De, tensor_t De_dev, double De_vol
 }
 
 
+double getH_GQHmodel () {
+
+double H=0;
+
+/*function [Kp_bar] = Groholski_Kp(Theta1, Theta2,Theta3,Theta4,Theta5, kappa, ErrTol, MaxIter)
+
+if kappa==0
+    Kp_bar=0;
+else
+
+    tao_bar = 1/(1+kappa);
+
+    % approximate initial gamma_bar asssuming Theta4=Theta5=1
+    A1 = 1-tao_bar;
+    B1 = Theta3*A1 - tao_bar + (Theta1+Theta2)*tao_bar^2;
+    C1 = tao_bar*Theta3*(Theta1*tao_bar-1);
+    gamma_baro = (-B1 + sqrt(B1^2 -4*A1*C1))/(2*A1);
+
+
+    [theta,  Dergamma] = get_theta(Theta1, Theta2,Theta3,Theta4,Theta5, gamma_baro);
+
+
+    Eo  = gamma_baro*(1-tao_bar) -tao_bar+tao_bar^2*theta;
+
+    gamma_bar = gamma_baro;
+
+    for m=1:MaxIter
+
+        if (abs(Eo)>ErrTol )
+            Jac = (1-tao_bar)+tao_bar^2 * Dergamma;
+            gamma_bar = gamma_bar - Eo/Jac;
+
+            [theta , Dergamma] = get_theta(Theta1, Theta2,Theta3,Theta4,Theta5, gamma_bar);
+
+            Eo  = gamma_bar*(1-tao_bar) -tao_bar+tao_bar^2*theta;
+        else
+            break;
+        end
+    end
+
+    if m==MaxIter
+        error('Could not find H for Material type:2');
+    end
+    %% get Kp
+
+    % %   18.667924984725442
+    % %
+    % % Teta_tau1(220)
+    % %
+    % % ans =
+    % %
+    % %   -3.764607921847290
+
+    A =  1+ gamma_bar + sqrt((1+gamma_bar)^2-4*theta*gamma_bar);
+    C = 1 + ( 1+ gamma_bar - 2 * (theta + gamma_bar*Dergamma) )/sqrt( (1+gamma_bar)^2 - 4*theta*gamma_bar );
+    B = A - gamma_bar * C;
+
+    Kp_bar= 4 * B /( A^2 - 2 * B );
+
+end
+
+
+end*/
+
+
+
+
+return H;
+
+
+}
+
+
+
+
+
 /*  Plastic modulus */
 double getHardening(double kappa, double psi, double m, double G) {
 
@@ -1725,8 +1825,12 @@ double getHardening(double kappa, double psi, double m, double G) {
 	}
 	if ( theMaterialModel == VONMISES_BAE )
 		H = ( psi * G ) * pow( kappa, m );
-	else
-		H = 3.0 * G * pow(kappa,2.0) / ( 1.0 + 2.0 * kappa );
+	else {
+		if ( theMaterialModel == VONMISES_BAH )
+			H = 3.0 * G * pow(kappa,2.0) / ( 1.0 + 2.0 * kappa );
+		else
+			H = 56;
+	}
 
 	return H;
 }
@@ -1746,8 +1850,12 @@ double getDerHardening(double kappa, double psi, double m, double G) {
 
 	if ( theMaterialModel == VONMISES_BAE )
 		H = ( psi * G * m ) * pow( kappa, m - 1.0 );
-	else
-		H = 6.0 * kappa * G * ( 1.0 + kappa ) / ( ( 1.0 + 2.0 * kappa ) * ( 1.0 + 2.0 * kappa ) );
+	else {
+		if ( theMaterialModel == VONMISES_BAE )
+			H = 6.0 * kappa * G * ( 1.0 + kappa ) / ( ( 1.0 + 2.0 * kappa ) * ( 1.0 + 2.0 * kappa ) );
+		else
+			H = 99999999; // fix this;
+	}
 
 	return H;
 }

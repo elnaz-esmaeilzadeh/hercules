@@ -110,6 +110,9 @@ typedef struct nlconstants_t {
 
     double m;             /* For vonMisesBAE H=psi0*mu*kappa^m     */
 
+    double thetaGQH[5];      /* GQH  parameters   */
+
+
     double fs[8];         /* F(sigma) */
     double dLambda[8];    /* yield control */
     double strainrate;
