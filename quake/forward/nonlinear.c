@@ -1515,7 +1515,7 @@ double compute_hardening ( double gamma, double c, double Sy, double h, double e
 /*===============================================================*/
 /*===============================================================*/
 /*   Material update function for (1994) Borja & Amies models    */
-void MatUpd_vMBA (double Su, double G, double Lambda, double psi, double m, double *kappa,
+void MatUpd_vMBA (nlconstants_t el_cnt, double Su, double G, double Lambda, double psi, double m, double *kappa,
 		         tensor_t e_n, tensor_t e_n1, tensor_t *sigma_ref, tensor_t *sigma,
 		         double substepTol, int *FlagTolSubSteps, int *FlagNoSubSteps, double *ErrMax) {
 
@@ -1566,13 +1566,13 @@ void MatUpd_vMBA (double Su, double G, double Lambda, double psi, double m, doub
 	if ( load_unload > 0 ) {
 		//*kappa = get_kappaUnLo(  Sdev_n1,  De_dev,  theErrorTol,  Su,  1E+15,  G,  psi,  m, ErrMax );
 
-		*kappa = get_kappaUnLoading_II(  Sdev_n1,  De_dev,  theErrorTol,  Su,  1E+15,  G,  psi,  m, ErrMax );
+		*kappa = get_kappaUnLoading_II(  el_cnt, Sdev_n1,  De_dev,  theErrorTol,  Su,  1E+15,  G,  psi,  m, ErrMax );
 
 
 	    *sigma_ref = copy_tensor( Sdev_n1 );
 
 		/* get sigma_n deviatoric */
-		double H_n      = getHardening( *kappa, psi, m, G);
+		double H_n      = getHardening( el_cnt, *kappa);
 		double xi1      = 2.0 * G / ( 1.0 + 3.0 * G / H_n );
 		tensor_t DSdev  = scaled_tensor( De_dev, xi1 );
 
@@ -1587,7 +1587,7 @@ void MatUpd_vMBA (double Su, double G, double Lambda, double psi, double m, doub
 
 	}
 
-	EvalSubStep (  sigma_n,  De,  De_dev,  De_vol, Dt,  sigma_ref,  &sigma_up,  kappa_n,
+	EvalSubStep ( el_cnt,  sigma_n,  De,  De_dev,  De_vol, Dt,  sigma_ref,  &sigma_up,  kappa_n,
 			       G,        Lambda,  Su,  psi,  m,  substepTol, &kappa_up,  &ErrB,  &ErrS);
 
 
@@ -1609,12 +1609,12 @@ void MatUpd_vMBA (double Su, double G, double Lambda, double psi, double m, doub
 
 	    		/*  compute state for xi_sup (xi_sup is an extrapolated value of xi)  */
 	    		if ( Dt_sup > Dt ) {
-	    			EvalSubStep (  sigma_n,  De,      De_dev,  De_vol, Dt_sup,  sigma_ref,  &sigma_up,  kappa_n,
+	    			EvalSubStep (  el_cnt, sigma_n,  De,      De_dev,  De_vol, Dt_sup,  sigma_ref,  &sigma_up,  kappa_n,
 	    					       G,        Lambda,  Su,      psi,    m,       substepTol, &kappa_up,  &ErrB,  &ErrS );
 	    		}
 
 	    		if ( ErrB > theErrorTol ) {
-	    			EvalSubStep ( sigma_n,  De,  De_dev,  De_vol, Dt,  sigma_ref,  &sigma_up,  kappa_n,
+	    			EvalSubStep ( el_cnt, sigma_n,  De,  De_dev,  De_vol, Dt,  sigma_ref,  &sigma_up,  kappa_n,
 	    					      G,        Lambda,  Su,  psi,    m,   substepTol, &kappa_up,  &ErrB,  &ErrS);
 	    			xi_sup = 0.0;  // forget previous xi_sup
 	    		} else
@@ -1640,7 +1640,7 @@ void MatUpd_vMBA (double Su, double G, double Lambda, double psi, double m, doub
 	        sigma_n = copy_tensor(sigma_up);
 	        kappa_n = kappa_up;
 	        Sdev    = tensor_deviator( sigma_n, tensor_octahedral ( tensor_I1 ( sigma_n ) ) );
-	        *kappa  = get_kappa(  Sdev,  *sigma_ref,  theErrorTol,  Su,  kappa_o ,  G );
+	        *kappa  = get_kappa(  el_cnt, Sdev,  *sigma_ref,  theErrorTol,  Su,  kappa_o ,  G );
 	        *sigma  = copy_tensor(sigma_up);
 	        T       = T + Dt;
 
@@ -1688,7 +1688,7 @@ void MatUpd_vMBA (double Su, double G, double Lambda, double psi, double m, doub
 }
 
 
-void EvalSubStep (tensor_t  sigma_n, tensor_t De, tensor_t De_dev, double De_vol,
+void EvalSubStep (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t De_dev, double De_vol,
 		          double Dt, tensor_t *sigma_ref, tensor_t *sigma_up, double kappa_n,
 		          double G, double Lambda, double Su, double psi, double m, double substepTol,
 		          double *kappa_up, double *ErrB, double *ErrS) {
@@ -1703,21 +1703,21 @@ void EvalSubStep (tensor_t  sigma_n, tensor_t De, tensor_t De_dev, double De_vol
 
 	/* get sigma_n deviatoric */
 	Sdev_0   = tensor_deviator( sigma_n, tensor_octahedral ( tensor_I1 ( sigma_n ) ) );
-	H_n      = getHardening( kappa_n, psi, m, G);
+	H_n      = getHardening( el_cnt, kappa_n );
 	xi1      = 2.0 * G / ( 1.0 + 3.0 * G / H_n );
 
 	DSdev1   = scaled_tensor( De_dev,xi1 );
 	Sdev1    = add_tensors( Sdev_0, DSdev1 );
 	Dsigma1  = add_tensors( isotropic_tensor(K * De_vol), Sdev1 );
-	kappa1   = get_kappa( Sdev1, *sigma_ref, theErrorTol, Su, kappa_n, G );
+	kappa1   = get_kappa( el_cnt, Sdev1, *sigma_ref, theErrorTol, Su, kappa_n, G );
 
 	/* get second set of values */
-	H_n2     = getHardening( kappa1, psi, m, G );
+	H_n2     = getHardening( el_cnt, kappa1 );
 	xi2      = 2.0 * G / ( 1.0 + 3.0 * G / H_n2 );
 
 	DSdev2   = scaled_tensor( De_dev,xi2 );
 	Sdev2    = add_tensors( Sdev_0, DSdev2 );
-	kappa2   = get_kappa( Sdev2, *sigma_ref, theErrorTol, Su, kappa_n, G );
+	kappa2   = get_kappa( el_cnt, Sdev2, *sigma_ref, theErrorTol, Su, kappa_n, G );
 	Dsigma2  = add_tensors( isotropic_tensor(K * De_vol), Sdev2 );
 
 	*sigma_up = add_tensors (  add_tensors( sigma_n, isotropic_tensor(K*De_vol) ),
@@ -1815,9 +1815,9 @@ return H;
 
 
 /*  Plastic modulus */
-double getHardening(double kappa, double psi, double m, double G) {
+double getHardening(nlconstants_t el_cnt, double kappa) {
 
-	double H = 0;
+	double H = 0, psi=el_cnt.psi0, m=el_cnt.m, G=el_cnt.mu;
 
 	if ( kappa == FLT_MAX ) {
 		H = FLT_MAX;
@@ -1836,9 +1836,9 @@ double getHardening(double kappa, double psi, double m, double G) {
 }
 
 /* Derivative of the plastic modulus */
-double getDerHardening(double kappa, double psi, double m, double G) {
+double getDerHardening(nlconstants_t el_cnt, double kappa) {
 
-	double H = 0;
+	double H = 0, psi=el_cnt.psi0, m=el_cnt.m, G=el_cnt.mu;
 
 	if ( kappa == FLT_MAX ) {
 		if ( theMaterialModel == VONMISES_BAE )
@@ -1851,7 +1851,7 @@ double getDerHardening(double kappa, double psi, double m, double G) {
 	if ( theMaterialModel == VONMISES_BAE )
 		H = ( psi * G * m ) * pow( kappa, m - 1.0 );
 	else {
-		if ( theMaterialModel == VONMISES_BAE )
+		if ( theMaterialModel == VONMISES_BAH )
 			H = 6.0 * kappa * G * ( 1.0 + kappa ) / ( ( 1.0 + 2.0 * kappa ) * ( 1.0 + 2.0 * kappa ) );
 		else
 			H = 99999999; // fix this;
@@ -1862,7 +1862,7 @@ double getDerHardening(double kappa, double psi, double m, double G) {
 
 
 
-double get_kappa( tensor_t Sdev, tensor_t Sref, double Tol, double Su, double kn, double G ) {
+double get_kappa( nlconstants_t el_cnt, tensor_t Sdev, tensor_t Sref, double Tol, double Su, double kn, double G ) {
 
 	double R, Fk, Dk, Jk, kappa, cnt=0, cnt_max=200;
 	tensor_t SmSo, S1;
@@ -1893,126 +1893,7 @@ double get_kappa( tensor_t Sdev, tensor_t Sref, double Tol, double Su, double kn
 
 }
 
-double get_kappaUnLo( tensor_t Sn, tensor_t De, double Tol, double Su, double kn, double G, double psi, double m, double *Err ) {
-
-	double R, Fk, Gk, Dk, Jk, A, B, C, Hk, Psik, Dpsi_Dk, kappa, kappa1, kappa2, alpha, phi;
-	int    i, cnt=0, cnt_max=200;
-
-	kappa = kn;
-	R     = sqrt(8.0/3.0) * Su;
-
-	A = ddot_tensors(Sn,Sn);
-	B = 2.0 * ddot_tensors(Sn,De);
-	C = ddot_tensors(De,De);
-
-	/* ========== Improve kn value =========== */
-
-
-	if ( ( B*B - 4.0*C*(A-R*R) ) > 0 ) {
-
-		kappa1 = (-B + sqrt( B*B - 4.0*C*(A-R*R) ) ) / (2 * C);
-		kappa2 = (-B - sqrt( B*B - 4.0*C*(A-R*R) ) ) / (2 * C);
-
-		phi  = MAX(kappa1,kappa2);
-
-		/* Sanity check. Should not get here !!!  */
-		if ( phi < 0.0 ) {
-			fprintf(stderr,"Material update error: "
-					"negative kappa at unloading:%f \n",kappa);
-			MPI_Abort(MPI_COMM_WORLD, ERROR);
-			exit(1);
-		}
-
-		if ( theMaterialModel == VONMISES_BAE ) {
-			alpha = 2.0 * G * psi * G / phi;
-			Fk    = alpha * (pow(kn,(m+1))) + (alpha-psi*G)*(pow(kn,m)) - 3.0 * G;
-			for (i = 0; i < 100; i++) {
-				Jk  = ( m + 1 ) * alpha * ( pow(kn,m) ) + m * ( alpha - psi * G ) * ( pow(kn,(m-1)) );
-				Dk = -Fk/Jk;
-				kn  = kn + Dk;
-				if ( kn < 0 || fabs(Fk) < theErrorTol )
-					break;
-				Fk    = alpha * (pow(kn,(m+1))) + (alpha-psi*G)*(pow(kn,m)) - 3.0 * G;
-			}
-		} else {
-			Gk   = kn * kn / ( 1.0 + kn *kn );
-			Fk   = Gk * ( 1 + kn - phi / (2*G) ) - phi / ( 2 * G );
-
-			for (i = 0; i < 100; i++) {
-				Jk  = Gk + ( 1.0 + kn ) * 2.0 * kn / ( pow( (1.0 + kn * kn),2 ) );
-				Dk = -Fk/Jk;
-				kn  = kn + Dk;
-
-				Gk   = kn * kn / ( 1.0 + kn *kn );
-				Fk   = Gk * ( 1 + kn - phi / (2*G) ) - phi / ( 2 * G );
-
-				if ( kn < 0 || fabs(Fk) < theErrorTol )
-					break;
-			}
-		}
-
-
-		if ( kn > 0 && fabs(Fk) < theErrorTol ) {
-			kappa = kn;
-			*Err = Fk;
-			return kappa;
-		}
-
-		if ( kn > 0  )
-			kappa = kn;
-	}
-	/* ========================= */
-
-
-
-	/* ================= try this if we could not improve =========== */
-	Hk = getHardening( kappa, psi, m, G);
-	Psik = 2.0 * G / ( 1.0 + 3.0 * G / Hk );
-	Fk   = A + B * ( 1.0 + kappa ) * Psik + C * pow( ( ( 1 + kappa ) * Psik ), 2 ) - pow(R,2);
-
-	while ( fabs(Fk) > theErrorTol ) {
-
-		if ( theMaterialModel == VONMISES_BAE )
-			Dpsi_Dk = ( 6.0 / ( pow( ( 3.0 + Hk / G ),2 ) ) ) * ( m * psi*G * ( pow(kappa,(m-1)) ) );
-		else
-			Dpsi_Dk = ( 6.0 / ( pow( ( 3.0 + Hk / G ),2 ) ) ) * ( 6.0 * G * kappa * (1.0 + kappa) / (pow( ( 1.0 + 2.0 * kappa ), 2) ) );
-
-
-		Jk   =  B * Psik + B * kappa * Dpsi_Dk + 2.0 * C * (1.0 + kappa) * Psik * ( (1.0 + kappa) * Dpsi_Dk + Psik );
-		Dk   = -Fk / Jk;
-		kappa   = kappa + Dk;
-
-		Hk   = getHardening( kappa, psi, m, G);
-		Psik = 2.0 * G / ( 1.0 + 3.0 * G / Hk );
-		Fk   = A + B * ( 1.0 + kappa ) * Psik + C * pow( ( ( 1 + kappa ) * Psik ), 2 ) - pow(R,2);
-		cnt  = cnt + 1;
-
-		if (cnt > cnt_max)
-			break;
-
-	}
-
-	/*    if ( cnt > cnt_max ) {
-        fprintf(stdout," Minimum error found at unloading: %f. Error allowed=%f  \n",Fk, theErrorTol);
-    }*/
-
-	if ( kappa < 0 ) {
-		fprintf(stdout," =*=*=*=* CHECK FOR UNSTABLE BEHAVIOR =*=*=*=* \n"
-				"Found negative kappa at unloading: %f. Making kappa=0  \n", kappa );
-		kappa=0;
-		//MPI_Abort(MPI_COMM_WORLD, ERROR);
-		//exit(1);
-	}
-
-
-	*Err = Fk;
-	return kappa;
-
-}
-
-
-
-double get_kappaUnLoading_II( tensor_t Sn, tensor_t De, double Tol, double Su, double kn, double G, double psi, double m, double *Err ) {
+double get_kappaUnLoading_II( nlconstants_t el_cnt, tensor_t Sn, tensor_t De, double Tol, double Su, double kn, double G, double psi, double m, double *Err ) {
 
 	double R, Fk, Dk, Jk, A, B, C, kappa, kappa1, kappa2, beta, phi;
 	int    i;
@@ -2043,14 +1924,14 @@ double get_kappaUnLoading_II( tensor_t Sn, tensor_t De, double Tol, double Su, d
 		}
 
 		beta = phi * 0.50 / G;
-		Fk    = ( 1.0 + kn - beta ) * getHardening(kn,psi,m,G) - 3.0 * G * beta;
+		Fk    = ( 1.0 + kn - beta ) * getHardening(el_cnt, kn) - 3.0 * G * beta;
 		for (i = 0; i < 100; i++) {
-			Jk  = ( 1.0 + kn - beta ) * getDerHardening(kn,psi,m,G) + getHardening(kn,psi,m,G);
+			Jk  = ( 1.0 + kn - beta ) * getDerHardening(el_cnt, kn) + getHardening(el_cnt,kn);
 			Dk = -Fk/Jk;
 			kn  = kn + Dk;
 			if ( kn < 0 || fabs(Fk) < theErrorTol )
 				break;
-			Fk    = ( 1.0 + kn - beta ) * getHardening(kn,psi,m,G) - 3.0 * G * beta;
+			Fk    = ( 1.0 + kn - beta ) * getHardening(el_cnt, kn) - 3.0 * G * beta;
 		}
 
 
@@ -2454,7 +2335,7 @@ void material_update ( nlconstants_t constants, tensor_t e_n, tensor_t e_n1, ten
 
 	}  else if ( theMaterialModel == VONMISES_BAE || theMaterialModel == VONMISES_BAH ) {
 
-		MatUpd_vMBA ( c,  mu,  Lambda, psi0,  m,  kp,  e_n,  e_n1, sigma_ref, sigma , 1E-05, flagTolSubSteps, flagNoSubSteps, ErrBA );
+		MatUpd_vMBA ( constants, c,  mu,  Lambda, psi0,  m,  kp,  e_n,  e_n1, sigma_ref, sigma , 1E-05, flagTolSubSteps, flagNoSubSteps, ErrBA );
 		return;
 
 	} else { /* Must be MohrCoulomb soil */

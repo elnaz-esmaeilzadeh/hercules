@@ -272,15 +272,17 @@ void MatUpd_vMFA (double J2_pr, tensor_t dev_pr, double psi, double c, tensor_t 
 		tensor_t *epl, tensor_t ep, double *ep_bar, double ep_barn, tensor_t *eta, tensor_t *sigma, tensor_t stresses,
 		double *fs, double *psi_n, double *loadunl_n, double *Tao_n, double *Tao_max );
 
-void MatUpd_vMBA (double Su, double G, double Lambda, double psi, double m, double *kappa,
+void MatUpd_vMBA (nlconstants_t el_cnt, double Su, double G, double Lambda, double psi, double m, double *kappa,
 		         tensor_t e_n, tensor_t e_n1, tensor_t *sigma_ref, tensor_t *sigma,
 		         double substepTol, int *FlagSubSteps, int *FlagNoSubSteps, double *ErrMax) ;
 
-double getHardening (double kappa, double psi, double m, double G);
-double get_kappa    ( tensor_t Sdev, tensor_t Sref, double Tol, double Su, double kn, double G );
-double get_kappaUnLo( tensor_t Sn, tensor_t De, double Tol, double Su, double kn, double G, double psi, double m, double *Err );
-double get_kappaUnLoading_II( tensor_t Sn, tensor_t De, double Tol, double Su, double kn, double G, double psi, double m, double *Err );
-void   EvalSubStep    (tensor_t  sigma_n, tensor_t De, tensor_t De_dev, double De_vol, double Dt, tensor_t *sigma_ref,
+
+double getHardening(nlconstants_t el_cnt, double kappa);
+double getDerHardening(nlconstants_t el_cnt, double kappa) ;
+
+double get_kappa    ( nlconstants_t el_cnt, tensor_t Sdev, tensor_t Sref, double Tol, double Su, double kn, double G );
+double get_kappaUnLoading_II( nlconstants_t el_cnt, tensor_t Sn, tensor_t De, double Tol, double Su, double kn, double G, double psi, double m, double *Err );
+void   EvalSubStep    (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t De_dev, double De_vol, double Dt, tensor_t *sigma_ref,
 		               tensor_t *sigma_up, double kappa_n, double G, double Lambda, double Su,
 		               double psi, double m, double substepTol, double *kappa_up, double *ErrB, double *ErrS);
 
