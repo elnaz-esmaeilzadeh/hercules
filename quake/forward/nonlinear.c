@@ -1514,17 +1514,13 @@ double compute_hardening ( double gamma, double c, double Sy, double h, double e
 
 /*===============================================================*/
 /*===============================================================*/
-/*   Material update function for (1994) Borja & Amies models    */
-void MatUpd_vMBA (nlconstants_t el_cnt, double Su, double G, double Lambda, double psi, double m, double *kappa,
-		         tensor_t e_n, tensor_t e_n1, tensor_t *sigma_ref, tensor_t *sigma,
-		         double substepTol, int *FlagTolSubSteps, int *FlagNoSubSteps, double *ErrMax) {
-
+/*   Material update function for material models based on (1994) Borja & Amies approach    */
+void MatUpd_vMGeneral ( nlconstants_t el_cnt, double *kappa,
+		                tensor_t e_n, tensor_t e_n1, tensor_t *sigma_ref, tensor_t *sigma,
+		                int *FlagTolSubSteps, int *FlagNoSubSteps, double *ErrMax ) {
 
 /*	 INPUTS:
-    * Su           		: Undrained shear stress
- 	* G, K          	: Material constants.
-    * psi, m        	: material parameters to define the hardening functions
-    * *kappa_n          . plastic variable to define the hardening function
+    * el_cnt            : Material constants
 
  	* e_n           	: Total strain tensor.
  	* e_n1         		: Total strain tensor at t-1
@@ -1537,7 +1533,8 @@ void MatUpd_vMBA (nlconstants_t el_cnt, double Su, double G, double Lambda, doub
     * Sref          : Updated reference deviator stress tensor          */
 
 	double   Dt=1.0, T=0.0, Dtmin, Dt_sup, kappa_n, load_unload, Den1, Den2, kappa_up,
-			 ErrB, ErrS, xi, xi_sup, kappa_o, K,  cnt=0 ;
+			 ErrB, ErrS, xi, xi_sup, kappa_o, K,  cnt=0,
+			 G=el_cnt.mu, Lambda = el_cnt.lambda;
 	tensor_t sigma_n, sigma_up, Num, Sdev;
 
 	Dtmin = Dt/theNoSubsteps;
@@ -1566,8 +1563,7 @@ void MatUpd_vMBA (nlconstants_t el_cnt, double Su, double G, double Lambda, doub
 	if ( load_unload > 0 ) {
 		//*kappa = get_kappaUnLo(  Sdev_n1,  De_dev,  theErrorTol,  Su,  1E+15,  G,  psi,  m, ErrMax );
 
-		*kappa = get_kappaUnLoading_II(  el_cnt, Sdev_n1,  De_dev,  theErrorTol,  Su,  1E+15,  G,  psi,  m, ErrMax );
-
+		*kappa = get_kappaUnLoading_II(  el_cnt, Sdev_n1,  De_dev,  1E+15, ErrMax );
 
 	    *sigma_ref = copy_tensor( Sdev_n1 );
 
@@ -1587,8 +1583,7 @@ void MatUpd_vMBA (nlconstants_t el_cnt, double Su, double G, double Lambda, doub
 
 	}
 
-	EvalSubStep ( el_cnt,  sigma_n,  De,  De_dev,  De_vol, Dt,  sigma_ref,  &sigma_up,  kappa_n,
-			       G,        Lambda,  Su,  psi,  m,  substepTol, &kappa_up,  &ErrB,  &ErrS);
+	EvalSubStep ( el_cnt,  sigma_n,  De,  De_dev,  De_vol, Dt,  sigma_ref,  &sigma_up,  kappa_n, &kappa_up,  &ErrB,  &ErrS);
 
 
 	double Emax     = 0;
@@ -1609,13 +1604,11 @@ void MatUpd_vMBA (nlconstants_t el_cnt, double Su, double G, double Lambda, doub
 
 	    		/*  compute state for xi_sup (xi_sup is an extrapolated value of xi)  */
 	    		if ( Dt_sup > Dt ) {
-	    			EvalSubStep (  el_cnt, sigma_n,  De,      De_dev,  De_vol, Dt_sup,  sigma_ref,  &sigma_up,  kappa_n,
-	    					       G,        Lambda,  Su,      psi,    m,       substepTol, &kappa_up,  &ErrB,  &ErrS );
+	    			EvalSubStep (  el_cnt, sigma_n, De, De_dev,  De_vol, Dt_sup,  sigma_ref,  &sigma_up, kappa_n, &kappa_up, &ErrB, &ErrS );
 	    		}
 
 	    		if ( ErrB > theErrorTol ) {
-	    			EvalSubStep ( el_cnt, sigma_n,  De,  De_dev,  De_vol, Dt,  sigma_ref,  &sigma_up,  kappa_n,
-	    					      G,        Lambda,  Su,  psi,    m,   substepTol, &kappa_up,  &ErrB,  &ErrS);
+	    			EvalSubStep ( el_cnt, sigma_n, De, De_dev, De_vol, Dt, sigma_ref, &sigma_up, kappa_n, &kappa_up,  &ErrB, &ErrS);
 	    			xi_sup = 0.0;  // forget previous xi_sup
 	    		} else
 	    			Dt = Dt_sup;
@@ -1640,7 +1633,7 @@ void MatUpd_vMBA (nlconstants_t el_cnt, double Su, double G, double Lambda, doub
 	        sigma_n = copy_tensor(sigma_up);
 	        kappa_n = kappa_up;
 	        Sdev    = tensor_deviator( sigma_n, tensor_octahedral ( tensor_I1 ( sigma_n ) ) );
-	        *kappa  = get_kappa(  el_cnt, Sdev,  *sigma_ref,  theErrorTol,  Su,  kappa_o ,  G );
+	        *kappa  = get_kappa(  el_cnt, Sdev,  *sigma_ref,  kappa_o  );
 	        *sigma  = copy_tensor(sigma_up);
 	        T       = T + Dt;
 
@@ -1690,11 +1683,10 @@ void MatUpd_vMBA (nlconstants_t el_cnt, double Su, double G, double Lambda, doub
 
 void EvalSubStep (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t De_dev, double De_vol,
 		          double Dt, tensor_t *sigma_ref, tensor_t *sigma_up, double kappa_n,
-		          double G, double Lambda, double Su, double psi, double m, double substepTol,
 		          double *kappa_up, double *ErrB, double *ErrS) {
 
 	tensor_t Sdev_0, DSdev1, DSdev2, Sdev1, Sdev2, Dsigma1, Dsigma2, Dss;
-	double   H_n, H_n2, xi1, xi2, K, kappa1, kappa2;
+	double   H_n, H_n2, xi1, xi2, K, kappa1, kappa2, Su=el_cnt.c, Lambda=el_cnt.lambda, G=el_cnt.mu;
 
 	K       = Lambda + 2.0 * G / 3.0;
 	De 		= scaled_tensor(De,Dt);
@@ -1709,7 +1701,7 @@ void EvalSubStep (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t
 	DSdev1   = scaled_tensor( De_dev,xi1 );
 	Sdev1    = add_tensors( Sdev_0, DSdev1 );
 	Dsigma1  = add_tensors( isotropic_tensor(K * De_vol), Sdev1 );
-	kappa1   = get_kappa( el_cnt, Sdev1, *sigma_ref, theErrorTol, Su, kappa_n, G );
+	kappa1   = get_kappa( el_cnt, Sdev1, *sigma_ref, kappa_n );
 
 	/* get second set of values */
 	H_n2     = getHardening( el_cnt, kappa1 );
@@ -1717,7 +1709,7 @@ void EvalSubStep (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t
 
 	DSdev2   = scaled_tensor( De_dev,xi2 );
 	Sdev2    = add_tensors( Sdev_0, DSdev2 );
-	kappa2   = get_kappa( el_cnt, Sdev2, *sigma_ref, theErrorTol, Su, kappa_n, G );
+	kappa2   = get_kappa( el_cnt, Sdev2, *sigma_ref, kappa_n );
 	Dsigma2  = add_tensors( isotropic_tensor(K * De_vol), Sdev2 );
 
 	*sigma_up = add_tensors (  add_tensors( sigma_n, isotropic_tensor(K*De_vol) ),
@@ -1862,10 +1854,12 @@ double getDerHardening(nlconstants_t el_cnt, double kappa) {
 
 
 
-double get_kappa( nlconstants_t el_cnt, tensor_t Sdev, tensor_t Sref, double Tol, double Su, double kn, double G ) {
+double get_kappa( nlconstants_t el_cnt, tensor_t Sdev, tensor_t Sref, double kn ) {
 
 	double R, Fk, Dk, Jk, kappa, cnt=0, cnt_max=200;
 	tensor_t SmSo, S1;
+
+	double H = 0, Su=el_cnt.c;
 
 	kappa = kn;
 	R = sqrt(8.0/3.0) * Su;
@@ -1893,9 +1887,9 @@ double get_kappa( nlconstants_t el_cnt, tensor_t Sdev, tensor_t Sref, double Tol
 
 }
 
-double get_kappaUnLoading_II( nlconstants_t el_cnt, tensor_t Sn, tensor_t De, double Tol, double Su, double kn, double G, double psi, double m, double *Err ) {
+double get_kappaUnLoading_II( nlconstants_t el_cnt, tensor_t Sn, tensor_t De, double kn, double *Err ) {
 
-	double R, Fk, Dk, Jk, A, B, C, kappa, kappa1, kappa2, beta, phi;
+	double R, Fk, Dk, Jk, A, B, C, kappa, kappa1, kappa2, beta, phi, G=el_cnt.mu, Su=el_cnt.c;
 	int    i;
 
 	kappa = kn;
@@ -2335,7 +2329,7 @@ void material_update ( nlconstants_t constants, tensor_t e_n, tensor_t e_n1, ten
 
 	}  else if ( theMaterialModel == VONMISES_BAE || theMaterialModel == VONMISES_BAH ) {
 
-		MatUpd_vMBA ( constants, c,  mu,  Lambda, psi0,  m,  kp,  e_n,  e_n1, sigma_ref, sigma , 1E-05, flagTolSubSteps, flagNoSubSteps, ErrBA );
+		MatUpd_vMGeneral ( constants,  kp,  e_n,  e_n1, sigma_ref, sigma, flagTolSubSteps, flagNoSubSteps, ErrBA );
 		return;
 
 	} else { /* Must be MohrCoulomb soil */
