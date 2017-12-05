@@ -282,6 +282,7 @@ double get_kappaUnLoading_II ( nlconstants_t el_cnt, tensor_t Sn, tensor_t De, d
 void   EvalSubStep           ( nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t De_dev, double De_vol,
                                double Dt, tensor_t *sigma_ref, tensor_t *sigma_up, double kappa_n,
                                double *kappa_up, double *ErrB, double *ErrS);
+double getH_GQHmodel         (nlconstants_t el_cnt, double kappa);
 
 
 tensor_t ApproxGravity_tensor(double Szz, double phi, double h, double lz, double rho);

@@ -1453,7 +1453,8 @@ double compute_yield_surface_stateII ( double J3, double J2, double I1, double a
 
 	if ( ( theMaterialModel == VONMISES_EP )  || ( theMaterialModel == DRUCKERPRAGER ) ||
 	     ( theMaterialModel == VONMISES_FAM ) || ( theMaterialModel == VONMISES_FA   ) ||
-	     ( theMaterialModel == VONMISES_BAE ) || ( theMaterialModel == VONMISES_BAH   )  ) {
+	     ( theMaterialModel == VONMISES_BAE ) || ( theMaterialModel == VONMISES_BAH  ) ||
+	     ( theMaterialModel == VONMISES_GQH   )  ) {
 		if ( theMaterialModel == DRUCKERPRAGER )
 			Yf = alpha * I1 + sqrt( J2 );
 		else
@@ -1499,7 +1500,8 @@ double compute_hardening ( double gamma, double c, double Sy, double h, double e
 		H = c * 2.0 / sqrt(3.0);   // c=Su and tao_max = 2Su/sqrt(3)
 	} else if ( theMaterialModel == VONMISES_FA ) {
 		H = Sy; // Since Sy comes from the G/Gmax it does not require the constant 2/sqrt(3)
-	} else if ( theMaterialModel == VONMISES_FAM || theMaterialModel == VONMISES_BAE || theMaterialModel == VONMISES_BAH ) { // no elastic region in vonMisesKinHard_Modified
+	} else if ( theMaterialModel == VONMISES_FAM || theMaterialModel == VONMISES_BAE ||
+			    theMaterialModel == VONMISES_BAH || theMaterialModel == VONMISES_GQH ) { // no elastic region in vonMisesKinHard_Modified
 		H = 0.0;
 	} else if ( theMaterialModel == DRUCKERPRAGER ) {
 		H = gamma * ( c + h * ep_bar);
@@ -1533,9 +1535,10 @@ void MatUpd_vMGeneral ( nlconstants_t el_cnt, double *kappa,
     * Sref          : Updated reference deviator stress tensor          */
 
 	double   Dt=1.0, T=0.0, Dtmin, Dt_sup, kappa_n, load_unload, Den1, Den2, kappa_up,
-			 ErrB, ErrS, xi, xi_sup, kappa_o, K,  cnt=0,
+			 ErrB, ErrS, xi, xi_sup, kappa_o, K,
 			 G=el_cnt.mu, Lambda = el_cnt.lambda;
 	tensor_t sigma_n, sigma_up, Num, Sdev;
+	int cnt=0;
 
 	Dtmin = Dt/theNoSubsteps;
 	K     = Lambda + 2.0 * G / 3.0;
@@ -1553,17 +1556,16 @@ void MatUpd_vMGeneral ( nlconstants_t el_cnt, double *kappa,
 	double   De_vol   = tensor_I1 ( De );
 	tensor_t De_dev   = tensor_deviator( De, tensor_octahedral ( De_vol ) );
 
+	Den1 = ddot_tensors(Sdev_n1, subtrac_tensors (Sdev_n1 , *sigma_ref));
+	Den2 = kappa_n * ( ddot_tensors(subtrac_tensors (Sdev_n1 , *sigma_ref), subtrac_tensors (Sdev_n1 , *sigma_ref)) );
+	Num  = add_tensors ( scaled_tensor( Sdev_n1, (1.0+kappa_n) ), scaled_tensor( (subtrac_tensors (Sdev_n1 , *sigma_ref) ) ,kappa_n*(1.0+kappa_n) ) );
 
-		Den1 = ddot_tensors(Sdev_n1, subtrac_tensors (Sdev_n1 , *sigma_ref));
-		Den2 = kappa_n * ( ddot_tensors(subtrac_tensors (Sdev_n1 , *sigma_ref), subtrac_tensors (Sdev_n1 , *sigma_ref)) );
-		Num  = add_tensors ( scaled_tensor( Sdev_n1, (1.0+kappa_n) ), scaled_tensor( (subtrac_tensors (Sdev_n1 , *sigma_ref) ) ,kappa_n*(1.0+kappa_n) ) );
-
-		load_unload = -ddot_tensors(Num,De_dev) / (Den1 + Den2);
+	load_unload = -ddot_tensors(Num,De_dev) / (Den1 + Den2);
 
 	if ( load_unload > 0 ) {
 		//*kappa = get_kappaUnLo(  Sdev_n1,  De_dev,  theErrorTol,  Su,  1E+15,  G,  psi,  m, ErrMax );
 
-		*kappa = get_kappaUnLoading_II(  el_cnt, Sdev_n1,  De_dev,  1E+15, ErrMax );
+		*kappa = get_kappaUnLoading_II(  el_cnt, Sdev_n1,  De_dev,  1E+20, ErrMax );
 
 	    *sigma_ref = copy_tensor( Sdev_n1 );
 
@@ -1730,80 +1732,79 @@ void EvalSubStep (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t
 }
 
 
-double getH_GQHmodel () {
+double getH_GQHmodel (nlconstants_t el_cnt, double kappa) {
 
-double H=0;
+double H = 0.0, tao_bar, Theta1, Theta2, Theta3, Theta4, Theta5,
+	   A1, B1, C1, gamma_baro, gamma_bar, theta, Dergamma, Eo, Jac, A, B, C;
+int    cnt=0, cnt_max=200;
 
-/*function [Kp_bar] = Groholski_Kp(Theta1, Theta2,Theta3,Theta4,Theta5, kappa, ErrTol, MaxIter)
+if (kappa == 0.0)
+		return H;
 
-if kappa==0
-    Kp_bar=0;
-else
+Theta1 = el_cnt.thetaGQH[0];
+Theta2 = el_cnt.thetaGQH[1];
+Theta3 = el_cnt.thetaGQH[2];
+Theta4 = el_cnt.thetaGQH[3];
+Theta5 = el_cnt.thetaGQH[4];
 
-    tao_bar = 1/(1+kappa);
+tao_bar = 1.0/(1.0 + kappa);
 
-    % approximate initial gamma_bar asssuming Theta4=Theta5=1
-    A1 = 1-tao_bar;
-    B1 = Theta3*A1 - tao_bar + (Theta1+Theta2)*tao_bar^2;
-    C1 = tao_bar*Theta3*(Theta1*tao_bar-1);
-    gamma_baro = (-B1 + sqrt(B1^2 -4*A1*C1))/(2*A1);
+// approximate initial gamma_bar assuming Theta4=Theta5=1
+A1 = 1.0 - tao_bar;
+B1 = Theta3 * A1 - tao_bar + ( Theta1 + Theta2 ) * tao_bar * tao_bar;
+C1 = tao_bar * Theta3 * ( Theta1 * tao_bar - 1.0 );
+gamma_baro = (-B1 + sqrt( B1*B1 -4.0 * A1 * C1 ) ) / ( 2.0 * A1 );
 
-
-    [theta,  Dergamma] = get_theta(Theta1, Theta2,Theta3,Theta4,Theta5, gamma_baro);
-
-
-    Eo  = gamma_baro*(1-tao_bar) -tao_bar+tao_bar^2*theta;
-
-    gamma_bar = gamma_baro;
-
-    for m=1:MaxIter
-
-        if (abs(Eo)>ErrTol )
-            Jac = (1-tao_bar)+tao_bar^2 * Dergamma;
-            gamma_bar = gamma_bar - Eo/Jac;
-
-            [theta , Dergamma] = get_theta(Theta1, Theta2,Theta3,Theta4,Theta5, gamma_bar);
-
-            Eo  = gamma_bar*(1-tao_bar) -tao_bar+tao_bar^2*theta;
-        else
-            break;
-        end
-    end
-
-    if m==MaxIter
-        error('Could not find H for Material type:2');
-    end
-    %% get Kp
-
-    % %   18.667924984725442
-    % %
-    % % Teta_tau1(220)
-    % %
-    % % ans =
-    % %
-    % %   -3.764607921847290
-
-    A =  1+ gamma_bar + sqrt((1+gamma_bar)^2-4*theta*gamma_bar);
-    C = 1 + ( 1+ gamma_bar - 2 * (theta + gamma_bar*Dergamma) )/sqrt( (1+gamma_bar)^2 - 4*theta*gamma_bar );
-    B = A - gamma_bar * C;
-
-    Kp_bar= 4 * B /( A^2 - 2 * B );
-
-end
-
-
-end*/
-
-
-
-
-return H;
-
-
+// get theta initial
+if (gamma_baro == 0) {
+	theta    = Theta1;
+	Dergamma = 0.0;
+	H = FLT_MAX;
+	return H;
+} else {
+	theta    = Theta1 + Theta2 * ( Theta4 * pow(gamma_baro,Theta5) ) / ( pow(Theta3,Theta5) + Theta4 * pow(gamma_baro,Theta5) );
+	Dergamma = Theta2 * ( pow(Theta3,Theta5) ) * Theta4 * Theta5 * pow(gamma_baro,(Theta5-1)) / (pow(( pow(Theta3,Theta5) + Theta4 * pow(gamma_baro,Theta5) ),2));
 }
 
 
+Eo  = gamma_baro * ( 1.0 - tao_bar ) - tao_bar + tao_bar * tao_bar * theta;
+gamma_bar = gamma_baro;
 
+while ( fabs(Eo) > theErrorTol ) {
+	Jac       = (1.0 - tao_bar) + tao_bar * tao_bar * Dergamma;
+	gamma_bar = gamma_bar - Eo/Jac;
+
+	if (gamma_bar == 0) {
+		theta    = Theta1;
+		Dergamma = 0.0;
+	} else {
+		theta     = Theta1 + Theta2 * ( Theta4 * pow(gamma_bar,Theta5) ) / ( pow(Theta3,Theta5) + Theta4 * pow(gamma_bar,Theta5) );
+		Dergamma  = Theta2 * ( pow(Theta3,Theta5) ) * Theta4 * Theta5 * pow(gamma_bar,(Theta5-1)) / (pow(( pow(Theta3,Theta5) + Theta4 * pow(gamma_bar,Theta5) ),2));
+	}
+
+	Eo        = gamma_bar * ( 1.0 - tao_bar ) - tao_bar + tao_bar * tao_bar * theta;
+	cnt = cnt + 1;
+	if (cnt == cnt_max)
+		break;
+}
+
+/*  Sanity check.   */
+if ( cnt == cnt_max ) {
+    fprintf(stderr,"Material update warning: "
+            "could not find GammaBar for GQ/H model. GammaBar=%f, Error=%f\n", gamma_bar, Eo);
+    MPI_Abort(MPI_COMM_WORLD, ERROR);
+    exit(1);
+}
+
+A =  1.0 + gamma_bar + sqrt( (1.0 + gamma_bar) * (1.0 + gamma_bar) - 4.0 * theta * gamma_bar );
+C =  1.0 + ( 1+ gamma_bar - 2.0 * (theta + gamma_bar * Dergamma) )/sqrt( (1.0 + gamma_bar) * (1.0 + gamma_bar) - 4.0 * theta * gamma_bar );
+B =  A - gamma_bar * C;
+
+H = el_cnt.mu * 4.0 * B / ( A * A - 2.0 * B ) * 3.0 / 2.0; // the 3.0/2.0 scaling factor converts Kp to H as needed in (1994) Borja & Amies technique
+
+return H ;
+
+}
 
 
 /*  Plastic modulus */
@@ -1820,8 +1821,10 @@ double getHardening(nlconstants_t el_cnt, double kappa) {
 	else {
 		if ( theMaterialModel == VONMISES_BAH )
 			H = 3.0 * G * pow(kappa,2.0) / ( 1.0 + 2.0 * kappa );
-		else
-			H = 56;
+		else {
+			if ( theMaterialModel == VONMISES_GQH )
+				H = getH_GQHmodel ( el_cnt,  kappa);
+		}
 	}
 
 	return H;
@@ -1845,8 +1848,10 @@ double getDerHardening(nlconstants_t el_cnt, double kappa) {
 	else {
 		if ( theMaterialModel == VONMISES_BAH )
 			H = 6.0 * kappa * G * ( 1.0 + kappa ) / ( ( 1.0 + 2.0 * kappa ) * ( 1.0 + 2.0 * kappa ) );
-		else
-			H = 99999999; // fix this;
+		else{
+			if ( theMaterialModel == VONMISES_GQH )
+				H = ( getH_GQHmodel ( el_cnt,  kappa * 1.00001) - getH_GQHmodel ( el_cnt,  kappa) ) / 0.00001; // todo: get the exact expression for the derivative of the hardening function;
+		}
 	}
 
 	return H;
@@ -1856,10 +1861,11 @@ double getDerHardening(nlconstants_t el_cnt, double kappa) {
 
 double get_kappa( nlconstants_t el_cnt, tensor_t Sdev, tensor_t Sref, double kn ) {
 
-	double R, Fk, Dk, Jk, kappa, cnt=0, cnt_max=200;
+	double R, Fk, Dk, Jk, kappa;
+	int    cnt=0, cnt_max=200;
 	tensor_t SmSo, S1;
 
-	double H = 0, Su=el_cnt.c;
+	double Su=el_cnt.c;
 
 	kappa = kn;
 	R = sqrt(8.0/3.0) * Su;
@@ -1941,8 +1947,8 @@ double get_kappaUnLoading_II( nlconstants_t el_cnt, tensor_t Sn, tensor_t De, do
 		fprintf(stdout," =*=*=*=* CHECK FOR UNSTABLE BEHAVIOR =*=*=*=* \n"
 				"Found negative kappa at unloading: %f. Making kappa=0  \n", kappa );
 		kappa=0;
-		MPI_Abort(MPI_COMM_WORLD, ERROR);
-		exit(1);
+		//MPI_Abort(MPI_COMM_WORLD, ERROR);
+		//exit(1);
 	}
 	return kappa;
 	/* ========================= */
@@ -2327,7 +2333,7 @@ void material_update ( nlconstants_t constants, tensor_t e_n, tensor_t e_n1, ten
 		MatUpd_vMFA ( J2_pr,  dev_pr,  psi0,  c,  eta_n,  e_n1, mu,  Lambda,  Sy, epl,  ep,  ep_bar,  ep_barn,  eta,  sigma,  stresses, fs,  psi_n,  loadunl_n,  Tao_n,  Tao_max );
 		return;
 
-	}  else if ( theMaterialModel == VONMISES_BAE || theMaterialModel == VONMISES_BAH ) {
+	}  else if ( theMaterialModel == VONMISES_BAE || theMaterialModel == VONMISES_BAH || theMaterialModel == VONMISES_GQH ) {
 
 		MatUpd_vMGeneral ( constants,  kp,  e_n,  e_n1, sigma_ref, sigma, flagTolSubSteps, flagNoSubSteps, ErrBA );
 		return;
@@ -3758,7 +3764,7 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
 		Sref         = myNonlinSolver->Sref         + nl_eindex;
 
 		/* initialize kappa */
-		if ( ( theMaterialModel == VONMISES_BAE  ||  theMaterialModel == VONMISES_BAH ) && ( step == 0 ) ){
+		if ( ( theMaterialModel == VONMISES_BAE  ||  theMaterialModel == VONMISES_BAH || theMaterialModel == VONMISES_GQH ) && ( step == 0 ) ){
 			for (i = 0; i < 8; i++) {
 				kappa->qv[i] = 1E+06;
 			}
@@ -3803,7 +3809,7 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
 				double ErrBA=0;
 				double po=90;
 
-				if (i==7 && eindex == 21827 && ( step == 68 ) ) {
+				if (i==3 && eindex == 16806 && ( step == 7 || step == 6 ) ) {
 					po=89;
 					//enlcons->Sstrain0=0;
 				}
