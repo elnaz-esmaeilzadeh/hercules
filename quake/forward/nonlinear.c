@@ -1735,6 +1735,7 @@ double getH_GQHmodel (nlconstants_t el_cnt, double kappa) {
 
 double H = 0.0, tao_bar, Theta1, Theta2, Theta3, Theta4, Theta5,
 	   A1, B1, C1, gamma_baro, gamma_bar, theta, Dergamma, Eo, Jac, A, B, C;
+
 int    cnt=0, cnt_max=200;
 
 if (kappa == 0.0)
@@ -1762,14 +1763,14 @@ if (gamma_baro == 0) {
 	return H;
 } else {
 	theta    = Theta1 + Theta2 * ( Theta4 * pow(gamma_baro,Theta5) ) / ( pow(Theta3,Theta5) + Theta4 * pow(gamma_baro,Theta5) );
-	Dergamma = Theta2 * ( pow(Theta3,Theta5) ) * Theta4 * Theta5 * pow(gamma_baro,(Theta5-1)) / (pow(( pow(Theta3,Theta5) + Theta4 * pow(gamma_baro,Theta5) ),2));
+	Dergamma = Theta2 * ( pow(Theta3,Theta5) ) * Theta4 * Theta5 * pow(gamma_baro,(Theta5 - 1.0)) / (pow(( pow(Theta3,Theta5) + Theta4 * pow(gamma_baro,Theta5) ),2.0 ));
 }
 
 
 Eo  = gamma_baro * ( 1.0 - tao_bar ) - tao_bar + tao_bar * tao_bar * theta;
 gamma_bar = gamma_baro;
 
-while ( fabs(Eo) > 1E-06 ) {
+while ( fabs(Eo) > 1E-10 ) {
 	Jac       = (1.0 - tao_bar) + tao_bar * tao_bar * Dergamma;
 	gamma_bar = gamma_bar - Eo/Jac;
 
@@ -1778,11 +1779,11 @@ while ( fabs(Eo) > 1E-06 ) {
 		Dergamma = 0.0;
 	} else {
 		theta     = Theta1 + Theta2 * ( Theta4 * pow(gamma_bar,Theta5) ) / ( pow(Theta3,Theta5) + Theta4 * pow(gamma_bar,Theta5) );
-		Dergamma  = Theta2 * ( pow(Theta3,Theta5) ) * Theta4 * Theta5 * pow(gamma_bar,(Theta5-1)) / (pow(( pow(Theta3,Theta5) + Theta4 * pow(gamma_bar,Theta5) ),2));
+		Dergamma  = Theta2 * ( pow(Theta3,Theta5) ) * Theta4 * Theta5 * pow(gamma_bar,(Theta5 - 1.0)) / (pow(( pow(Theta3,Theta5) + Theta4 * pow(gamma_bar,Theta5) ), 2.0 ));
 	}
 
 	Eo        = gamma_bar * ( 1.0 - tao_bar ) - tao_bar + tao_bar * tao_bar * theta;
-	cnt = cnt + 1;
+	cnt++;
 	if (cnt == cnt_max)
 		break;
 }
@@ -1829,7 +1830,9 @@ double getHardening(nlconstants_t el_cnt, double kappa) {
 	return H;
 }
 
-/* Derivative of the plastic modulus */
+/*
+
+ Derivative of the plastic modulus
 double getDerHardening(nlconstants_t el_cnt, double kappa) {
 
 	double H = 0, psi=el_cnt.psi0, m=el_cnt.m, G=el_cnt.mu;
@@ -1856,6 +1859,7 @@ double getDerHardening(nlconstants_t el_cnt, double kappa) {
 	return H;
 }
 
+*/
 
 
 double get_kappa( nlconstants_t el_cnt, tensor_t Sdev, tensor_t Sref, double kn ) {
@@ -1897,7 +1901,7 @@ double Pegasus(double beta, nlconstants_t el_cnt) {
 	// (1973) King, R. An Improved Pegasus method for root finding
 
 	double k0 = 0.0, k1 = 1.0, k2,  f0, f1, f2,  G=el_cnt.mu, tmp;
-	int cnt1=1, cnt2=1, cntMax=100;
+	int cnt1=1, cnt2=1, cntMax = 200;
 
 	f0 = ( 1.0 + k0 - beta ) * getHardening(el_cnt, k0) / G - 3.0 * beta;
 	f1 = ( 1.0 + k1 - beta ) * getHardening(el_cnt, k1) / G - 3.0 * beta;
@@ -1965,7 +1969,7 @@ double Pegasus(double beta, nlconstants_t el_cnt) {
 	}
 
 	if ( cnt1 == cntMax || cnt2 == cntMax )
-		fprintf(stdout,"Increase the number of steps for root finding in Pegasus method. k=%f, Error=%f, ErroTol=%f \n", k2, fabs(f2), theErrorTol );
+		fprintf(stdout,"Increase the number of steps for root finding in Pegasus method. k=%f, beta=%f, Error=%f, ErroTol=%f \n", k2, beta, fabs(f2), theErrorTol );
 
 	return k2;
 
@@ -3835,12 +3839,11 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
 
 				int flagTolSubSteps=0, flagNoSubSteps=0;
 				double ErrBA=0;
-				double po=90;
 
-				if (i==3 && eindex == 112722 && ( step == 210 ) ) {
+				/*				double po=90;
+				if (i==5 && eindex == 111412 && ( step == 240 ) ) {
 					po=89;
-					//enlcons->Sstrain0=0;
-				}
+				}*/
 
 				material_update ( *enlcons,           tstrains->qp[i],      tstrains1->qp[i],   pstrains1->qp[i],  alphastress1->qp[i], epstr1->qv[i],   sigma0,        theDeltaT,
 						          &pstrains2->qp[i],  &alphastress2->qp[i], &stresses->qp[i],   &epstr2->qv[i],    &enlcons->fs[i],     &psi_n->qv[i],
