@@ -1536,7 +1536,7 @@ void MatUpd_vMGeneral ( nlconstants_t el_cnt, double *kappa,
 
 	double   Dt=1.0, T=0.0, Dtmin, Dt_sup, kappa_n, load_unload, Den1, Den2, kappa_up,
 			 ErrB, ErrS, xi, xi_sup, kappa_o, K,
-			 G=el_cnt.mu, Lambda = el_cnt.lambda;
+			 G=el_cnt.mu, Lambda = el_cnt.lambda, popo;
 	tensor_t sigma_n, sigma_up, Num, Sdev;
 	int cnt=0;
 
@@ -1563,11 +1563,10 @@ void MatUpd_vMGeneral ( nlconstants_t el_cnt, double *kappa,
 	load_unload = -ddot_tensors(Num,De_dev) / (Den1 + Den2);
 
 	if ( load_unload > 0 ) {
-		//*kappa = get_kappaUnLo(  Sdev_n1,  De_dev,  theErrorTol,  Su,  1E+15,  G,  psi,  m, ErrMax );
 
-		*kappa = get_kappaUnLoading_II(  el_cnt, Sdev_n1,  De_dev,  1E+20, ErrMax );
-
+		*kappa = get_kappaUnLoading_II(  el_cnt, Sdev_n1,  De_dev, ErrMax );
 	    *sigma_ref = copy_tensor( Sdev_n1 );
+
 
 		/* get sigma_n deviatoric */
 		double H_n      = getHardening( el_cnt, *kappa);
@@ -1770,7 +1769,7 @@ if (gamma_baro == 0) {
 Eo  = gamma_baro * ( 1.0 - tao_bar ) - tao_bar + tao_bar * tao_bar * theta;
 gamma_bar = gamma_baro;
 
-while ( fabs(Eo) > theErrorTol ) {
+while ( fabs(Eo) > 1E-06 ) {
 	Jac       = (1.0 - tao_bar) + tao_bar * tao_bar * Dergamma;
 	gamma_bar = gamma_bar - Eo/Jac;
 
@@ -1893,12 +1892,90 @@ double get_kappa( nlconstants_t el_cnt, tensor_t Sdev, tensor_t Sref, double kn 
 
 }
 
-double get_kappaUnLoading_II( nlconstants_t el_cnt, tensor_t Sn, tensor_t De, double kn, double *Err ) {
 
-	double R, Fk, Dk, Jk, A, B, C, kappa, kappa1, kappa2, beta, phi, G=el_cnt.mu, Su=el_cnt.c;
-	int    i;
+double Pegasus(double beta, nlconstants_t el_cnt) {
+	// (1973) King, R. An Improved Pegasus method for root finding
 
-	kappa = kn;
+	double k0 = 0.0, k1 = 1.0, k2,  f0, f1, f2,  G=el_cnt.mu, tmp;
+	int cnt1=1, cnt2=1, cntMax=100;
+
+	f0 = ( 1.0 + k0 - beta ) * getHardening(el_cnt, k0) / G - 3.0 * beta;
+	f1 = ( 1.0 + k1 - beta ) * getHardening(el_cnt, k1) / G - 3.0 * beta;
+
+	// get initial range for k
+	while ( f0 * f1 > 0 && cnt1 < cntMax ) {
+		k0 = k1;
+		k1 = 2.0 * k1;
+
+		f0 = ( 1.0 + k0 - beta ) * getHardening(el_cnt, k0) / G - 3.0 * beta;
+		f1 = ( 1.0 + k1 - beta ) * getHardening(el_cnt, k1) / G - 3.0 * beta;
+		cnt1++;
+	}
+
+	if (cnt1 == cntMax) {
+		fprintf(stdout,"Cannot obtain initial range for kappa at unloading: k0=%f, k1=%f. \n", k0, k1 );
+		MPI_Abort(MPI_COMM_WORLD, ERROR);
+		exit(1);
+	}
+
+	cnt1=1;
+
+	k2 = k1 - f1 * ( k1 - k0 ) / ( f1 - f0 );
+	f2 = ( 1.0 + k2 - beta ) * getHardening(el_cnt, k2) / G - 3.0 * beta;
+
+	while ( fabs(f2) > theErrorTol && cnt1 < cntMax ) {
+
+		if ( f1 * f2 < 0 ) {
+			tmp = k0;
+			k0  = k1;
+			k1  = tmp;
+			tmp = f0;
+			f0  = f1;
+			f1  = tmp;
+		}
+
+		while( f1 * f2 > 0 && cnt2 < cntMax) {
+			f0 = f0 * f1 / ( f1 + f2 );
+
+			k1 = k2;
+			f1 = f2;
+
+			k2 = k1 - f1 * ( k1 - k0 ) / ( f1 - f0 );
+			f2 = ( 1.0 + k2 - beta ) * getHardening(el_cnt, k2) / G - 3.0 * beta;
+
+			cnt2++;
+		}
+
+		k0 = k1;
+		f0 = f1;
+
+		k1 = k2;
+		f1 = f2;
+
+		if ( k0 == k1 ) {
+			k2 = k1;
+			break;
+		}
+
+		k2 = k1 - f1 * ( k1 - k0 ) / ( f1 - f0 );
+		f2 = ( 1.0 + k2 - beta ) * getHardening(el_cnt, k2) / G - 3.0 * beta;
+
+		cnt1++;
+
+	}
+
+	if ( cnt1 == cntMax || cnt2 == cntMax )
+		fprintf(stdout,"Increase the number of steps for root finding in Pegasus method. k=%f, Error=%f, ErroTol=%f \n", k2, fabs(f2), theErrorTol );
+
+	return k2;
+
+}
+
+
+double get_kappaUnLoading_II( nlconstants_t el_cnt, tensor_t Sn, tensor_t De, double *Err ) {
+
+	double R, A, B, C, kappa1, kappa2, beta, phi, G=el_cnt.mu, Su=el_cnt.c, kn;
+
 	R     = sqrt(8.0/3.0) * Su;
 
 	A = ddot_tensors(Sn,Sn);
@@ -1918,83 +1995,34 @@ double get_kappaUnLoading_II( nlconstants_t el_cnt, tensor_t Sn, tensor_t De, do
 		/* Sanity check. Should not get here !!!  */
 		if ( phi < 0.0 ) {
 			fprintf(stderr,"Material update error: "
-					"negative kappa at unloading:%f \n",kappa);
+					"negative phi at unloading:%f \n",phi);
 			MPI_Abort(MPI_COMM_WORLD, ERROR);
 			exit(1);
 		}
 
 		beta = phi * 0.50 / G;
-		Fk    = ( 1.0 + kn - beta ) * getHardening(el_cnt, kn) - 3.0 * G * beta;
-		for (i = 0; i < 100; i++) {
-			Jk  = ( 1.0 + kn - beta ) * getDerHardening(el_cnt, kn) + getHardening(el_cnt,kn);
-			Dk = -Fk/Jk;
-			kn  = kn + Dk;
-			if ( kn < 0 || fabs(Fk) < theErrorTol )
-				break;
-			Fk    = ( 1.0 + kn - beta ) * getHardening(el_cnt, kn) - 3.0 * G * beta;
+		kn   = Pegasus( beta,  el_cnt);  // this is a check
+		*Err    = ( 1.0 + kn - beta ) * getHardening(el_cnt, kn) / G - 3.0 * beta;
+
+		if ( fabs(*Err) > theErrorTol  ) {
+			fprintf(stdout," Warning --- UnloadingError/ErrorTolerance= %f/%f \n", fabs(*Err), theErrorTol );
 		}
 
-
-		if ( kn > 0 && fabs(Fk) < theErrorTol ) {
-			kappa = kn;
-			*Err = Fk;
-			return kappa;
+		if ( kn < 0  ) {
+			fprintf(stdout," =*=*=*=* CHECK FOR UNSTABLE BEHAVIOR =*=*=*=* \n"
+					"Found negative kappa at unloading.  k=%f  \n", kn );
+			MPI_Abort(MPI_COMM_WORLD, ERROR);
+			exit(1);
 		}
 
-		if ( kn > 0  )
-			kappa = kn;
 	} else {
 		fprintf(stdout," =*=*=*=* CHECK FOR UNSTABLE BEHAVIOR =*=*=*=* \n"
-				"Found negative kappa at unloading: %f. Making kappa=0  \n", kappa );
-		kappa=0;
-		//MPI_Abort(MPI_COMM_WORLD, ERROR);
-		//exit(1);
-	}
-	return kappa;
-	/* ========================= */
-
-
-
-/*	 ================= try this if we could not improve ===========
-	Hk = getHardening( kappa, psi, m, G);
-	Psik = 2.0 * G / ( 1.0 + 3.0 * G / Hk );
-	Fk   = A + B * ( 1.0 + kappa ) * Psik + C * pow( ( ( 1 + kappa ) * Psik ), 2 ) - pow(R,2);
-
-	while ( fabs(Fk) > theErrorTol ) {
-
-		if ( theMaterialModel == VONMISES_BAE )
-			Dpsi_Dk = ( 6.0 / ( pow( ( 3.0 + Hk / G ),2 ) ) ) * ( m * psi*G * ( pow(kappa,(m-1)) ) );
-		else
-			Dpsi_Dk = ( 6.0 / ( pow( ( 3.0 + Hk / G ),2 ) ) ) * ( 6.0 * G * kappa * (1.0 + kappa) / (pow( ( 1.0 + 2.0 * kappa ), 2) ) );
-
-
-		Jk   =  B * Psik + B * kappa * Dpsi_Dk + 2.0 * C * (1.0 + kappa) * Psik * ( (1.0 + kappa) * Dpsi_Dk + Psik );
-		Dk   = -Fk / Jk;
-		kappa   = kappa + Dk;
-
-		Hk   = getHardening( kappa, psi, m, G);
-		Psik = 2.0 * G / ( 1.0 + 3.0 * G / Hk );
-		Fk   = A + B * ( 1.0 + kappa ) * Psik + C * pow( ( ( 1 + kappa ) * Psik ), 2 ) - pow(R,2);
-		cnt  = cnt + 1;
-
-		if (cnt > cnt_max)
-			break;
-
+				"Cannot compute kappa at unloading. \n" );
+		MPI_Abort(MPI_COMM_WORLD, ERROR);
+		exit(1);
 	}
 
-
-	if ( kappa < 0 ) {
-		fprintf(stdout," =*=*=*=* CHECK FOR UNSTABLE BEHAVIOR =*=*=*=* \n"
-				"Found negative kappa at unloading: %f. Making kappa=0  \n", kappa );
-		kappa=0;
-		//MPI_Abort(MPI_COMM_WORLD, ERROR);
-		//exit(1);
-	}
-
-
-	*Err = Fk;
-	return kappa;*/
-
+	return kn;
 }
 
 
@@ -2200,7 +2228,7 @@ void material_update ( nlconstants_t constants, tensor_t e_n, tensor_t e_n1, ten
 	 */
 
 	double c, h, kappa, mu, Sy, beta, alpha, gamma, phi, dil, Fs_pr, Lambda, dLambda=0.0,
-		   Tol_sigma = 5e-10, cond1, cond2, psi0, m;
+		   Tol_sigma = 1e-05, cond1, cond2, psi0, m;
 
 	h      = constants.h;
 	c      = constants.c;
@@ -3809,7 +3837,7 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
 				double ErrBA=0;
 				double po=90;
 
-				if (i==3 && eindex == 16806 && ( step == 7 || step == 6 ) ) {
+				if (i==3 && eindex == 112722 && ( step == 210 ) ) {
 					po=89;
 					//enlcons->Sstrain0=0;
 				}
@@ -3818,7 +3846,7 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
 						          &pstrains2->qp[i],  &alphastress2->qp[i], &stresses->qp[i],   &epstr2->qv[i],    &enlcons->fs[i],     &psi_n->qv[i],
 						          &lounlo_n->qv[i], &Sv_n->qv[i], &Sv_max->qv[i], &kappa->qv[i], &Sref->qp[i], &flagTolSubSteps, &flagNoSubSteps, &ErrBA);
 
-				if ( ( theMaterialModel == VONMISES_BAE || theMaterialModel == VONMISES_BAH ) ) {
+				if ( ( theMaterialModel == VONMISES_BAE || theMaterialModel == VONMISES_BAH || theMaterialModel == VONMISES_GQH ) ) {
 					enlcons->fs[i] = ErrBA;
 					//if (flagTolSubSteps==1)
 					//	fprintf(stdout,"Exceeded Error Tolerance:%f at GP:%d, eindex: %d, step: %d \n", ErrBA, i, eindex, step);
