@@ -290,6 +290,7 @@ void   EvalSubStep           ( nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t
                                double *kappa_up, double *ErrB, double *ErrS);
 double getH_GQHmodel         (nlconstants_t el_cnt, double kappa);
 double Pegasus               (double beta, nlconstants_t el_cnt);
+double evalBackboneFn        (nlconstants_t el_cnt, double gamma_bar, double tao_bar);
 
 
 tensor_t ApproxGravity_tensor(double Szz, double phi, double h, double lz, double rho);

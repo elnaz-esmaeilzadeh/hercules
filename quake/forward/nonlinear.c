@@ -1563,7 +1563,7 @@ void MatUpd_vMGeneral ( nlconstants_t el_cnt, double *kappa,
 
 	double   Dt=1.0, T=0.0, Dtmin, Dt_sup, kappa_n, load_unload, Den1, Den2, kappa_up,
 			 ErrB, ErrS, xi, xi_sup, kappa_o, K,
-			 G=el_cnt.mu, Lambda = el_cnt.lambda, popo;
+			 G=el_cnt.mu, Lambda = el_cnt.lambda;
 	tensor_t sigma_n, sigma_up, Num, Sdev;
 	int cnt=0;
 
@@ -1834,6 +1834,34 @@ return H ;
 }
 
 
+/*  ec(18) of Restrepo and Taborda (2018) without damping reduction */
+double evalBackboneFn(nlconstants_t el_cnt, double gamma_bar, double tao_bar) {
+
+ double Fbb = 0, beta, s;
+ double  Theta1, Theta2, Theta3, Theta4, Theta5, theta;
+
+	if ( theMaterialModel == VONMISES_GQH ) {
+		Theta1 = el_cnt.thetaGQH[0];
+		Theta2 = el_cnt.thetaGQH[1];
+		Theta3 = el_cnt.thetaGQH[2];
+		Theta4 = el_cnt.thetaGQH[3];
+		Theta5 = el_cnt.thetaGQH[4];
+
+		theta  = Theta1 + Theta2 * ( Theta4 * pow(gamma_bar,Theta5) ) / ( pow(Theta3,Theta5) + Theta4 * pow(gamma_bar,Theta5) );
+		Fbb    = 2.0 * gamma_bar / ( 1.0 + gamma_bar + sqrt( pow((1.0 + gamma_bar),2.0) - 4.0 * theta * gamma_bar ) );
+	} else {
+		if ( theMaterialModel == VONMISES_MKZ ) {
+			beta = el_cnt.beta_MKZ;
+			s    = el_cnt.s_MKZ;
+			Fbb  = gamma_bar / ( 1.0 + beta * pow(gamma_bar,s) );
+		}
+	}
+
+	return (Fbb - tao_bar);
+}
+
+
+
 /*  Plastic modulus */
 double getHardening(nlconstants_t el_cnt, double kappa) {
 
@@ -1857,36 +1885,8 @@ double getHardening(nlconstants_t el_cnt, double kappa) {
 	return H;
 }
 
-/*
 
- Derivative of the plastic modulus
-double getDerHardening(nlconstants_t el_cnt, double kappa) {
 
-	double H = 0, psi=el_cnt.psi0, m=el_cnt.m, G=el_cnt.mu;
-
-	if ( kappa == FLT_MAX ) {
-		if ( theMaterialModel == VONMISES_BAE )
-			H = FLT_MAX;
-		else
-			H = 1.50 * G;
-		return H;
-	}
-
-	if ( theMaterialModel == VONMISES_BAE )
-		H = ( psi * G * m ) * pow( kappa, m - 1.0 );
-	else {
-		if ( theMaterialModel == VONMISES_BAH )
-			H = 6.0 * kappa * G * ( 1.0 + kappa ) / ( ( 1.0 + 2.0 * kappa ) * ( 1.0 + 2.0 * kappa ) );
-		else{
-			if ( theMaterialModel == VONMISES_GQH )
-				H = ( getH_GQHmodel ( el_cnt,  kappa * 1.00001) - getH_GQHmodel ( el_cnt,  kappa) ) / 0.00001; // todo: get the exact expression for the derivative of the hardening function;
-		}
-	}
-
-	return H;
-}
-
-*/
 
 
 double get_kappa( nlconstants_t el_cnt, tensor_t Sdev, tensor_t Sref, double kn ) {
@@ -2392,7 +2392,7 @@ void material_update ( nlconstants_t constants, tensor_t e_n, tensor_t e_n1, ten
 		MatUpd_vMFA ( J2_pr,  dev_pr,  psi0,  c,  eta_n,  e_n1, mu,  Lambda,  Sy, epl,  ep,  ep_bar,  ep_barn,  eta,  sigma,  stresses, fs,  psi_n,  loadunl_n,  Tao_n,  Tao_max );
 		return;
 
-	}  else if ( theMaterialModel == VONMISES_BAE || theMaterialModel == VONMISES_BAH || theMaterialModel == VONMISES_GQH ) {
+	}  else if ( theMaterialModel != MOHR_COULOMB ) {
 
 		MatUpd_vMGeneral ( constants,  kp,  e_n,  e_n1, sigma_ref, sigma, flagTolSubSteps, flagNoSubSteps, ErrBA );
 		return;
