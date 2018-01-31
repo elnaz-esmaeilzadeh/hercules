@@ -68,6 +68,7 @@ static double               *theTheta2;
 static double               *theTheta3;
 static double               *theTheta4;
 static double               *theTheta5;
+static double               *theTau_y;
 static double                theGeostaticLoadingT = 0;
 static double                theErrorTol          = 1E-03;
 static double                theGeostaticCushionT = 0;
@@ -361,6 +362,7 @@ void nonlinear_init( int32_t     myID,
         theTheta3	 	    = (double*)malloc( sizeof(double) * thePropertiesCount);
         theTheta4	 	    = (double*)malloc( sizeof(double) * thePropertiesCount);
         theTheta5	 	    = (double*)malloc( sizeof(double) * thePropertiesCount);
+        theTau_y 	 	    = (double*)malloc( sizeof(double) * thePropertiesCount);
     }
 
     /* Broadcast table of properties */
@@ -379,6 +381,7 @@ void nonlinear_init( int32_t     myID,
     MPI_Bcast(theTheta3,           thePropertiesCount, MPI_DOUBLE, 0, comm_solver);
     MPI_Bcast(theTheta4,           thePropertiesCount, MPI_DOUBLE, 0, comm_solver);
     MPI_Bcast(theTheta5,           thePropertiesCount, MPI_DOUBLE, 0, comm_solver);
+    MPI_Bcast(theTau_y,            thePropertiesCount, MPI_DOUBLE, 0, comm_solver);
 }
 
 /*
@@ -433,19 +436,23 @@ int32_t nonlinear_initparameters ( const char *parametersin,
 
     if ( strcasecmp(material_model, "linear") == 0 ) {
         materialmodel = LINEAR;
-    } else if ( strcasecmp(material_model, "vonMises_ep") == 0 ) {
+    } else if ( strcasecmp(material_model, "vonMises_ep") == 0 )   {
         materialmodel = VONMISES_EP;
-    } else if ( strcasecmp(material_model, "vonMises_fa") == 0 ) {
+    } else if ( strcasecmp(material_model, "vonMises_fa") == 0 )   {
         materialmodel = VONMISES_FA;
-    } else if ( strcasecmp(material_model, "vonMises_faM") == 0 ) {
+    } else if ( strcasecmp(material_model, "vonMises_faM") == 0 )  {
         materialmodel = VONMISES_FAM;
     }  else if ( strcasecmp(material_model, "vonMises_baE") == 0 ) {
         materialmodel = VONMISES_BAE;
     }  else if ( strcasecmp(material_model, "vonMises_baH") == 0 ) {
         materialmodel = VONMISES_BAH;
-    } else if ( strcasecmp(material_model, "vonMises_GQH") == 0 ) {
+    } else if ( strcasecmp(material_model, "vonMises_GQH") == 0 )  {
         materialmodel = VONMISES_GQH;
-    } else if ( strcasecmp(material_model, "MohrCoulomb") == 0 ) {
+    } else if ( strcasecmp(material_model, "vonMises_MKZ") == 0 )  {
+        materialmodel = VONMISES_MKZ;
+    } else if ( strcasecmp(material_model, "vonMises_RO") == 0 )  {
+        materialmodel = VONMISES_RO;
+    } else if ( strcasecmp(material_model, "MohrCoulomb") == 0 )   {
         materialmodel = MOHR_COULOMB;
     } else if ( strcasecmp(material_model, "DruckerPrager") == 0 ) {
         materialmodel = DRUCKERPRAGER;
@@ -454,7 +461,8 @@ int32_t nonlinear_initparameters ( const char *parametersin,
         fprintf(stderr,
                 "Illegal material model for nonlinear analysis \n"
                 "(linear, vonMises_ep (Elasto-plastic), vonMises_FA (Frederick-Armstrong), vonMises_FAM (Frederick-Armstrong modified), \n "
-                "vonMises_BAE (Borja-Aimes exponential), vonMises_BAH (Borja-Aimes hyperbolic), vonMises_GQH (Groholski et al GQH model), DruckerPrager, MohrCoulomb): %s\n", material_model);
+                "vonMises_BAE (Borja-Aimes exponential), vonMises_BAH (Borja-Aimes hyperbolic), vonMises_GQH (Groholski et al GQH model), \n"
+        		"vonMises_MKZ (Matasovic 1994), vonMises_RO (Ramberg-Osgood), DruckerPrager, MohrCoulomb): %s\n", material_model);
         return -1;
     }
 
@@ -525,7 +533,7 @@ int32_t nonlinear_initparameters ( const char *parametersin,
     theTensionCutoff      = tensioncutoff;
     theNoSubsteps         = no_substeps;
 
-    auxiliar             = (double*)malloc( sizeof(double) * thePropertiesCount * 15 );
+    auxiliar             = (double*)malloc( sizeof(double) * thePropertiesCount * 16 );
     theVsLimits          = (double*)malloc( sizeof(double) * thePropertiesCount );
     theAlphaCohes        = (double*)malloc( sizeof(double) * thePropertiesCount );
     theKayPhis           = (double*)malloc( sizeof(double) * thePropertiesCount );
@@ -541,29 +549,31 @@ int32_t nonlinear_initparameters ( const char *parametersin,
     theTheta3	 	     = (double*)malloc( sizeof(double) * thePropertiesCount );
     theTheta4	 	     = (double*)malloc( sizeof(double) * thePropertiesCount );
     theTheta5	 	     = (double*)malloc( sizeof(double) * thePropertiesCount );
+    theTau_y	 	     = (double*)malloc( sizeof(double) * thePropertiesCount );
 
 
-    if ( parsedarray( fp, "material_properties_list", thePropertiesCount * 15, auxiliar ) != 0) {
+    if ( parsedarray( fp, "material_properties_list", thePropertiesCount * 16, auxiliar ) != 0) {
         fprintf(stderr, "Error parsing nonlinear material properties list from %s\n", parametersin);
         return -1;
     }
 
     for ( row = 0; row < thePropertiesCount; row++) {
-        theVsLimits[row]          = auxiliar[ row * 15     ];
-        theAlphaCohes[row]        = auxiliar[ row * 15 + 1 ];
-        theKayPhis[row]           = auxiliar[ row * 15 + 2 ];
-        theStrainRates[row]       = auxiliar[ row * 15 + 3 ];
-        theSensitivities[row]     = auxiliar[ row * 15 + 4 ];
-        theHardeningModulus[row]  = auxiliar[ row * 15 + 5 ];
-        theBetaDilatancy[row]     = auxiliar[ row * 15 + 6 ];
-        theGamma0[row]            = auxiliar[ row * 15 + 7 ];
-        thePsi[row]               = auxiliar[ row * 15 + 8 ];
-        theM[row]                 = auxiliar[ row * 15 + 9 ];
-        theTheta1[row]            = auxiliar[ row * 15 + 10 ];
-        theTheta2[row]            = auxiliar[ row * 15 + 11 ];
-        theTheta3[row]            = auxiliar[ row * 15 + 12 ];
-        theTheta4[row]            = auxiliar[ row * 15 + 13 ];
-        theTheta5[row]            = auxiliar[ row * 15 + 14 ];
+        theVsLimits[row]          = auxiliar[ row * 16     ];
+        theAlphaCohes[row]        = auxiliar[ row * 16 + 1 ];
+        theKayPhis[row]           = auxiliar[ row * 16 + 2 ];
+        theStrainRates[row]       = auxiliar[ row * 16 + 3 ];
+        theSensitivities[row]     = auxiliar[ row * 16 + 4 ];
+        theHardeningModulus[row]  = auxiliar[ row * 16 + 5 ];
+        theBetaDilatancy[row]     = auxiliar[ row * 16 + 6 ];
+        theGamma0[row]            = auxiliar[ row * 16 + 7 ];
+        thePsi[row]               = auxiliar[ row * 16 + 8 ];
+        theM[row]                 = auxiliar[ row * 16 + 9 ];
+        theTheta1[row]            = auxiliar[ row * 16 + 10 ];
+        theTheta2[row]            = auxiliar[ row * 16 + 11 ];
+        theTheta3[row]            = auxiliar[ row * 16 + 12 ];
+        theTheta4[row]            = auxiliar[ row * 16 + 13 ];
+        theTheta5[row]            = auxiliar[ row * 16 + 14 ];
+        theTau_y [row]            = auxiliar[ row * 16 + 15 ];
 
     }
 
@@ -1001,6 +1011,23 @@ void nonlinear_solver_init(int32_t myID, mesh_t *myMesh, double depth) {
             	ecp->thetaGQH[2] = interpolate_property_value(elementVs, theTheta3);
             	ecp->thetaGQH[3] = interpolate_property_value(elementVs, theTheta4);
             	ecp->thetaGQH[4] = interpolate_property_value(elementVs, theTheta5);
+
+            	break;
+
+            case VONMISES_MKZ:
+            	ecp->c           = get_cohesion(elementVs);
+
+            	ecp->beta_MKZ    = interpolate_property_value(elementVs, thePsi);
+            	ecp->s_MKZ       = interpolate_property_value(elementVs, theM);
+
+            	break;
+
+            case VONMISES_RO:
+            	ecp->c           = get_cohesion(elementVs);
+
+            	ecp->alpha_RO    = interpolate_property_value(elementVs, thePsi);
+            	ecp->eta_RO      = interpolate_property_value(elementVs, theM);
+            	ecp->tauy_RO     = interpolate_property_value(elementVs, theTau_y);
 
             	break;
 

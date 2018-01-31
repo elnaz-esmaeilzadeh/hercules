@@ -38,7 +38,7 @@ typedef enum {
      * allows one to initially evaluate the levels of deformation and serves
      * for comparisons with the corresponding elastoplastic runs.
      */
-    LINEAR = 0, VONMISES_EP, VONMISES_FA, VONMISES_FAM, VONMISES_BAE, VONMISES_BAH, VONMISES_GQH, DRUCKERPRAGER, MOHR_COULOMB
+    LINEAR = 0, VONMISES_EP, VONMISES_FA, VONMISES_FAM, VONMISES_BAE, VONMISES_BAH, VONMISES_GQH, VONMISES_MKZ, VONMISES_RO, DRUCKERPRAGER, MOHR_COULOMB
 
 } materialmodel_t;
 
@@ -110,8 +110,14 @@ typedef struct nlconstants_t {
 
     double m;             /* For vonMisesBAE H=psi0*mu*kappa^m     */
 
-    double thetaGQH[5];      /* GQH  parameters   */
+    double thetaGQH[5];   /* GQ/H  parameters   */
 
+    double beta_MKZ;      /* MKZ  parameters   */
+    double s_MKZ;
+
+    double alpha_RO;      /* Ramberg-Osgood  parameters   */
+    double eta_RO;
+    double tauy_RO;
 
     double fs[8];         /* F(sigma) */
     double dLambda[8];    /* yield control */
