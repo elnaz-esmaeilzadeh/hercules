@@ -1834,6 +1834,132 @@ return H ;
 }
 
 
+double getHard_Pegassus (nlconstants_t el_cnt, double kappa) {
+
+	double H = 0.0, tao_bar, k0 = 0.0, k1 = 1.0, k2,  f0, f1, f2, tmp;
+	int    cnt1=1,   cnt2=1,   cntMax = 200;
+
+	if (kappa == 0.0)
+		return H;
+
+
+	tao_bar = 1.0/(1.0 + kappa);
+
+
+	// (1973) King, R. An Improved Pegasus method for root finding
+	f0 = evalBackboneFn( el_cnt, k0,  tao_bar);
+	f1 = evalBackboneFn( el_cnt, k1,  tao_bar);
+
+	// get initial range for k
+	while ( f0 * f1 > 0 && cnt1 < cntMax ) {
+		k0 = k1;
+		k1 = 2.0 * k1;
+
+		f0 = evalBackboneFn( el_cnt, k0,  tao_bar);
+		f1 = evalBackboneFn( el_cnt, k1,  tao_bar);
+		cnt1++;
+	}
+
+	if (cnt1 == cntMax) {
+		fprintf(stdout,"Cannot obtain gamma_bar initial in getHard_Pegassus function: gamma_bar0=%f, gamma_bar1=%f. \n", k0, k1 );
+		MPI_Abort(MPI_COMM_WORLD, ERROR);
+		exit(1);
+	}
+
+	cnt1=1;
+
+	k2 = k1 - f1 * ( k1 - k0 ) / ( f1 - f0 );
+	f2 = evalBackboneFn( el_cnt, k2,  tao_bar);
+
+	while ( fabs(f2) > theErrorTol && cnt1 < cntMax ) {
+
+		// step 4
+		if ( f1 * f2 < 0 ) {
+			tmp = k0;
+			k0  = k1;
+			k1  = tmp;
+			tmp = f0;
+			f0  = f1;
+			f1  = tmp;
+		}
+
+		// step 5
+		while( f1 * f2 > 0 && cnt2 < cntMax) {
+			f0 = f0 * f1 / ( f1 + f2 );
+
+			k1 = k2;
+			f1 = f2;
+
+			k2 = k1 - f1 * ( k1 - k0 ) / ( f1 - f0 );
+			f2 = evalBackboneFn( el_cnt, k2,  tao_bar);
+
+			if (fabs(f2) < theErrorTol)
+				return evalHardFnc( el_cnt,  k2);
+
+			cnt2++;
+		}
+
+		k0 = k1;
+		f0 = f1;
+
+		k1 = k2;
+		f1 = f2;
+
+		if ( k0 == k1 ) {
+			k2 = k1;
+			return evalHardFnc( el_cnt,  k2);
+			break;
+		}
+
+		k2 = k1 - f1 * ( k1 - k0 ) / ( f1 - f0 );
+		f2 = evalBackboneFn( el_cnt, k2,  tao_bar);
+
+		cnt1++;
+
+	}
+
+	if ( cnt1 == cntMax || cnt2 == cntMax )
+		fprintf(stdout,"Increase the number of steps for root finding in Pegasus method for plastic modulus. gamma_bar=%f, min_error=%f, ErroTol=%f \n", k2, fabs(f2), theErrorTol );
+
+	return evalHardFnc( el_cnt,  k2);
+
+
+}
+
+
+// eqn (9) of Restrepo and Taborda (2018)
+double evalHardFnc(nlconstants_t el_cnt, double gamma_bar) {
+
+	double  G=el_cnt.mu, beta, s, HardFn=0;
+	double  Theta1, Theta2, Theta3, Theta4, Theta5, theta, Dergamma, df_dgamma=0;
+
+	if ( theMaterialModel == VONMISES_GQH ) {
+		Theta1 = el_cnt.thetaGQH[0];
+		Theta2 = el_cnt.thetaGQH[1];
+		Theta3 = el_cnt.thetaGQH[2];
+		Theta4 = el_cnt.thetaGQH[3];
+		Theta5 = el_cnt.thetaGQH[4];
+
+		theta     = Theta1 + Theta2 * ( Theta4 * pow(gamma_bar,Theta5) ) / ( pow(Theta3,Theta5) + Theta4 * pow(gamma_bar,Theta5) );
+		Dergamma  = Theta2 * ( pow(Theta3,Theta5) ) * Theta4 * Theta5 * pow(gamma_bar,(Theta5 - 1.0)) / (pow(( pow(Theta3,Theta5) + Theta4 * pow(gamma_bar,Theta5) ), 2.0 ));
+
+		double A  = 1.0 + gamma_bar + sqrt( pow((1.0 + gamma_bar),2.0) - 4.0 * theta * gamma_bar );
+		double B  = 1.0 + ( 1.0 + gamma_bar - 2.0 * (theta + gamma_bar * Dergamma) ) / sqrt( pow((1.0 + gamma_bar),2.0) - 4.0 * theta * gamma_bar );
+		df_dgamma = 2.0 * ( A - gamma_bar * B ) / (A * A);
+
+	} else {
+		if ( theMaterialModel == VONMISES_MKZ ) {
+			beta = el_cnt.beta_MKZ;
+			s    = el_cnt.s_MKZ;
+			df_dgamma = ( 1.0 + beta * (1.0 - s) * pow(gamma_bar,s) ) / (  pow( (1.0 + beta * pow(gamma_bar,s) ),2.0) ) ;
+		}
+	}
+
+	return  HardFn = 3.0 * G * df_dgamma / ( 1.0 - df_dgamma );
+
+}
+
+
 /*  ec(18) of Restrepo and Taborda (2018) without damping reduction */
 double evalBackboneFn(nlconstants_t el_cnt, double gamma_bar, double tao_bar) {
 
@@ -1877,16 +2003,21 @@ double getHardening(nlconstants_t el_cnt, double kappa) {
 		if ( theMaterialModel == VONMISES_BAH )
 			H = 3.0 * G * pow(kappa,2.0) / ( 1.0 + 2.0 * kappa );
 		else {
-			if ( theMaterialModel == VONMISES_GQH )
-				H = getH_GQHmodel ( el_cnt,  kappa);
+			if ( theMaterialModel == VONMISES_RO ) {
+				double tao_Max = 2.0 * el_cnt.c / sqrt(3.0), eta = el_cnt.eta_RO, tao_y = el_cnt.tauy_RO, alpha = el_cnt.alpha_RO ;
+				double tao_ratio = tao_y / tao_Max  ;
+				H = 3.0 * G * pow( tao_ratio * (1.0 + kappa), (eta - 1.0) ) / ( alpha * eta  );
+			} else {
+				if ( theMaterialModel == VONMISES_GQH ) {
+					//kappa=123.765;
+					//H = getH_GQHmodel ( el_cnt,  kappa);
+				H = getHard_Pegassus ( el_cnt,  kappa ); }
+			}
 		}
 	}
 
 	return H;
 }
-
-
-
 
 
 double get_kappa( nlconstants_t el_cnt, tensor_t Sdev, tensor_t Sref, double kn ) {
@@ -3870,7 +4001,7 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
 				/*				double po=90;
 				if (i==5 && eindex == 111412 && ( step == 240 ) ) {
 					po=89;
-				}*/
+				} */
 
 				material_update ( *enlcons,           tstrains->qp[i],      tstrains1->qp[i],   pstrains1->qp[i],  alphastress1->qp[i], epstr1->qv[i],   sigma0,        theDeltaT,
 						          &pstrains2->qp[i],  &alphastress2->qp[i], &stresses->qp[i],   &epstr2->qv[i],    &enlcons->fs[i],     &psi_n->qv[i],
