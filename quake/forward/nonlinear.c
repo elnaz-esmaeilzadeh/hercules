@@ -1483,7 +1483,44 @@ double compute_yield_surface_stateII ( double J3, double J2, double I1, double a
 
 	double Yf=0., p, q, r, teta, Rmc, s1, s3;
 
-	if ( ( theMaterialModel == VONMISES_EP )  || ( theMaterialModel == DRUCKERPRAGER ) ||
+	if ( theMaterialModel == MOHR_COULOMB ) {
+		p = (1./3.) * I1;
+		q = 2.0 * pow( J2, 1.5 );
+		r = -3.0 * sqrt(3.0) * (J3);
+
+		if ( ( r/q <= 1.00000001 ) && ( r/q >= 0.99999999 ) )
+			teta = PI / 6.0;
+		else if ( ( r/q >= -1.00000001 ) && ( r/q <= -0.99999999 ) )
+			teta = -PI / 6.0;
+		else
+			teta = 1./3. * asin(r/q);
+
+		if ( ( teta > PI / 6.0 ) || ( teta < -PI / 6.0 ) ) {
+
+			vect1_t n1, n2, n3, eig_vals;
+
+		    specDecomp(Sigma, &n1, &n2, &n3, &eig_vals);
+
+		    s1 = eig_vals.x;
+		    s3 = eig_vals.z;
+
+		    Yf = s1 - s3 + ( s1 + s3 )*sin(phi);
+
+		} else {
+			Rmc = -1./sqrt(3.0) * ( sin(phi)*sin(teta) ) + cos(teta);
+			Yf = 2. * ( Rmc * sqrt(J2) + p * sin(phi) );
+		}
+
+	} else if ( theMaterialModel == DRUCKERPRAGER ) {
+		Yf = alpha * I1 + sqrt( J2 );
+	} else {
+		Yf = sqrt( J2 ); // the rest of the models a deviatoric
+	}
+
+	return Yf;
+
+    // old fnc
+/*	if ( ( theMaterialModel == VONMISES_EP )  || ( theMaterialModel == DRUCKERPRAGER ) ||
 	     ( theMaterialModel == VONMISES_FAM ) || ( theMaterialModel == VONMISES_FA   ) ||
 	     ( theMaterialModel == VONMISES_BAE ) || ( theMaterialModel == VONMISES_BAH  ) ||
 	     ( theMaterialModel == VONMISES_GQH   )  ) {
@@ -1521,7 +1558,7 @@ double compute_yield_surface_stateII ( double J3, double J2, double I1, double a
 
 	}
 
-	return Yf;
+	return Yf;*/
 
 }
 
@@ -2000,6 +2037,10 @@ double getHardening(nlconstants_t el_cnt, double kappa) {
 
 	double H = 0, psi=el_cnt.psi0, m=el_cnt.m, G=el_cnt.mu;
 
+	if ( kappa == 0.0 ) {
+		return H;
+	}
+
 	if ( kappa == FLT_MAX ) {
 		H = FLT_MAX;
 		return H;
@@ -2133,8 +2174,8 @@ double Pegasus(double beta, nlconstants_t el_cnt) {
 
 	}
 
-	if ( cnt1 == cntMax || cnt2 == cntMax )
-		fprintf(stdout,"Increase the number of steps for root finding in Pegasus method. k=%f, beta=%f, Error=%f, ErroTol=%f \n", k2, beta, fabs(f2), theErrorTol );
+	//if ( cnt1 == cntMax || cnt2 == cntMax )
+	//	fprintf(stdout,"Increase the number of steps for root finding in Pegasus method. k=%f, beta=%f, Error=%f, ErroTol=%f \n", k2, beta, fabs(f2), theErrorTol );
 
 	return k2;
 
@@ -4005,10 +4046,10 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
 				int flagTolSubSteps=0, flagNoSubSteps=0;
 				double ErrBA=0;
 
-				/*				double po=90;
-				if (i==5 && eindex == 111412 && ( step == 240 ) ) {
+							double po=90;
+				if (i==0 && eindex == 16769 && ( step == 103 ) ) {
 					po=89;
-				} */
+				}
 
 				material_update ( *enlcons,           tstrains->qp[i],      tstrains1->qp[i],   pstrains1->qp[i],  alphastress1->qp[i], epstr1->qv[i],   sigma0,        theDeltaT,
 						          &pstrains2->qp[i],  &alphastress2->qp[i], &stresses->qp[i],   &epstr2->qv[i],    &enlcons->fs[i],     &psi_n->qv[i],
