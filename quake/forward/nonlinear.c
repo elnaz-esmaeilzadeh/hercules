@@ -68,9 +68,10 @@ static double               *theTheta2;
 static double               *theTheta3;
 static double               *theTheta4;
 static double               *theTheta5;
-static double               *theTau_y;
+static double               *thePhi_RO;
 static double                theGeostaticLoadingT = 0;
-static double                theErrorTol          = 1E-03;
+static double                theErrorTol             = 1E-03;
+static double                theBackboneErrorTol     = 1E-05;
 static double                theGeostaticCushionT = 0;
 static int                   theGeostaticFinalStep;
 static int                   theNoSubsteps=1000;
@@ -301,7 +302,7 @@ void nonlinear_init( int32_t     myID,
                      double      theDeltaT,
                      double      theEndT )
 {
-    double  double_message[3];
+    double  double_message[4];
     int     int_message[8];
 
     /* Capturing data from file --- only done by PE0 */
@@ -318,6 +319,7 @@ void nonlinear_init( int32_t     myID,
     double_message[0] = theGeostaticLoadingT;
     double_message[1] = theGeostaticCushionT;
     double_message[2] = theErrorTol;
+    double_message[3] = theBackboneErrorTol;
 
     int_message[0] = (int)theMaterialModel;
     int_message[1] = thePropertiesCount;
@@ -328,12 +330,13 @@ void nonlinear_init( int32_t     myID,
     int_message[6] = (int)theTensionCutoff;
     int_message[7] = (int)theNoSubsteps;
 
-    MPI_Bcast(double_message, 3, MPI_DOUBLE, 0, comm_solver);
+    MPI_Bcast(double_message, 4, MPI_DOUBLE, 0, comm_solver);
     MPI_Bcast(int_message,    8, MPI_INT,    0, comm_solver);
 
     theGeostaticLoadingT  = double_message[0];
     theGeostaticCushionT  = double_message[1];
     theErrorTol           = double_message[2];
+    theBackboneErrorTol   = double_message[3];
 
     theMaterialModel      = int_message[0];
     thePropertiesCount    = int_message[1];
@@ -362,7 +365,7 @@ void nonlinear_init( int32_t     myID,
         theTheta3	 	    = (double*)malloc( sizeof(double) * thePropertiesCount);
         theTheta4	 	    = (double*)malloc( sizeof(double) * thePropertiesCount);
         theTheta5	 	    = (double*)malloc( sizeof(double) * thePropertiesCount);
-        theTau_y 	 	    = (double*)malloc( sizeof(double) * thePropertiesCount);
+        thePhi_RO 	 	    = (double*)malloc( sizeof(double) * thePropertiesCount);
     }
 
     /* Broadcast table of properties */
@@ -381,7 +384,7 @@ void nonlinear_init( int32_t     myID,
     MPI_Bcast(theTheta3,           thePropertiesCount, MPI_DOUBLE, 0, comm_solver);
     MPI_Bcast(theTheta4,           thePropertiesCount, MPI_DOUBLE, 0, comm_solver);
     MPI_Bcast(theTheta5,           thePropertiesCount, MPI_DOUBLE, 0, comm_solver);
-    MPI_Bcast(theTau_y,            thePropertiesCount, MPI_DOUBLE, 0, comm_solver);
+    MPI_Bcast(thePhi_RO,           thePropertiesCount, MPI_DOUBLE, 0, comm_solver);
 }
 
 /*
@@ -394,7 +397,7 @@ int32_t nonlinear_initparameters ( const char *parametersin,
     FILE    *fp;
     int32_t  properties_count, no_substeps;
     int      row;
-    double   geostatic_loading_t, geostatic_cushion_t, errorTol,
+    double   geostatic_loading_t, geostatic_cushion_t, errorTol, backbone_errorTol,
             *auxiliar;
     char     material_model[64],
              plasticity_type[64], approx_geostatic_state[64], tension_cutoff[64];
@@ -415,6 +418,7 @@ int32_t nonlinear_initparameters ( const char *parametersin,
     if ( (parsetext(fp, "geostatic_loading_time_sec",   'd', &geostatic_loading_t    ) != 0) ||
          (parsetext(fp, "geostatic_cushion_time_sec",   'd', &geostatic_cushion_t    ) != 0) ||
          (parsetext(fp, "error_tolerance",              'd', &errorTol               ) != 0) ||
+         (parsetext(fp, "backbone_errTol",              'd', &backbone_errorTol      ) != 0) ||
          (parsetext(fp, "material_model",               's', &material_model         ) != 0) ||
          (parsetext(fp, "approximate_geostatic_state",  's', &approx_geostatic_state ) != 0) ||
          (parsetext(fp, "material_plasticity_type",     's', &plasticity_type        ) != 0) ||
@@ -525,6 +529,7 @@ int32_t nonlinear_initparameters ( const char *parametersin,
     theGeostaticLoadingT  = geostatic_loading_t;
     theGeostaticCushionT  = geostatic_cushion_t;
     theErrorTol           = errorTol;
+    theBackboneErrorTol   = backbone_errorTol;
     theGeostaticFinalStep = (int)( (geostatic_loading_t + geostatic_cushion_t) / theDeltaT );
     theMaterialModel      = materialmodel;
     thePropertiesCount    = properties_count;
@@ -549,7 +554,7 @@ int32_t nonlinear_initparameters ( const char *parametersin,
     theTheta3	 	     = (double*)malloc( sizeof(double) * thePropertiesCount );
     theTheta4	 	     = (double*)malloc( sizeof(double) * thePropertiesCount );
     theTheta5	 	     = (double*)malloc( sizeof(double) * thePropertiesCount );
-    theTau_y	 	     = (double*)malloc( sizeof(double) * thePropertiesCount );
+    thePhi_RO	 	     = (double*)malloc( sizeof(double) * thePropertiesCount );
 
 
     if ( parsedarray( fp, "material_properties_list", thePropertiesCount * 16, auxiliar ) != 0) {
@@ -573,7 +578,7 @@ int32_t nonlinear_initparameters ( const char *parametersin,
         theTheta3[row]            = auxiliar[ row * 16 + 12 ];
         theTheta4[row]            = auxiliar[ row * 16 + 13 ];
         theTheta5[row]            = auxiliar[ row * 16 + 14 ];
-        theTau_y [row]            = auxiliar[ row * 16 + 15 ];
+        thePhi_RO [row]           = auxiliar[ row * 16 + 15 ];
 
     }
 
@@ -1025,9 +1030,9 @@ void nonlinear_solver_init(int32_t myID, mesh_t *myMesh, double depth) {
             case VONMISES_RO:
             	ecp->c           = get_cohesion(elementVs);
 
-            	ecp->alpha_RO    = interpolate_property_value(elementVs, thePsi);
+            	ecp->gammaOff_RO = interpolate_property_value(elementVs, thePsi);
             	ecp->eta_RO      = interpolate_property_value(elementVs, theM);
-            	ecp->tauy_RO     = interpolate_property_value(elementVs, theTau_y);
+            	ecp->phi_RO      = interpolate_property_value(elementVs, thePhi_RO);
 
             	break;
 
@@ -1523,21 +1528,25 @@ double compute_yield_surface_stateII ( double J3, double J2, double I1, double a
 double compute_hardening ( double gamma, double c, double Sy, double h, double ep_bar, double phi, double psi ) {
 	double H=0.;
 
-	if ( theMaterialModel == VONMISES_EP ) {
+	if ( theMaterialModel        == VONMISES_EP ) {
 		H = c * 2.0 / sqrt(3.0);   // c=Su and tao_max = 2Su/sqrt(3)
+	} else if ( theMaterialModel == MOHR_COULOMB ) {
+		H = 2.0 * ( c + h * ep_bar) * cos(phi);
+	} else if ( theMaterialModel == DRUCKERPRAGER ) {
+		H = gamma * ( c + h * ep_bar);
 	} else if ( theMaterialModel == VONMISES_FA ) {
 		H = Sy; // Since Sy comes from the G/Gmax it does not require the constant 2/sqrt(3)
-	} else if ( theMaterialModel == VONMISES_FAM || theMaterialModel == VONMISES_BAE ||
+	}
+
+	return H;
+/*	else if ( theMaterialModel == VONMISES_FAM || theMaterialModel == VONMISES_BAE ||
 			    theMaterialModel == VONMISES_BAH || theMaterialModel == VONMISES_GQH ) { // no elastic region in vonMisesKinHard_Modified
 		H = 0.0;
 	} else if ( theMaterialModel == DRUCKERPRAGER ) {
 		H = gamma * ( c + h * ep_bar);
 	}	else {
 		H = 2.0 * ( c + h * ep_bar) * cos(phi);
-	}
-
-
-	return H;
+	}*/
 
 }
 
@@ -1842,9 +1851,7 @@ double getHard_Pegassus (nlconstants_t el_cnt, double kappa) {
 	if (kappa == 0.0)
 		return H;
 
-
 	tao_bar = 1.0/(1.0 + kappa);
-
 
 	// (1973) King, R. An Improved Pegasus method for root finding
 	f0 = evalBackboneFn( el_cnt, k0,  tao_bar);
@@ -1871,7 +1878,7 @@ double getHard_Pegassus (nlconstants_t el_cnt, double kappa) {
 	k2 = k1 - f1 * ( k1 - k0 ) / ( f1 - f0 );
 	f2 = evalBackboneFn( el_cnt, k2,  tao_bar);
 
-	while ( fabs(f2) > theErrorTol && cnt1 < cntMax ) {
+	while ( fabs(f2)  > theBackboneErrorTol && cnt1 < cntMax ) {
 
 		// step 4
 		if ( f1 * f2 < 0 ) {
@@ -1893,7 +1900,7 @@ double getHard_Pegassus (nlconstants_t el_cnt, double kappa) {
 			k2 = k1 - f1 * ( k1 - k0 ) / ( f1 - f0 );
 			f2 = evalBackboneFn( el_cnt, k2,  tao_bar);
 
-			if (fabs(f2) < theErrorTol)
+			if ( fabs(f2)  < theBackboneErrorTol )
 				return evalHardFnc( el_cnt,  k2);
 
 			cnt2++;
@@ -1919,7 +1926,7 @@ double getHard_Pegassus (nlconstants_t el_cnt, double kappa) {
 	}
 
 	if ( cnt1 == cntMax || cnt2 == cntMax )
-		fprintf(stdout,"Increase the number of steps for root finding in Pegasus method for plastic modulus. gamma_bar=%f, min_error=%f, ErroTol=%f \n", k2, fabs(f2), theErrorTol );
+		fprintf(stdout,"Increase the number of steps for root finding in Pegasus method for backbone solving. gamma_bar=%f, min_error=%f, ErroTol=%f \n", k2, fabs(f2), theErrorTol );
 
 	return evalHardFnc( el_cnt,  k2);
 
@@ -2004,14 +2011,14 @@ double getHardening(nlconstants_t el_cnt, double kappa) {
 			H = 3.0 * G * pow(kappa,2.0) / ( 1.0 + 2.0 * kappa );
 		else {
 			if ( theMaterialModel == VONMISES_RO ) {
-				double tao_Max = 2.0 * el_cnt.c / sqrt(3.0), eta = el_cnt.eta_RO, tao_y = el_cnt.tauy_RO, alpha = el_cnt.alpha_RO ;
-				double tao_ratio = tao_y / tao_Max  ;
-				H = 3.0 * G * pow( tao_ratio * (1.0 + kappa), (eta - 1.0) ) / ( alpha * eta  );
+				double  tao_Max = 2.0*el_cnt.c/sqrt(3.0),  eta = el_cnt.eta_RO, phi = el_cnt.phi_RO, alpha = el_cnt.gammaOff_RO * G / tao_Max ;
+				H = 3.0 * G / ( alpha * eta  ) * pow( phi * (1.0 + kappa), (eta - 1.0) ) ;
 			} else {
 				if ( theMaterialModel == VONMISES_GQH ) {
-					//kappa=123.765;
-					//H = getH_GQHmodel ( el_cnt,  kappa);
-				H = getHard_Pegassus ( el_cnt,  kappa ); }
+			   // kappa = 173523.765;
+				H = getH_GQHmodel ( el_cnt,  kappa);
+				//H = getHard_Pegassus ( el_cnt,  kappa );
+					}
 			}
 		}
 	}
@@ -2059,7 +2066,7 @@ double Pegasus(double beta, nlconstants_t el_cnt) {
 	// (1973) King, R. An Improved Pegasus method for root finding
 
 	double k0 = 0.0, k1 = 1.0, k2,  f0, f1, f2,  G=el_cnt.mu, tmp;
-	int cnt1=1, cnt2=1, cntMax = 200;
+	int cnt1=1, cnt2=1, cntMax = 500;
 
 	f0 = ( 1.0 + k0 - beta ) * getHardening(el_cnt, k0) / G - 3.0 * beta;
 	f1 = ( 1.0 + k1 - beta ) * getHardening(el_cnt, k1) / G - 3.0 * beta;

@@ -115,9 +115,9 @@ typedef struct nlconstants_t {
     double beta_MKZ;      /* MKZ  parameters   */
     double s_MKZ;
 
-    double alpha_RO;      /* Ramberg-Osgood  parameters   */
+    double gammaOff_RO;      /* Ramberg-Osgood  parameters   */
     double eta_RO;
-    double tauy_RO;
+    double phi_RO;
 
     double fs[8];         /* F(sigma) */
     double dLambda[8];    /* yield control */
