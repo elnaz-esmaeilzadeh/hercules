@@ -2014,11 +2014,11 @@ double getHardening(nlconstants_t el_cnt, double kappa) {
 				double  tao_Max = 2.0*el_cnt.c/sqrt(3.0),  eta = el_cnt.eta_RO, phi = el_cnt.phi_RO, alpha = el_cnt.gammaOff_RO * G / tao_Max ;
 				H = 3.0 * G / ( alpha * eta  ) * pow( phi * (1.0 + kappa), (eta - 1.0) ) ;
 			} else {
-				if ( theMaterialModel == VONMISES_GQH ) {
+				//if ( theMaterialModel == VONMISES_GQH ) {
 			   // kappa = 173523.765;
-				H = getH_GQHmodel ( el_cnt,  kappa);
-				//H = getHard_Pegassus ( el_cnt,  kappa );
-					}
+				//H = getH_GQHmodel ( el_cnt,  kappa);
+				H = getHard_Pegassus ( el_cnt,  kappa );
+					//}
 			}
 		}
 	}
