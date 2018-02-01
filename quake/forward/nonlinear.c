@@ -2109,16 +2109,16 @@ double Pegasus(double beta, nlconstants_t el_cnt) {
 	double k0 = 0.0, k1 = 1.0, k2,  f0, f1, f2,  G=el_cnt.mu, tmp;
 	int cnt1=1, cnt2=1, cntMax = 500;
 
-	f0 = ( 1.0 + k0 - beta ) * getHardening(el_cnt, k0) / G - 3.0 * beta;
-	f1 = ( 1.0 + k1 - beta ) * getHardening(el_cnt, k1) / G - 3.0 * beta;
+	f0 = ( 1.0 + k0 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k0);
+	f1 = ( 1.0 + k1 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k1);
 
 	// get initial range for k
 	while ( f0 * f1 > 0 && cnt1 < cntMax ) {
 		k0 = k1;
 		k1 = 2.0 * k1;
 
-		f0 = ( 1.0 + k0 - beta ) * getHardening(el_cnt, k0) / G - 3.0 * beta;
-		f1 = ( 1.0 + k1 - beta ) * getHardening(el_cnt, k1) / G - 3.0 * beta;
+		f0 = ( 1.0 + k0 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k0);
+		f1 = ( 1.0 + k1 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k1);
 		cnt1++;
 	}
 
@@ -2131,7 +2131,7 @@ double Pegasus(double beta, nlconstants_t el_cnt) {
 	cnt1=1;
 
 	k2 = k1 - f1 * ( k1 - k0 ) / ( f1 - f0 );
-	f2 = ( 1.0 + k2 - beta ) * getHardening(el_cnt, k2) / G - 3.0 * beta;
+	f2 = ( 1.0 + k2 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k2);
 
 	while ( fabs(f2) > theErrorTol && cnt1 < cntMax ) {
 
@@ -2151,7 +2151,7 @@ double Pegasus(double beta, nlconstants_t el_cnt) {
 			f1 = f2;
 
 			k2 = k1 - f1 * ( k1 - k0 ) / ( f1 - f0 );
-			f2 = ( 1.0 + k2 - beta ) * getHardening(el_cnt, k2) / G - 3.0 * beta;
+			f2 = ( 1.0 + k2 - beta ) - 3.0 * beta * G / getHardening(el_cnt, k2);
 
 			cnt2++;
 		}
@@ -2168,14 +2168,14 @@ double Pegasus(double beta, nlconstants_t el_cnt) {
 		}
 
 		k2 = k1 - f1 * ( k1 - k0 ) / ( f1 - f0 );
-		f2 = ( 1.0 + k2 - beta ) * getHardening(el_cnt, k2) / G - 3.0 * beta;
+		f2 = ( 1.0 + k2 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k2);
 
 		cnt1++;
 
 	}
 
-	//if ( cnt1 == cntMax || cnt2 == cntMax )
-	//	fprintf(stdout,"Increase the number of steps for root finding in Pegasus method. k=%f, beta=%f, Error=%f, ErroTol=%f \n", k2, beta, fabs(f2), theErrorTol );
+	if ( cnt1 == cntMax || cnt2 == cntMax )
+		fprintf(stdout,"Increase the number of steps for root finding in Pegasus method. k=%f, beta=%f, Error=%f, ErroTol=%f \n", k2, beta, fabs(f2), theErrorTol );
 
 	return k2;
 
@@ -2212,7 +2212,7 @@ double get_kappaUnLoading_II( nlconstants_t el_cnt, tensor_t Sn, tensor_t De, do
 
 		beta = phi * 0.50 / G;
 		kn   = Pegasus( beta,  el_cnt);  // this is a check
-		*Err    = ( 1.0 + kn - beta ) * getHardening(el_cnt, kn) / G - 3.0 * beta;
+		*Err    = ( 1.0 + kn - beta ) - 3.0 * beta * G / getHardening(el_cnt, kn);
 
 		if ( fabs(*Err) > theErrorTol  ) {
 			fprintf(stdout," Warning --- UnloadingError/ErrorTolerance= %f/%f \n", fabs(*Err), theErrorTol );
@@ -2438,7 +2438,7 @@ void material_update ( nlconstants_t constants, tensor_t e_n, tensor_t e_n1, ten
 	 */
 
 	double c, h, kappa, mu, Sy, beta, alpha, gamma, phi, dil, Fs_pr, Lambda, dLambda=0.0,
-		   Tol_sigma = 1e-05, cond1, cond2, psi0, m;
+		   Tol_sigma = 1e-03, cond1, cond2, psi0, m;
 
 	h      = constants.h;
 	c      = constants.c;
@@ -4047,7 +4047,7 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
 				double ErrBA=0;
 
 							double po=90;
-				if (i==0 && eindex == 16769 && ( step == 103 ) ) {
+				if (i==0 && eindex == 16748 && ( step == 3 ) ) {
 					po=89;
 				}
 
@@ -4055,7 +4055,8 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
 						          &pstrains2->qp[i],  &alphastress2->qp[i], &stresses->qp[i],   &epstr2->qv[i],    &enlcons->fs[i],     &psi_n->qv[i],
 						          &lounlo_n->qv[i], &Sv_n->qv[i], &Sv_max->qv[i], &kappa->qv[i], &Sref->qp[i], &flagTolSubSteps, &flagNoSubSteps, &ErrBA);
 
-				if ( ( theMaterialModel == VONMISES_BAE || theMaterialModel == VONMISES_BAH || theMaterialModel == VONMISES_GQH ) ) {
+				// if ( ( theMaterialModel == VONMISES_BAE || theMaterialModel == VONMISES_BAH || theMaterialModel == VONMISES_GQH ) ) {
+				if ( ( theMaterialModel != LINEAR || theMaterialModel != VONMISES_EP || theMaterialModel != DRUCKERPRAGER || theMaterialModel != MOHR_COULOMB) ) {
 					enlcons->fs[i] = ErrBA;
 					//if (flagTolSubSteps==1)
 					//	fprintf(stdout,"Exceeded Error Tolerance:%f at GP:%d, eindex: %d, step: %d \n", ErrBA, i, eindex, step);
