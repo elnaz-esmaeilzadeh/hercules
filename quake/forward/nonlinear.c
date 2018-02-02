@@ -2055,11 +2055,10 @@ double getHardening(nlconstants_t el_cnt, double kappa) {
 				double  tao_Max = 2.0*el_cnt.c/sqrt(3.0),  eta = el_cnt.eta_RO, phi = el_cnt.phi_RO, alpha = el_cnt.gammaOff_RO * G / tao_Max ;
 				H = 3.0 * G / ( alpha * eta  ) * pow( phi * (1.0 + kappa), (eta - 1.0) ) ;
 			} else {
-				//if ( theMaterialModel == VONMISES_GQH ) {
-			   // kappa = 173523.765;
-				//H = getH_GQHmodel ( el_cnt,  kappa);
-				H = getHard_Pegassus ( el_cnt,  kappa );
-					//}
+				if ( theMaterialModel == VONMISES_GQH && el_cnt.thetaGQH[3]>=0.99 && el_cnt.thetaGQH[4]>=0.99)
+					H = getH_GQHmodel ( el_cnt,  kappa);
+				else
+					H = getHard_Pegassus ( el_cnt,  kappa );
 			}
 		}
 	}
@@ -2106,7 +2105,7 @@ double get_kappa( nlconstants_t el_cnt, tensor_t Sdev, tensor_t Sref, double kn 
 double Pegasus(double beta, nlconstants_t el_cnt) {
 	// (1973) King, R. An Improved Pegasus method for root finding
 
-	double k0 = 0.0, k1 = 1.0, k2,  f0, f1, f2,  G=el_cnt.mu, tmp;
+	double k0 = 0.05, k1 = 0.10, k2,  f0, f1, f2,  G=el_cnt.mu, tmp;
 	int cnt1=1, cnt2=1, cntMax = 500;
 
 	f0 = ( 1.0 + k0 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k0);
@@ -4046,28 +4045,17 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
 				int flagTolSubSteps=0, flagNoSubSteps=0;
 				double ErrBA=0;
 
-							double po=90;
-				if (i==0 && eindex == 16748 && ( step == 3 ) ) {
+/*				double po=90;
+				if (i==1 && eindex == 14428 && ( step == 208 ) ) {
 					po=89;
-				}
+				}*/
 
 				material_update ( *enlcons,           tstrains->qp[i],      tstrains1->qp[i],   pstrains1->qp[i],  alphastress1->qp[i], epstr1->qv[i],   sigma0,        theDeltaT,
 						          &pstrains2->qp[i],  &alphastress2->qp[i], &stresses->qp[i],   &epstr2->qv[i],    &enlcons->fs[i],     &psi_n->qv[i],
 						          &lounlo_n->qv[i], &Sv_n->qv[i], &Sv_max->qv[i], &kappa->qv[i], &Sref->qp[i], &flagTolSubSteps, &flagNoSubSteps, &ErrBA);
 
-				// if ( ( theMaterialModel == VONMISES_BAE || theMaterialModel == VONMISES_BAH || theMaterialModel == VONMISES_GQH ) ) {
-				if ( ( theMaterialModel != LINEAR || theMaterialModel != VONMISES_EP || theMaterialModel != DRUCKERPRAGER || theMaterialModel != MOHR_COULOMB) ) {
+				if ( ( theMaterialModel != LINEAR || theMaterialModel != VONMISES_EP || theMaterialModel != DRUCKERPRAGER || theMaterialModel != MOHR_COULOMB) )
 					enlcons->fs[i] = ErrBA;
-					//if (flagTolSubSteps==1)
-					//	fprintf(stdout,"Exceeded Error Tolerance:%f at GP:%d, eindex: %d, step: %d \n", ErrBA, i, eindex, step);
-
-					//if (flagNoSubSteps==1)
-					//	fprintf(stdout,"Exceeded number of sub-steps at GP:%d, eindex: %d -- INCREASE SUBSTEPS NUMBER \n", i, eindex);
-
-					//if (step>110)
-						//fprintf(stdout,"stuck at GP:%d, eindex: %d, step: %d \n", i, eindex, step);
-				}
-
 
 			}
 		} /* for all quadrature points */
