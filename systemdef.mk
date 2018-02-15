@@ -163,8 +163,9 @@ ifeq ($(SYSTEM), HOOKE)
     CPPFLAGS    += -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64
 endif
 
+#eesNote021218: I changed the MPI_DIR from /usr/ to /usr/local
 ifeq ($(SYSTEM), MACBOOK)
-	MPI_DIR      = /usr/
+	MPI_DIR      = /usr/local
         MPI_INCLUDE  = $(MPI_DIR)/include/openmpi/ompi/mpi/cxx
         CC           = $(MPI_DIR)/bin/mpicc
         CXX          = $(MPI_DIR)/bin/mpicxx
