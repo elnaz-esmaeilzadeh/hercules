@@ -1,13 +1,13 @@
 # System definition
 # -----------------
 
-SYSTEM = XT5
+SYSTEM = MACBOOK
 
 # Main compilation setup
 # ----------------------
 
-CFLAGS += -fastsse -O3
-#CFLAGS += -g -O0 -DDEBUG
+#CFLAGS += -fastsse -O3
+CFLAGS += -g -O0 -DDEBUG
 
 # Compilation flags
 # -----------------
