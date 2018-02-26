@@ -1024,13 +1024,14 @@ void nonlinear_solver_init(int32_t myID, mesh_t *myMesh, double depth) {
 
             	ecp->beta_MKZ    = interpolate_property_value(elementVs, thePsi);
             	ecp->s_MKZ       = interpolate_property_value(elementVs, theM);
+            	ecp->phi_MKZ     = interpolate_property_value(elementVs, thePhi_RO);
 
             	break;
 
             case VONMISES_RO:
             	ecp->c           = get_cohesion(elementVs);
 
-            	ecp->gammaOff_RO = interpolate_property_value(elementVs, thePsi);
+            	ecp->alpha_RO    = interpolate_property_value(elementVs, thePsi);
             	ecp->eta_RO      = interpolate_property_value(elementVs, theM);
             	ecp->phi_RO      = interpolate_property_value(elementVs, thePhi_RO);
 
@@ -2052,7 +2053,7 @@ double getHardening(nlconstants_t el_cnt, double kappa) {
 			H = 3.0 * G * pow(kappa,2.0) / ( 1.0 + 2.0 * kappa );
 		else {
 			if ( theMaterialModel == VONMISES_RO ) {
-				double  tao_Max = 2.0*el_cnt.c/sqrt(3.0),  eta = el_cnt.eta_RO, phi = el_cnt.phi_RO, alpha = el_cnt.gammaOff_RO / ( tao_Max / G * phi ) ;
+				double  eta = el_cnt.eta_RO, phi = el_cnt.phi_RO, alpha = el_cnt.alpha_RO;
 				H = 3.0 * G / ( alpha * eta  ) * pow( phi * (1.0 + kappa), (eta - 1.0) ) ;
 			} else {
 				if ( theMaterialModel == VONMISES_GQH && el_cnt.thetaGQH[3]>=0.99 && el_cnt.thetaGQH[4]>=0.99)
