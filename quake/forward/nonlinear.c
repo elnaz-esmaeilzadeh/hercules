@@ -2052,7 +2052,7 @@ double getHardening(nlconstants_t el_cnt, double kappa) {
 			H = 3.0 * G * pow(kappa,2.0) / ( 1.0 + 2.0 * kappa );
 		else {
 			if ( theMaterialModel == VONMISES_RO ) {
-				double  tao_Max = 2.0*el_cnt.c/sqrt(3.0),  eta = el_cnt.eta_RO, phi = el_cnt.phi_RO, alpha = el_cnt.gammaOff_RO * G / tao_Max ;
+				double  tao_Max = 2.0*el_cnt.c/sqrt(3.0),  eta = el_cnt.eta_RO, phi = el_cnt.phi_RO, alpha = el_cnt.gammaOff_RO / ( tao_Max / G * phi ) ;
 				H = 3.0 * G / ( alpha * eta  ) * pow( phi * (1.0 + kappa), (eta - 1.0) ) ;
 			} else {
 				if ( theMaterialModel == VONMISES_GQH && el_cnt.thetaGQH[3]>=0.99 && el_cnt.thetaGQH[4]>=0.99)

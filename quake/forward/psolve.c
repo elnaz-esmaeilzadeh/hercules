@@ -1420,7 +1420,41 @@ setrec( octant_t* leaf, double ticksize, void* data )
                     z_m -= get_surface_shift();
 		}
 
-		/* Reset Shear Velocities. Doriam */
+		// Reset Shear Velocities. Doriam for elliptical basin
+		double a, b, c, d, Ldom=4096.00;
+		if (z_m >= 128)
+			res = cvm_query( Global.theCVMEp, Ldom, Ldom, 500, &g_props );
+		else {
+			a=256.0, b=512, c=128.0; // ellipse semi-axes
+			d = 1.0 -  z_m*z_m/(c*c);
+
+			x_m = fabs(x_m - Ldom);
+			y_m = fabs(y_m - Ldom);
+
+			double r2 = x_m*x_m + y_m*y_m;
+			double Ctheta = x_m/sqrt(r2),  Stheta = y_m/sqrt(r2);
+			double r_ell2 = d / ( (Ctheta/a)*(Ctheta/a) + (Stheta/b)*(Stheta/b) );
+
+			if ( r2 > r_ell2 )
+				res = cvm_query( Global.theCVMEp,  Ldom, Ldom, 500, &g_props );
+			else{
+				if ( z_m < 48 ) {
+					g_props.Vs  = 200.00;
+					g_props.Vp  = sqrt(3.0)*g_props.Vs;
+					g_props.rho = 1800.00;
+					res=0.0;
+
+				} else {
+					g_props.Vs  = 400.00;
+					g_props.Vp  = sqrt(3.0)*g_props.Vs;
+					g_props.rho = 1800.00;
+					res=0.0;
+				}
+			}
+		}
+
+
+/*		 Reset Shear Velocities. Doriam for cubic basin
 		if (z_m>=125)
 			res = cvm_query( Global.theCVMEp, y_m, x_m, z_m, &g_props );
 		else {
@@ -1437,7 +1471,7 @@ setrec( octant_t* leaf, double ticksize, void* data )
 				res = cvm_query( Global.theCVMEp, 1000.00, 1000.0, 0.10, &g_props );
 			} else
 				res = cvm_query( Global.theCVMEp, 1000.00, 1000.0, 300.0, &g_props );
-		}
+		}*/
 
 		if (res != 0) {
 		    continue;
@@ -7521,7 +7555,43 @@ mesh_correct_properties( etree_t* cvm )
                     //res = cvm_query( Global.theCVMEp, east_m, north_m,
                       //               depth_m, &g_props );
 
-            		/* Reset Shear Velocities. Doriam */
+            		// Reset Shear Velocities. Doriam for elliptical basin
+            		double a, b, c, r2, r_ell2, Ldom=4096.00;
+
+            		if (depth_m >= 128)
+            			res = cvm_query( Global.theCVMEp, Ldom, Ldom, 500, &g_props );
+            		else {
+            			a=256.0, b=512, c=128.0; // ellipse semi-axes
+
+            			double d = 1.0 -  depth_m*depth_m/(c*c);
+
+            			r2 = (north_m - Ldom)*(north_m - Ldom) + (east_m - Ldom)*(east_m - Ldom);
+
+            			double Ctheta = (north_m - Ldom)/sqrt(r2),  Stheta = (east_m - Ldom)/sqrt(r2);
+
+            			r_ell2 = d / ( (Ctheta/a)*(Ctheta/a) + (Stheta/b)*(Stheta/b) );
+
+            			if ( r2 > r_ell2 )
+            				res = cvm_query( Global.theCVMEp, Ldom, Ldom, 500, &g_props );
+            			else{
+            				if ( depth_m < 48 ) {
+            					g_props.Vs  = 200.00;
+            					g_props.Vp  = sqrt(3.0)*g_props.Vs;
+            					g_props.rho = 1800.00;
+            					res=0.0;
+
+            				} else {
+            					g_props.Vs  = 400.00;
+            					g_props.Vp  = sqrt(3.0)*g_props.Vs;
+            					g_props.rho = 1800.00;
+            					res=0.0;
+            				}
+            			}
+            		}
+
+
+
+/*            		 Reset Shear Velocities. Doriam
             		if (depth_m>=125)
             			res = cvm_query( Global.theCVMEp, east_m, north_m,
                                 depth_m, &g_props );
@@ -7539,13 +7609,13 @@ mesh_correct_properties( etree_t* cvm )
             				res = cvm_query( Global.theCVMEp, 1000.00, 1000.0, 0.10, &g_props );
             			} else
             				res = cvm_query( Global.theCVMEp, 1000.00, 1000.0, 300.0, &g_props );
-            		}
+            		}*/
 
 
 
                     if (res != 0) {
-                        fprintf(stderr, "Cannot find the query point: east = %lf, north = %lf, depth = %lf \n",
-                        		east_m, north_m, depth_m);
+                        fprintf(stderr, "Cannot find the query point: east = %lf, north = %lf, depth = %lf, rsqr=%lf, r_ell=%lf  \n",
+                        		east_m, north_m, depth_m, r2, r_ell2);
                         exit(1);
                     }
 

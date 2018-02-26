@@ -746,7 +746,13 @@ void DRM_ForcesinElement ( mesh_t     *myMesh,
 
 void getRicker ( fvector_t *myDisp, double zp, double t, double Vs ) {
 
-	double Rz = Ricker_displ ( zp, theTs, t, thefc, Vs  );
+	//double Rz = 1.10 * Ricker_displ ( zp, theTs, t, thefc, Vs  ) + 0.80 * Ricker_displ ( zp, 1.18 * theTs, t, 2.0 * thefc, Vs  ) + 0.50 * Ricker_displ ( zp, 1.3 * theTs, t, 0.9 * thefc, Vs  );
+	double Rz = 2.1*Ricker_displ ( zp, theTs, t, thefc, Vs  ) + 0.75 * Ricker_displ ( zp, 1.08 * theTs, t, 2.0 * thefc, Vs  );
+
+	//RP = 1.10*RickerPulse(vt,Ts,fc)'+ 0.8*RickerPulse(vt,1.18*Ts,f1)' + 0.5*RickerPulse(vt,1.3*Ts,f2)' ;
+	// fc= 5/3;
+	// f1 = fc*2;
+	// f2 = fc*0.9;
 
 	if ( thePlaneWaveType == SV ) {
 		myDisp->f[0] = Rz * theUo * cos (theplanewave_strike);
