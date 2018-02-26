@@ -1889,7 +1889,10 @@ double getHard_Pegassus (nlconstants_t el_cnt, double kappa) {
 	if (kappa == 0.0)
 		return H;
 
-	tao_bar = 1.0/(1.0 + kappa);
+	tao_bar = 1.0 / ( 1.0 + kappa ) ;
+
+	if ( theMaterialModel==VONMISES_MKZ )
+		tao_bar = tao_bar / el_cnt.phi_MKZ;
 
 	// (1973) King, R. An Improved Pegasus method for root finding
 	f0 = evalBackboneFn( el_cnt, k0,  tao_bar);
