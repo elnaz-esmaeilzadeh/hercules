@@ -23,14 +23,21 @@ ifeq ($(SYSTEM), XT5)
         CC      = cc
         CXX     = CC
         LD      = CC
+    ifdef USE_GSL
+            CC  += -I${GSL_INCLUDE_PATH}
+    endif
         CFLAGS  += -DBIGBEN 
-        LDFLAGS += 
+        LDFLAGS += -Wl,-zmuldefs
         ifdef IOBUF_INC
             CPPFLAGS += -I${IOBUF_INC}
         endif        
         CPPFLAGS    += -D_USE_FILE_OFFSET64 -D_FILE_OFFSET_BITS=64 -D_USE_LARGEFILE64       
-        
+        ifdef USE_GSL
+            LDFLAGS += -L${GSL_LIBRARY_PATH}
+        LDFLAGS += -lgsl -lgslcblas
+    endif
 endif
+
 
 
 ifeq ($(SYSTEM), BGW)
@@ -163,8 +170,9 @@ ifeq ($(SYSTEM), HOOKE)
     CPPFLAGS    += -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64
 endif
 
+#eesNote021218: I changed the MPI_DIR from /usr/ to /usr/local
 ifeq ($(SYSTEM), MACBOOK)
-	MPI_DIR      = /usr/
+	MPI_DIR      = /usr/local
         MPI_INCLUDE  = $(MPI_DIR)/include/openmpi/ompi/mpi/cxx
         CC           = $(MPI_DIR)/bin/mpicc
         CXX          = $(MPI_DIR)/bin/mpicxx
