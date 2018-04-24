@@ -4058,7 +4058,7 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
 						          &pstrains2->qp[i],  &alphastress2->qp[i], &stresses->qp[i],   &epstr2->qv[i],    &enlcons->fs[i],     &psi_n->qv[i],
 						          &lounlo_n->qv[i], &Sv_n->qv[i], &Sv_max->qv[i], &kappa->qv[i], &Sref->qp[i], &flagTolSubSteps, &flagNoSubSteps, &ErrBA);
 
-				if ( ( theMaterialModel != LINEAR || theMaterialModel != VONMISES_EP || theMaterialModel != DRUCKERPRAGER || theMaterialModel != MOHR_COULOMB) )
+				if ( ( (theMaterialModel != LINEAR) && (theMaterialModel != VONMISES_EP) && (theMaterialModel != DRUCKERPRAGER) && (theMaterialModel != MOHR_COULOMB) ) )
 					enlcons->fs[i] = ErrBA;
 
 			}
