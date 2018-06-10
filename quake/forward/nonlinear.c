@@ -3697,6 +3697,79 @@ void compute_addforce_gravity( mesh_t     *myMesh,
     return;
 }
 
+
+double baseAccel (  double dt, double step ) {
+
+	double Acc, tf = dt*step, w = 2.0*PI;
+
+	return Acc = tf * ( 1.0 * sin (w*tf) );
+
+}
+
+
+
+void compute_addforce_baseAccel( mesh_t     *myMesh,
+                               mysolver_t   *mySolver,
+                               int           step,
+                               double        dt,
+                               double        depth)
+{
+
+    int32_t   eindex;
+
+    double popo=90;
+    if (step==520)
+    	popo=89;
+
+    /* Loop on the number of elements */
+    for (eindex = 0; eindex < myMesh->lenum; eindex++) {
+
+    	if ( isThisElementsAtTheBottom(myMesh, eindex, depth) == YES ) {
+
+    		int      i;
+    		elem_t  *elemp;
+    		edata_t *edata;
+    		double   h, h3;
+    		double   rho,M;
+
+    		/* Capture element data structure */
+    		elemp = &myMesh->elemTable[eindex];
+    		edata = (edata_t *)elemp->data;
+
+    		/* capture element data */
+    		h   = (double)edata->edgesize;
+    		rho = (double)edata->rho;
+
+    		/* Compute nodal total weight contribution */
+    		h3 = h * h * h;
+    		M  = h3 * rho * 0.125;     /* volume x density x gravity / 8 */
+
+    		/* Loop over the base nodes of the element:
+    		 * Add the acceleration force contribution calculated with respect
+    		 * to the current time-step to the nodal force vector.
+    		 */
+
+    		double Accel = baseAccel ( dt, step );
+
+    		for (i = 4; i < 8; i++) {
+
+    			int32_t    lnid;
+    			fvector_t *nodalForce;
+
+    			lnid       = elemp->lnid[i];
+    			nodalForce = mySolver->force + lnid;
+
+    			/* Base force in Y direction */
+    			nodalForce->f[1] += M * Accel * dt * dt;
+
+    		} /* element nodes */
+    	}
+    }
+
+    return;
+
+}
+
 void compute_bottom_reactions ( mesh_t     *myMesh,
                                 mysolver_t *mySolver,
                                 fmatrix_t (*theK1)[8],
@@ -3793,6 +3866,37 @@ void geostatic_displacements_fix( mesh_t     *myMesh,
 
     return;
 }
+
+
+void base_displacements_fix( mesh_t     *myMesh,
+                                  mysolver_t *mySolver,
+                                  double      totalDomainDepth,
+                                  double      dt,
+                                  int         step )
+{
+
+
+    int32_t nindex;
+    double w=2.0*PI, t=step*dt, A=1.0/3.25;
+
+
+    for ( nindex = 0; nindex < myMesh->nharbored; nindex++ ) {
+
+        double z_m = (myMesh->ticksize)*(double)myMesh->nodeTable[nindex].z;
+
+        if ( z_m == totalDomainDepth ) {
+            fvector_t *tm2Disp;
+            tm2Disp = mySolver->tm2 + nindex;
+            tm2Disp->f[0] = 0;
+            tm2Disp->f[1] = - A * ( w*t*sin(w*t) + 2.0*cos(w*t) - 2.0 )/ (w * w * w)  ;
+            tm2Disp->f[2] = 0;
+
+        }
+    }
+
+    return;
+}
+
 
 /*
  * compute_addforce_nl: Adds a fictitious force that accounts for

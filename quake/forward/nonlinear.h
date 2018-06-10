@@ -295,6 +295,10 @@ double evalBackboneFn        (nlconstants_t el_cnt, double gamma_bar, double tao
 double evalHardFnc           (nlconstants_t el_cnt, double gamma_bar);
 double getHard_Pegassus      (nlconstants_t el_cnt, double kappa);
 
+void   compute_addforce_baseAccel( mesh_t *myMesh, mysolver_t *mySolver, int step, double dt, double depth);
+double baseAccel (  double dt, double step );
+
+void base_displacements_fix( mesh_t     *myMesh, mysolver_t *mySolver, double totalDomainDepth, double dt,int step);
 
 tensor_t ApproxGravity_tensor(double Szz, double phi, double h, double lz, double rho);
 

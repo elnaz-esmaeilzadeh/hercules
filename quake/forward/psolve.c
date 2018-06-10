@@ -1420,58 +1420,7 @@ setrec( octant_t* leaf, double ticksize, void* data )
                     z_m -= get_surface_shift();
 		}
 
-		// Reset Shear Velocities. Doriam for elliptical basin
-		double a, b, c, d, Ldom=4096.00;
-		if (z_m >= 128)
-			res = cvm_query( Global.theCVMEp, Ldom, Ldom, 500, &g_props );
-		else {
-			a=256.0, b=512, c=128.0; // ellipse semi-axes
-			d = 1.0 -  z_m*z_m/(c*c);
-
-			x_m = fabs(x_m - Ldom);
-			y_m = fabs(y_m - Ldom);
-
-			double r2 = x_m*x_m + y_m*y_m;
-			double Ctheta = x_m/sqrt(r2),  Stheta = y_m/sqrt(r2);
-			double r_ell2 = d / ( (Ctheta/a)*(Ctheta/a) + (Stheta/b)*(Stheta/b) );
-
-			if ( r2 > r_ell2 )
-				res = cvm_query( Global.theCVMEp,  Ldom, Ldom, 500, &g_props );
-			else{
-				if ( z_m < 48 ) {
-					g_props.Vs  = 200.00;
-					g_props.Vp  = sqrt(3.0)*g_props.Vs;
-					g_props.rho = 1800.00;
-					res=0.0;
-
-				} else {
-					g_props.Vs  = 400.00;
-					g_props.Vp  = sqrt(3.0)*g_props.Vs;
-					g_props.rho = 1800.00;
-					res=0.0;
-				}
-			}
-		}
-
-
-/*		 Reset Shear Velocities. Doriam for cubic basin
-		if (z_m>=125)
-			res = cvm_query( Global.theCVMEp, y_m, x_m, z_m, &g_props );
-		else {
-			double a = 250.0;
-			double b = 0.0;
-			double H = 125.0;
-
-			double m = 2.0 * ( a + b - b * z_m /H );
-
-			if ( ( y_m <= ( 1000 + m / 2.0 ) ) &&
-			     ( y_m >= ( 1000 - m / 2.0 ) ) &&
-			     ( x_m <= ( 1000 + m / 2.0   ) ) &&
-			     ( x_m >= ( 1000 - m / 2.0  ) ) ) {
-				res = cvm_query( Global.theCVMEp, 1000.00, 1000.0, 0.10, &g_props );
-			} else
-				res = cvm_query( Global.theCVMEp, 1000.00, 1000.0, 300.0, &g_props );
-		}*/
+		res = cvm_query( Global.theCVMEp, y_m, x_m, z_m, &g_props );
 
 		if (res != 0) {
 		    continue;
@@ -3586,27 +3535,27 @@ static void solver_init()
         ep->c3 = b * Param.theDeltaT * edata->edgesize * mu / 9;
         ep->c4 = b * Param.theDeltaT * edata->edgesize * lambda / 9;
 
-#ifdef BOUNDARY
-
-        /* Set the flag for the element */
-        lnid0 = elemp->lnid[0];
-
-        ldb[0] = Global.myMesh->nodeTable[lnid0].x;
-        ldb[1] = Global.myMesh->nodeTable[lnid0].y;
-        ldb[2] = Global.myMesh->nodeTable[lnid0].z;
-
-        edgeticks = (tick_t)1 << (PIXELLEVEL - elemp->level);
-        ruf[0] = ldb[0] + edgeticks;
-        ruf[1] = ldb[1] + edgeticks;
-        ruf[2] = ldb[2] + edgeticks;
-
-        flag = compute_setflag(ldb, ruf, Global.myOctree->nearendp,
-                Global.myOctree->farendp);
-        if (flag != 13) {
-            compute_setboundary(edata->edgesize, edata->Vp, edata->Vs,
-                                edata->rho, flag, dashpot);
-        }
-#endif /* BOUNDARY */
+//#ifdef BOUNDARY
+//
+//        /* Set the flag for the element */
+//        lnid0 = elemp->lnid[0];
+//
+//        ldb[0] = Global.myMesh->nodeTable[lnid0].x;
+//        ldb[1] = Global.myMesh->nodeTable[lnid0].y;
+//        ldb[2] = Global.myMesh->nodeTable[lnid0].z;
+//
+//        edgeticks = (tick_t)1 << (PIXELLEVEL - elemp->level);
+//        ruf[0] = ldb[0] + edgeticks;
+//        ruf[1] = ldb[1] + edgeticks;
+//        ruf[2] = ldb[2] + edgeticks;
+//
+//        flag = compute_setflag(ldb, ruf, Global.myOctree->nearendp,
+//                Global.myOctree->farendp);
+//        if (flag != 13) {
+//            compute_setboundary(edata->edgesize, edata->Vp, edata->Vs,
+//                                edata->rho, flag, dashpot);
+//        }
+//#endif /* BOUNDARY */
 
         /* Assign the element mass to its vertices */
         /* mass is the total mass of the element   */
@@ -4267,6 +4216,17 @@ solver_compute_force_gravity( mysolver_t *solver, mesh_t *mesh, int step )
     }
 }
 
+static void
+solver_compute_force_baseAccel( mysolver_t *solver, mesh_t *mesh, int step )
+{
+	if ( Param.includeNonlinearAnalysis == YES ) {
+		Timer_Start( "Compute base acceleration forces" );
+		compute_addforce_baseAccel( mesh, solver, step, Param.theDeltaT, Param.theDomainZ );
+		Timer_Stop(  "Compute base acceleration forces" );
+	}
+
+}
+
 /** Send the forces on dangling nodes to their owner processors */
 static void solver_send_force_dangling( mysolver_t* solver )
 {
@@ -4326,6 +4286,8 @@ solver_compute_displacement( mysolver_t* solver, mesh_t* mesh )
         nodalForce.f[2] += np->mass2_minusaM[2] * tm1Disp->f[2]
                          - np->mass_minusaM[2]  * tm2Disp->f[2];
 
+        const elem_t* popo = &mesh->elemTable[nindex];
+
         /* overwrite tm2 */
         /* mass sanity check */
         if (np->mass_simple < 0) {
@@ -4382,6 +4344,19 @@ solver_geostatic_fix(int step)
                                          Param.theDeltaT, step );
         }
         Timer_Stop( "Compute addforces gravity" );
+    }
+}
+
+static void
+solver_baseDispl_fix(int step)
+{
+    if ( Param.includeNonlinearAnalysis == YES ) {
+        Timer_Start( "Compute baseDispl " );
+
+        base_displacements_fix( Global.myMesh, Global.mySolver, Param.theDomainZ,
+                                         Param.theDeltaT, step );
+
+        Timer_Stop( "Compute baseDispl " );
     }
 }
 
@@ -4553,6 +4528,7 @@ static void solver_run()
         solver_compute_force_gravity( Global.mySolver, Global.myMesh, step );
         solver_compute_force_nonlinear( Global.mySolver, Global.myMesh, Param.theDeltaTSquared );
         solver_compute_force_planewaves( Global.myMesh, Global.mySolver, Param.theDeltaT, step, Global.theK1, Global.theK2 );
+        //solver_compute_force_baseAccel( Global.mySolver, Global.myMesh, step );
 
         Timer_Stop( "Compute Physics" );
 
@@ -4567,6 +4543,7 @@ static void solver_run()
         Timer_Start( "Compute Physics" );
         solver_compute_displacement( Global.mySolver, Global.myMesh );
         solver_geostatic_fix( step );
+        solver_baseDispl_fix( step );
         solver_load_fixedbase_displacements( Global.mySolver, step );
         Timer_Stop( "Compute Physics" );
 
@@ -7552,72 +7529,8 @@ mesh_correct_properties( etree_t* cvm )
 
             		}
 
-                    //res = cvm_query( Global.theCVMEp, east_m, north_m,
-                      //               depth_m, &g_props );
-
-            		// Reset Shear Velocities. Doriam for elliptical basin
-            		double a, b, c, r2, r_ell2, Ldom=4096.00;
-
-            		if (depth_m >= 128)
-            			res = cvm_query( Global.theCVMEp, Ldom, Ldom, 500, &g_props );
-            		else {
-            			a=256.0, b=512, c=128.0; // ellipse semi-axes
-
-            			double d = 1.0 -  depth_m*depth_m/(c*c);
-
-            			r2 = (north_m - Ldom)*(north_m - Ldom) + (east_m - Ldom)*(east_m - Ldom);
-
-            			double Ctheta = (north_m - Ldom)/sqrt(r2),  Stheta = (east_m - Ldom)/sqrt(r2);
-
-            			r_ell2 = d / ( (Ctheta/a)*(Ctheta/a) + (Stheta/b)*(Stheta/b) );
-
-            			if ( r2 > r_ell2 )
-            				res = cvm_query( Global.theCVMEp, Ldom, Ldom, 500, &g_props );
-            			else{
-            				if ( depth_m < 48 ) {
-            					g_props.Vs  = 200.00;
-            					g_props.Vp  = sqrt(3.0)*g_props.Vs;
-            					g_props.rho = 1800.00;
-            					res=0.0;
-
-            				} else {
-            					g_props.Vs  = 400.00;
-            					g_props.Vp  = sqrt(3.0)*g_props.Vs;
-            					g_props.rho = 1800.00;
-            					res=0.0;
-            				}
-            			}
-            		}
-
-
-
-/*            		 Reset Shear Velocities. Doriam
-            		if (depth_m>=125)
-            			res = cvm_query( Global.theCVMEp, east_m, north_m,
-                                depth_m, &g_props );
-            		else {
-            			double a = 250.0;
-            			double b = 0.0;
-            			double H = 125.0;
-
-            			double m = 2.0 * ( a + b - b * depth_m /H );
-
-            			if ( ( east_m <= ( 1000 + m / 2.0 ) ) &&
-            			     ( east_m >= ( 1000 - m / 2.0 ) ) &&
-            			     ( north_m <= ( 1000 + m / 2.0   ) ) &&
-            			     ( north_m >= ( 1000 - m / 2.0   ) ) ) {
-            				res = cvm_query( Global.theCVMEp, 1000.00, 1000.0, 0.10, &g_props );
-            			} else
-            				res = cvm_query( Global.theCVMEp, 1000.00, 1000.0, 300.0, &g_props );
-            		}*/
-
-
-
-                    if (res != 0) {
-                        fprintf(stderr, "Cannot find the query point: east = %lf, north = %lf, depth = %lf, rsqr=%lf, r_ell=%lf  \n",
-                        		east_m, north_m, depth_m, r2, r_ell2);
-                        exit(1);
-                    }
+                    res = cvm_query( Global.theCVMEp, east_m, north_m,
+                                     depth_m, &g_props );
 
         			vp  += g_props.Vp;
         			vs  += g_props.Vs;
