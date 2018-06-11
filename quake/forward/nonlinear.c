@@ -4482,7 +4482,7 @@ void print_nonlinear_stations(mesh_t     *myMesh,
     	tstrainF   = myNonlinSolver->strains   + nl_eindex;
     	stressF    = myNonlinSolver->stresses  + nl_eindex;
 
-    	stress      = &(stressF->qp[0]);            /* relative stresses of the first Gauss point */
+    	stress      = &(stressF->qp[4]);            /* relative stresses of the first Gauss point */
     	tstress     = add_tensors(*stress,sigma0); /* compute the total stress tensor */
 
     	tstrain    = &(tstrainF->qp[0]);

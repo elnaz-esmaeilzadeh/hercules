@@ -4286,8 +4286,6 @@ solver_compute_displacement( mysolver_t* solver, mesh_t* mesh )
         nodalForce.f[2] += np->mass2_minusaM[2] * tm1Disp->f[2]
                          - np->mass_minusaM[2]  * tm2Disp->f[2];
 
-        const elem_t* popo = &mesh->elemTable[nindex];
-
         /* overwrite tm2 */
         /* mass sanity check */
         if (np->mass_simple < 0) {
@@ -4309,9 +4307,13 @@ solver_compute_displacement( mysolver_t* solver, mesh_t* mesh )
                 tm3Disp->f[2] = tm2Disp->f[2];
             }
 
-        	tm2Disp->f[0] = nodalForce.f[0] / np->mass_simple;
+        	tm2Disp->f[0] = 0;
         	tm2Disp->f[1] = nodalForce.f[1] / np->mass_simple;
-        	tm2Disp->f[2] = nodalForce.f[2] / np->mass_simple;
+        	tm2Disp->f[2] = 0;
+
+/*        	tm2Disp->f[0] = nodalForce.f[0] / np->mass_simple;
+        	tm2Disp->f[1] = nodalForce.f[1] / np->mass_simple;
+        	tm2Disp->f[2] = nodalForce.f[2] / np->mass_simple;*/
         }
         else {
         	tm2Disp->f[0] = 0.0;
