@@ -4153,10 +4153,10 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
 				int flagTolSubSteps=0, flagNoSubSteps=0;
 				double ErrBA=0;
 
-/*				double po=90;
-				if (i==1 && eindex == 14428 && ( step == 208 ) ) {
+				double po=90;
+				if (i==4 && eindex == 60 && ( step == 60 ) ) {
 					po=89;
-				}*/
+				}
 
 				material_update ( *enlcons,           tstrains->qp[i],      tstrains1->qp[i],   pstrains1->qp[i],  alphastress1->qp[i], epstr1->qv[i],   sigma0,        theDeltaT,
 						          &pstrains2->qp[i],  &alphastress2->qp[i], &stresses->qp[i],   &epstr2->qv[i],    &enlcons->fs[i],     &psi_n->qv[i],
@@ -4485,12 +4485,16 @@ void print_nonlinear_stations(mesh_t     *myMesh,
     	stress      = &(stressF->qp[4]);            /* relative stresses of the first Gauss point */
     	tstress     = add_tensors(*stress,sigma0); /* compute the total stress tensor */
 
-    	tstrain    = &(tstrainF->qp[0]);
+    	tstrain    = &(tstrainF->qp[4]);
 
-    	Fy         = (myNonlinSolver->constants   + nl_eindex)->fs[0];
+    	Fy         = (myNonlinSolver->constants   + nl_eindex)->fs[4];
 
     	bStrain = tstrain->xx + tstrain->yy + tstrain->zz;
     	bStress = tstress.xx + tstress.yy + tstress.zz;
+
+    	double popo;
+    	if (step==60)
+    		popo=89;
 
     	if (step % rate == 0) {
     		fprintf( myStations[mappingIndex].fpoutputfile,
