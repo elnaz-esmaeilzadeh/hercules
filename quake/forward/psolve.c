@@ -6979,7 +6979,7 @@ void setup_stations_data()
 	                "    Epsilon_XY      Sigma_XY"
 	                "    Epsilon_YZ      Sigma_YZ"
 	                "    Epsilon_XZ      Sigma_XZ"
-	                "        Fs     ",
+	                "        Fs          kappa",
 	                Param.myStations[iLCStation].fpoutputfile );
 	    }
 

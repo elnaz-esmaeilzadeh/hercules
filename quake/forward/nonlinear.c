@@ -4049,10 +4049,10 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
 				int flagTolSubSteps=0, flagNoSubSteps=0;
 				double ErrBA=0;
 
-/*				double po=90;
-				if (i==1 && eindex == 14428 && ( step == 208 ) ) {
+				double po=90;
+				if (i==0 && eindex == 411711 && ( step == 200 ) ) {
 					po=89;
-				}*/
+				}
 
 				material_update ( *enlcons,           tstrains->qp[i],      tstrains1->qp[i],   pstrains1->qp[i],  alphastress1->qp[i], epstr1->qv[i],   sigma0,        theDeltaT,
 						          &pstrains2->qp[i],  &alphastress2->qp[i], &stresses->qp[i],   &epstr2->qv[i],    &enlcons->fs[i],     &psi_n->qv[i],
@@ -4350,7 +4350,8 @@ void print_nonlinear_stations(mesh_t     *myMesh,
     for ( iStation = 0; iStation < myNumberOfNonlinStations; iStation++ ) {
     	tensor_t       *stress, *tstrain, tstress;
     	qptensors_t    *stressF, *tstrainF;
-    	double         bStrain = 0., bStress = 0., Fy, h;
+    	qpvectors_t    *kappaF;
+    	double         bStrain = 0., bStress = 0., Fy, h, kappa;
     	tensor_t       sigma0;
 
     	elem_t         *elemp;
@@ -4377,11 +4378,13 @@ void print_nonlinear_stations(mesh_t     *myMesh,
     	 * corresponding to the first Gauss point*/
     	tstrainF   = myNonlinSolver->strains   + nl_eindex;
     	stressF    = myNonlinSolver->stresses  + nl_eindex;
+    	kappaF     = myNonlinSolver->kappa     + nl_eindex;
 
     	stress      = &(stressF->qp[0]);            /* relative stresses of the first Gauss point */
     	tstress     = add_tensors(*stress,sigma0); /* compute the total stress tensor */
 
     	tstrain    = &(tstrainF->qp[0]);
+    	kappa      =  kappaF->qv[0];
 
     	Fy         = (myNonlinSolver->constants   + nl_eindex)->fs[0];
 
@@ -4398,7 +4401,7 @@ void print_nonlinear_stations(mesh_t     *myMesh,
     				" % 8e % 8e"
     				" % 8e % 8e"
     				" % 8e % 8e"
-    				" % 8e",
+    				" % 8e % 8e",
 
     				tstrain->xx, tstress.xx, // 11 12
     				tstrain->yy, tstress.yy, // 13 14
@@ -4407,7 +4410,7 @@ void print_nonlinear_stations(mesh_t     *myMesh,
     				tstrain->xy, tstress.xy, // 19 20
     				tstrain->yz, tstress.yz, // 21 22
     				tstrain->xz, tstress.xz,
-    				Fy); // 23 24
+    				Fy, kappa); // 23 24
     	}
     } /* for all my stations */
 
