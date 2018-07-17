@@ -4362,6 +4362,19 @@ solver_baseDispl_fix(int step)
     }
 }
 
+static void
+solver_UyDispl_fix(int step)
+{
+    if ( Param.includeNonlinearAnalysis == YES ) {
+        Timer_Start( "Compute UyDispl " );
+
+        Uy_displacements_fix( Global.myMesh, Global.mySolver, Param.theDomainZ,  Param.theDomainX, Param.theDomainY,
+                                         Param.theDeltaT, step );
+
+        Timer_Stop( "Compute UyDispl " );
+    }
+}
+
 /** Share the displacement of anchored nodes with other processors. */
 static void solver_send_displacement_anchored( mysolver_t* solver )
 {
@@ -4546,6 +4559,7 @@ static void solver_run()
         solver_compute_displacement( Global.mySolver, Global.myMesh );
         solver_geostatic_fix( step );
         solver_baseDispl_fix( step );
+        //solver_UyDispl_fix  ( step );
         solver_load_fixedbase_displacements( Global.mySolver, step );
         Timer_Stop( "Compute Physics" );
 

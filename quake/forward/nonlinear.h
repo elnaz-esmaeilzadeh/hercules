@@ -300,6 +300,8 @@ double baseAccel (  double dt, double step );
 
 void base_displacements_fix( mesh_t     *myMesh, mysolver_t *mySolver, double totalDomainDepth, double dt,int step);
 
+void Uy_displacements_fix( mesh_t     *myMesh, mysolver_t *mySolver, double totalDomainDepth, double totalDomainLx, double totalDomainLy, double dt, int step );
+
 tensor_t ApproxGravity_tensor(double Szz, double phi, double h, double lz, double rho);
 
 

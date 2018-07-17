@@ -3877,6 +3877,106 @@ void base_displacements_fix( mesh_t     *myMesh,
 
 
     int32_t nindex;
+    double w = PI, t=step*dt, A=0.5;
+    //A=0.05/3.25
+    //   A/w/w * sin (w t) for displacement with A = 0.15 and w = pi/10.
+
+    for ( nindex = 0; nindex < myMesh->nharbored; nindex++ ) {
+
+        double z_m = (myMesh->ticksize)*(double)myMesh->nodeTable[nindex].z;
+
+        if ( z_m == totalDomainDepth ) {
+            fvector_t *tm2Disp;
+            tm2Disp = mySolver->tm2 + nindex;
+            tm2Disp->f[0] = 0;
+            tm2Disp->f[1] =  A * sin(w*t) / (w * w)   ;
+            tm2Disp->f[2] = 0;
+            //tm2Disp->f[1] = - A * ( w*t*sin(w*t) + 2.0*cos(w*t) - 2.0 )/ (w * w * w)  ;
+
+/*            if (t<=2.0) {
+            	 tm2Disp->f[1] =  A * sin(w*t)   ;
+            } else {
+            	tm2Disp->f[1]  =  0.0   ;
+            }*/
+
+
+
+
+        }
+    }
+
+    return;
+}
+
+
+void Uy_displacements_fix(        mesh_t     *myMesh,
+                                  mysolver_t *mySolver,
+                                  double      totalDomainDepth,
+                                  double      totalDomainLx,
+                                  double      totalDomainLy,
+                                  double      dt,
+                                  int         step )
+{
+
+    vector3D_t  point;
+    octant_t    *octant;
+    int32_t     eindex, eindex2, nl_eindex, nl_eindex2, lnid0, lnid02;
+    fvector_t   *tm2Disp, *tm2DispCent;
+
+    for ( nl_eindex = 0; nl_eindex < myNonlinElementsCount; nl_eindex++ ) {
+
+        eindex = myNonlinElementsMapping[nl_eindex];
+
+        lnid0 = myMesh->elemTable[eindex].lnid[0];
+
+        tm2Disp = mySolver->tm2 + lnid0;
+
+        /* get displacement at the center of the domain   */
+        point.x[0] = totalDomainLx/2.0;
+        point.x[1] = totalDomainLy/2.0;
+        //point.x[0] = 20.01;
+        //point.x[1] = 20.01;
+        point.x[2] = (myMesh->ticksize)*(double)myMesh->nodeTable[lnid0].z;
+
+        /* search the octant */
+        if ( search_point(point, &octant) != 1 ) {
+            fprintf( stdout, "%8.4f %8.4f %8.4f %d %d %d \n",
+            		point.x[0], point.x[1], point.x[2], myNonlinElementsCount, eindex, nl_eindex);
+            fprintf(stderr,
+                    "No octant found with coords\n");
+            MPI_Abort(MPI_COMM_WORLD, ERROR);
+            exit(1);
+        }
+
+        /* find center element    */
+        for ( nl_eindex2 = 0; nl_eindex2 < myNonlinElementsCount; nl_eindex2++ ) {
+
+        	eindex2 = myNonlinElementsMapping[nl_eindex2];
+        	lnid02  = myMesh->elemTable[eindex2].lnid[0];
+
+            if ( (myMesh->nodeTable[lnid02].x == octant->lx) &&
+                 (myMesh->nodeTable[lnid02].y == octant->ly) &&
+                 (myMesh->nodeTable[lnid02].z == octant->lz) ) {
+
+            	/* I have a match for the element's origin */
+                tm2DispCent = mySolver->tm2 + lnid02;
+
+                tm2Disp->f[0] = tm2DispCent->f[0];
+                tm2Disp->f[1] = tm2DispCent->f[1];
+                tm2Disp->f[2] = tm2DispCent->f[2];
+
+                break;
+            }
+        }
+    }
+
+    return;
+}
+
+/*{
+
+
+    int32_t nindex;
     double w=2.0*PI, t=step*dt, A=1.0/3.25;
 
 
@@ -3895,7 +3995,7 @@ void base_displacements_fix( mesh_t     *myMesh,
     }
 
     return;
-}
+}*/
 
 
 /*
@@ -4154,7 +4254,7 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
 				double ErrBA=0;
 
 				double po=90;
-				if (i==4 && eindex == 60 && ( step == 60 ) ) {
+				if (i==4 && eindex == 30976 && ( step == 499 ) ) {
 					po=89;
 				}
 
