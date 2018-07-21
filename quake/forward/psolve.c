@@ -4307,9 +4307,9 @@ solver_compute_displacement( mysolver_t* solver, mesh_t* mesh )
                 tm3Disp->f[2] = tm2Disp->f[2];
             }
 
-        	tm2Disp->f[0] = 0;
+        	tm2Disp->f[0] = nodalForce.f[0] / np->mass_simple;
         	tm2Disp->f[1] = nodalForce.f[1] / np->mass_simple;
-        	tm2Disp->f[2] = 0;
+        	tm2Disp->f[2] = nodalForce.f[2] / np->mass_simple;
 
 /*        	tm2Disp->f[0] = nodalForce.f[0] / np->mass_simple;
         	tm2Disp->f[1] = nodalForce.f[1] / np->mass_simple;
@@ -4359,6 +4359,19 @@ solver_baseDispl_fix(int step)
                                          Param.theDeltaT, step );
 
         Timer_Stop( "Compute baseDispl " );
+    }
+}
+
+static void
+solver_TopDispl_fix(int step)
+{
+    if ( Param.includeNonlinearAnalysis == YES ) {
+        Timer_Start( "Compute TopDispl " );
+
+        set_top_displacements( Global.myMesh, Global.mySolver,
+                                         Param.theDeltaT, step );
+
+        Timer_Stop( "Compute TopDispl " );
     }
 }
 
@@ -4560,6 +4573,7 @@ static void solver_run()
         solver_geostatic_fix( step );
         solver_baseDispl_fix( step );
         //solver_UyDispl_fix  ( step );
+        solver_TopDispl_fix ( step );
         solver_load_fixedbase_displacements( Global.mySolver, step );
         Timer_Stop( "Compute Physics" );
 
