@@ -3531,31 +3531,34 @@ static void solver_init()
         a = zeta * Global.theABase;
         b = zeta * Global.theBBase;
 
+        //a = 0.012239971377623;
+        //b = 0.000826778925153;
+
         /* coefficients for term (b * deltaT * Ke_off * (Ut-1 - Ut)) */
         ep->c3 = b * Param.theDeltaT * edata->edgesize * mu / 9;
         ep->c4 = b * Param.theDeltaT * edata->edgesize * lambda / 9;
 
-//#ifdef BOUNDARY
-//
-//        /* Set the flag for the element */
-//        lnid0 = elemp->lnid[0];
-//
-//        ldb[0] = Global.myMesh->nodeTable[lnid0].x;
-//        ldb[1] = Global.myMesh->nodeTable[lnid0].y;
-//        ldb[2] = Global.myMesh->nodeTable[lnid0].z;
-//
-//        edgeticks = (tick_t)1 << (PIXELLEVEL - elemp->level);
-//        ruf[0] = ldb[0] + edgeticks;
-//        ruf[1] = ldb[1] + edgeticks;
-//        ruf[2] = ldb[2] + edgeticks;
-//
-//        flag = compute_setflag(ldb, ruf, Global.myOctree->nearendp,
-//                Global.myOctree->farendp);
-//        if (flag != 13) {
-//            compute_setboundary(edata->edgesize, edata->Vp, edata->Vs,
-//                                edata->rho, flag, dashpot);
-//        }
-//#endif /* BOUNDARY */
+#ifdef BOUNDARY
+
+        /* Set the flag for the element */
+        lnid0 = elemp->lnid[0];
+
+        ldb[0] = Global.myMesh->nodeTable[lnid0].x;
+        ldb[1] = Global.myMesh->nodeTable[lnid0].y;
+        ldb[2] = Global.myMesh->nodeTable[lnid0].z;
+
+        edgeticks = (tick_t)1 << (PIXELLEVEL - elemp->level);
+        ruf[0] = ldb[0] + edgeticks;
+        ruf[1] = ldb[1] + edgeticks;
+        ruf[2] = ldb[2] + edgeticks;
+
+        //flag = compute_setflag(ldb, ruf, Global.myOctree->nearendp,
+        //        Global.myOctree->farendp);
+        //if (flag != 13) {
+        //    compute_setboundary(edata->edgesize, edata->Vp, edata->Vs,
+        //                        edata->rho, flag, dashpot);
+        // }
+#endif /* BOUNDARY */
 
         /* Assign the element mass to its vertices */
         /* mass is the total mass of the element   */
@@ -4307,9 +4310,9 @@ solver_compute_displacement( mysolver_t* solver, mesh_t* mesh )
                 tm3Disp->f[2] = tm2Disp->f[2];
             }
 
-        	tm2Disp->f[0] = nodalForce.f[0] / np->mass_simple;
+        	tm2Disp->f[0] = 0.0;
         	tm2Disp->f[1] = nodalForce.f[1] / np->mass_simple;
-        	tm2Disp->f[2] = nodalForce.f[2] / np->mass_simple;
+        	tm2Disp->f[2] = 0.0;
 
 /*        	tm2Disp->f[0] = nodalForce.f[0] / np->mass_simple;
         	tm2Disp->f[1] = nodalForce.f[1] / np->mass_simple;
@@ -4352,14 +4355,14 @@ solver_geostatic_fix(int step)
 static void
 solver_baseDispl_fix(int step)
 {
-    if ( Param.includeNonlinearAnalysis == YES ) {
+   // if ( Param.includeNonlinearAnalysis == YES ) {
         Timer_Start( "Compute baseDispl " );
 
         base_displacements_fix( Global.myMesh, Global.mySolver, Param.theDomainZ,
                                          Param.theDeltaT, step );
 
         Timer_Stop( "Compute baseDispl " );
-    }
+   // }
 }
 
 static void
@@ -4573,7 +4576,7 @@ static void solver_run()
         solver_geostatic_fix( step );
         solver_baseDispl_fix( step );
         //solver_UyDispl_fix  ( step );
-        solver_TopDispl_fix ( step );
+        //solver_TopDispl_fix ( step );
         solver_load_fixedbase_displacements( Global.mySolver, step );
         Timer_Stop( "Compute Physics" );
 

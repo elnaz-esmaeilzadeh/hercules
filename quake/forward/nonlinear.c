@@ -3877,7 +3877,7 @@ void base_displacements_fix( mesh_t     *myMesh,
 
 
     int32_t nindex;
-    //double w = PI, t=step*dt, A=0.5;
+    double w = PI, t=step*dt, A=2, To=5;
     //A=0.05/3.25
     //   A/w/w * sin (w t) for displacement with A = 0.15 and w = pi/10.
 
@@ -3889,9 +3889,12 @@ void base_displacements_fix( mesh_t     *myMesh,
             fvector_t *tm2Disp;
             tm2Disp = mySolver->tm2 + nindex;
             tm2Disp->f[0] =  0.0;
-            //tm2Disp->f[1] =  A * sin(w*t) / (w * w)   ;
-            tm2Disp->f[1] =  0.0  ;
+            /* if ( t<= To )
+            	tm2Disp->f[1] =  A * sin(w*t) / (w * w)   ;
+            else
+            	tm2Disp->f[1] =  0.0  ; */
             tm2Disp->f[2] =  0.0;
+            tm2Disp->f[1] =  A * sin(w*t) / (w * w) ;
 
         }
     }
@@ -3908,7 +3911,7 @@ void set_top_displacements( mesh_t     *myMesh,
 
 
     int32_t nindex;
-    double t=step*dt, A=0.02, disp_y=0, Tt=25.0;
+    double t=step*dt, A=2.0, w=PI, disp_y=0, Tt=25.0;
 
     if (t <= Tt )
     	disp_y = A/Tt * t;
@@ -3925,8 +3928,8 @@ void set_top_displacements( mesh_t     *myMesh,
             fvector_t *tm2Disp;
             tm2Disp = mySolver->tm2 + nindex;
             tm2Disp->f[0] = 0;
-            //tm2Disp->f[1] =  A * sin(w*t) / (w * w)   ;
-            tm2Disp->f[1] =  disp_y   ;
+            tm2Disp->f[1] =  A * sin(w*t) / (w * w)   ;
+           // tm2Disp->f[1] =  disp_y   ;
             tm2Disp->f[2] = 0;
 
         }
@@ -4142,12 +4145,12 @@ void compute_addforce_nl (mesh_t     *myMesh,
             nodalForce->f[1] -= localForce[i].f[1] * theDeltaTSquared;
             nodalForce->f[2] -= localForce[i].f[2] * theDeltaTSquared;
 
-        	if (  ( ( nodalForce->f[0] >=0 ) || ( nodalForce->f[0] < 0 ) ) &&
+/*        	if (  ( ( nodalForce->f[0] >=0 ) || ( nodalForce->f[0] < 0 ) ) &&
         		  ( ( nodalForce->f[1] >=0 ) || ( nodalForce->f[1] < 0 ) ) &&
         		  ( ( nodalForce->f[2] >=0 ) || ( nodalForce->f[2] < 0 ) ) ) {
         	} else {
 
-        	}
+        	}*/
 
 
         } /* element nodes */
