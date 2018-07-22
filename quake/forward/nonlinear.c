@@ -3914,8 +3914,10 @@ void set_top_displacements( mesh_t     *myMesh,
     	disp_y = A/Tt * t;
     else if (t <= 3.0*Tt )
     	disp_y = A - A/Tt * (t-Tt);
-    else
+    else if (t <= 4.0*Tt )
     	disp_y = -A + A/Tt * (t-3.0*Tt);
+    else
+    	disp_y = 0.0;
 
     for ( nindex = 0; nindex < myMesh->nharbored; nindex++ ) {
 
