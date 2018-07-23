@@ -4137,10 +4137,16 @@ octor_newtree(double x, double y, double z, int32_t recsize,
 
     pow = LOG2_32b(max);
 
-    tree->farendp[0] = u32x * ((tick_t)1 << (PIXELLEVEL - pow));
-    tree->farendp[1] = u32y * ((tick_t)1 << (PIXELLEVEL - pow));
-    tree->farendp[2] = u32z * ((tick_t)1 << (PIXELLEVEL - pow));
+    int32_t z_over_x = (z/x);
+    int32_t pow2 = LOG2_32b(z_over_x)/LOG2_32b(2) ;
 
+
+    //tree->farendp[0] = u32x * ((tick_t)1 << (PIXELLEVEL - pow));
+    //tree->farendp[1] = u32y * ((tick_t)1 << (PIXELLEVEL - pow));
+    //tree->farendp[2] = u32z * ((tick_t)1 << (PIXELLEVEL - pow));
+
+    tree->farendp[0] = 1 * ((tick_t)1 << (PIXELLEVEL - pow2));
+    tree->farendp[1] = 1 * ((tick_t)1 << (PIXELLEVEL - pow2));
     tree->farendp[2] = 1 * ((tick_t)1 << (PIXELLEVEL - 0));
 
     tree->farbound[0] = tree->farendp[0] - 1;
