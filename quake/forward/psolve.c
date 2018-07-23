@@ -6127,6 +6127,10 @@ static void compute_setab(double freq, double *aBasePtr, double *bBasePtr)
 	/* the b over zeta target is... */
 	*bBasePtr = numer / denom;
 
+	// Elnaz: This are the values to overwrite. The denominator is 10/Vs
+	*aBasePtr = 0.012239971377623/0.05;
+	*bBasePtr = 0.000826778925153/0.05;
+
     }
     else if ( Param.theTypeOfDamping == MASS )
     {

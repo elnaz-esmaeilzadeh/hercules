@@ -31,6 +31,7 @@
 #include "psolve.h"
 #include "quake_util.h"
 #include "util.h"
+#include "stiffness.h"
 
 #define  QC  qc = 0.577350269189 /* sqrt(3.0)/3.0; */
 
@@ -3877,9 +3878,7 @@ void base_displacements_fix( mesh_t     *myMesh,
 
 
     int32_t nindex;
-    double w = PI, t=step*dt, A=2, To=5;
-    //A=0.05/3.25
-    //   A/w/w * sin (w t) for displacement with A = 0.15 and w = pi/10.
+    double w = PI, t=step*dt, A=2.0;
 
     for ( nindex = 0; nindex < myMesh->nharbored; nindex++ ) {
 
@@ -3889,12 +3888,8 @@ void base_displacements_fix( mesh_t     *myMesh,
             fvector_t *tm2Disp;
             tm2Disp = mySolver->tm2 + nindex;
             tm2Disp->f[0] =  0.0;
-            /* if ( t<= To )
-            	tm2Disp->f[1] =  A * sin(w*t) / (w * w)   ;
-            else
-            	tm2Disp->f[1] =  0.0  ; */
-            tm2Disp->f[2] =  0.0;
             tm2Disp->f[1] =  A * sin(w*t) / (w * w) ;
+            tm2Disp->f[2] =  0.0;
 
         }
     }
@@ -4047,6 +4042,10 @@ void compute_addforce_nl (mesh_t     *myMesh,
     int32_t   nl_eindex;
     fvector_t localForce[8];
 
+
+    fvector_t localForceDamp[8];
+    fvector_t curDisp[8];
+
     /* Loop on the number of elements */
     for (nl_eindex = 0; nl_eindex < myNonlinElementsCount; nl_eindex++) {
 
@@ -4054,6 +4053,8 @@ void compute_addforce_nl (mesh_t     *myMesh,
         edata_t *edata;
         double   h, h3, WiJi;
         double   mu, lambda;
+
+        e_t*    ep;
 
         eindex = myNonlinElementsMapping[nl_eindex];
 
@@ -4063,6 +4064,7 @@ void compute_addforce_nl (mesh_t     *myMesh,
          * This is what gives me the connectivity to nodes */
         elemp = &myMesh->elemTable[eindex];
         edata = (edata_t *)elemp->data;
+        ep    = &mySolver->eTable[nl_eindex] ;
 
         h    = (double)edata->edgesize;
         h3   = h * h * h;
@@ -4073,23 +4075,7 @@ void compute_addforce_nl (mesh_t     *myMesh,
         mu     = ec.mu;
         lambda = ec.lambda;
 
-//        if ( theMaterialModel == LINEAR ) {
-
-            stresses = myNonlinSolver->stresses[nl_eindex];
-
-//        } else {
-//
-//            qptensors_t tstrains, pstrains, estrains;
-//
-//            tstrains = myNonlinSolver->strains   [nl_eindex];
-//            pstrains = myNonlinSolver->pstrains1[nl_eindex];
-//
-//            /* compute total strain - plastic strain */
-//            estrains = subtrac_qptensors(tstrains, pstrains);
-//
-//            /* compute the corresponding stress */
-//            stresses = compute_qp_stresses(estrains, mu, lambda);
-//        }
+        stresses = myNonlinSolver->stresses[nl_eindex];
 
         /* Clean memory for the local force vector */
         memset(localForce, 0, 8 * sizeof(fvector_t));
@@ -4145,15 +4131,54 @@ void compute_addforce_nl (mesh_t     *myMesh,
             nodalForce->f[1] -= localForce[i].f[1] * theDeltaTSquared;
             nodalForce->f[2] -= localForce[i].f[2] * theDeltaTSquared;
 
-/*        	if (  ( ( nodalForce->f[0] >=0 ) || ( nodalForce->f[0] < 0 ) ) &&
-        		  ( ( nodalForce->f[1] >=0 ) || ( nodalForce->f[1] < 0 ) ) &&
-        		  ( ( nodalForce->f[2] >=0 ) || ( nodalForce->f[2] < 0 ) ) ) {
-        	} else {
-
-        	}*/
-
-
         } /* element nodes */
+
+        /* =-=-==-=-=-=-=-=-=-=-=-=-=-=-= */
+        /* =-=-=-=- Add damping -=-=-=-=- */
+        /* =-=-==-=-=-=-=-=-=-=-=-=-=-=-= */
+
+        memset( localForceDamp, 0, 8 * sizeof(fvector_t) );
+
+        double b_over_dt = ep->c3 / ep->c1;
+
+        for (i = 0; i < 8; i++) {
+            int32_t    lnid = elemp->lnid[i];
+            fvector_t* tm1Disp = mySolver->tm1 + lnid;
+   	        fvector_t* tm2Disp = mySolver->tm2 + lnid;
+
+            curDisp[i].f[0] = ( tm1Disp->f[0] - tm2Disp->f[0] ) * b_over_dt;
+            curDisp[i].f[1] = ( tm1Disp->f[1] - tm2Disp->f[1] ) * b_over_dt;
+            curDisp[i].f[2] = ( tm1Disp->f[2] - tm2Disp->f[2] ) * b_over_dt;
+        }
+
+        /* Coefficients for new stiffness matrix calculation */
+        if (vector_is_zero( curDisp ) != 0) {
+
+            double first_coeff  = -0.5625 * (ep->c2 + 2 * ep->c1);
+            double second_coeff = -0.5625 * (ep->c2);
+            double third_coeff  = -0.5625 * (ep->c1);
+
+            double atu[24];
+            double firstVec[24];
+
+            aTransposeU( curDisp, atu );
+            firstVector( atu, firstVec, first_coeff, second_coeff, third_coeff );
+            au( localForceDamp, firstVec );
+        }
+
+        for (i = 0; i < 8; i++) {
+
+            int32_t lnid          = elemp->lnid[i];
+            fvector_t* nodalForce = mySolver->force + lnid;
+
+            nodalForce->f[0] += localForceDamp[i].f[0];
+            nodalForce->f[1] += localForceDamp[i].f[1];
+            nodalForce->f[2] += localForceDamp[i].f[2];
+        }
+
+        /* =-=-==-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= */
+        /* =-=-==-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= */
+        /* =-=-==-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= */
 
     } /* all elements */
 
