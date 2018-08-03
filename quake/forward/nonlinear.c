@@ -4058,7 +4058,7 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
 						          &pstrains2->qp[i],  &alphastress2->qp[i], &stresses->qp[i],   &epstr2->qv[i],    &enlcons->fs[i],     &psi_n->qv[i],
 						          &lounlo_n->qv[i], &Sv_n->qv[i], &Sv_max->qv[i], &kappa->qv[i], &Sref->qp[i], &flagTolSubSteps, &flagNoSubSteps, &ErrBA);
 
-				if ( ( (theMaterialModel != LINEAR) && (theMaterialModel != VONMISES_EP) && (theMaterialModel != DRUCKERPRAGER) && (theMaterialModel != MOHR_COULOMB) ) )
+				if ( ( theMaterialModel != LINEAR || theMaterialModel != VONMISES_EP || theMaterialModel != DRUCKERPRAGER || theMaterialModel != MOHR_COULOMB) )
 					enlcons->fs[i] = ErrBA;
 
 			}
@@ -4350,7 +4350,8 @@ void print_nonlinear_stations(mesh_t     *myMesh,
     for ( iStation = 0; iStation < myNumberOfNonlinStations; iStation++ ) {
     	tensor_t       *stress, *tstrain, tstress;
     	qptensors_t    *stressF, *tstrainF;
-    	double         bStrain = 0., bStress = 0., Fy, h;
+    	qpvectors_t    *kappaF;
+    	double         bStrain = 0., bStress = 0., Fy, h, kappa;
     	tensor_t       sigma0;
 
     	elem_t         *elemp;
@@ -4377,11 +4378,13 @@ void print_nonlinear_stations(mesh_t     *myMesh,
     	 * corresponding to the first Gauss point*/
     	tstrainF   = myNonlinSolver->strains   + nl_eindex;
     	stressF    = myNonlinSolver->stresses  + nl_eindex;
+    	kappaF     = myNonlinSolver->kappa     + nl_eindex;
 
     	stress      = &(stressF->qp[0]);            /* relative stresses of the first Gauss point */
     	tstress     = add_tensors(*stress,sigma0); /* compute the total stress tensor */
 
     	tstrain    = &(tstrainF->qp[0]);
+    	kappa      =  kappaF->qv[0];
 
     	Fy         = (myNonlinSolver->constants   + nl_eindex)->fs[0];
 
@@ -4398,7 +4401,7 @@ void print_nonlinear_stations(mesh_t     *myMesh,
     				" % 8e % 8e"
     				" % 8e % 8e"
     				" % 8e % 8e"
-    				" % 8e",
+    				" % 8e % 8e",
 
     				tstrain->xx, tstress.xx, // 11 12
     				tstrain->yy, tstress.yy, // 13 14
@@ -4407,7 +4410,7 @@ void print_nonlinear_stations(mesh_t     *myMesh,
     				tstrain->xy, tstress.xy, // 19 20
     				tstrain->yz, tstress.yz, // 21 22
     				tstrain->xz, tstress.xz,
-    				Fy); // 23 24
+    				Fy, kappa); // 23 24
     	}
     } /* for all my stations */
 
