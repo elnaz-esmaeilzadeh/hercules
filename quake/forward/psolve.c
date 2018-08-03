@@ -7575,6 +7575,8 @@ mesh_correct_properties( etree_t* cvm )
         edata->rho = rho;
 
 
+
+
         if (cnt != 0 ) {
         	edata->Vp  =  vp / cnt;
         	edata->Vs  =  vs / cnt;

@@ -3908,13 +3908,13 @@ void set_top_displacements( mesh_t     *myMesh,
 
 
     int32_t nindex;
-    double t=step*dt, A=0.02, disp_y=0, Tt=25.0;
+    double t=step*dt, A=0.02, disp_y=0, Tt=100.0;
 
     if (t <= Tt )
     	disp_y = A/Tt * t;
-    else if (t <= 3.0*Tt )
+    else if ( t>Tt && t <= 3.0*Tt )
     	disp_y = A - A/Tt * (t-Tt);
-    else if (t <= 4.0*Tt )
+    else if (t > 3.0*Tt && t <= 4.0*Tt )
     	disp_y = -A + A/Tt * (t-3.0*Tt);
     else
     	disp_y = 0.0;
@@ -3926,10 +3926,10 @@ void set_top_displacements( mesh_t     *myMesh,
         if ( z_m == 0.0 ) {
             fvector_t *tm2Disp;
             tm2Disp = mySolver->tm2 + nindex;
-            tm2Disp->f[0] = 0;
+            tm2Disp->f[0] = -disp_y*2.0;
             //tm2Disp->f[1] =  A * sin(w*t) / (w * w)   ;
             tm2Disp->f[1] =  disp_y   ;
-            tm2Disp->f[2] = 0;
+            //tm2Disp->f[2] = 0;
 
         }
     }
@@ -4281,7 +4281,7 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
 				double ErrBA=0;
 
 				double po=90;
-				if (i==4 && eindex == 30976 && ( step == 499 ) ) {
+				if (i==0 && eindex == 0 && ( step == 7 ) ) {
 					po=89;
 				}
 
