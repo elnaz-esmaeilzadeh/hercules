@@ -2074,7 +2074,7 @@ double getHardening(nlconstants_t el_cnt, double kappa) {
 
 double get_kappa( nlconstants_t el_cnt, tensor_t Sdev, tensor_t Sref, double kn ) {
 
-	double R, Fk, Dk, Jk, kappa;
+	double R, Fk, Dk, Jk, kappa, A, B, C;
 	int    cnt=0, cnt_max=200;
 	tensor_t SmSo, S1;
 
@@ -2086,7 +2086,7 @@ double get_kappa( nlconstants_t el_cnt, tensor_t Sdev, tensor_t Sref, double kn 
 	SmSo = subtrac_tensors(Sdev,Sref);
 	S1   = add_tensors(Sdev, scaled_tensor(SmSo,kappa));
 
-	Fk   = sqrt(ddot_tensors(S1,S1)) - R;
+/*	Fk   = sqrt(ddot_tensors(S1,S1)) - R;
 
 	while ( fabs(Fk) > theErrorTol ) {
 		Jk     = ddot_tensors(SmSo,S1)/(sqrt(ddot_tensors(S1,S1)));
@@ -2097,7 +2097,16 @@ double get_kappa( nlconstants_t el_cnt, tensor_t Sdev, tensor_t Sref, double kn 
 		cnt = cnt + 1;
 		if (cnt == cnt_max)
 			break;
-	}
+	}*/
+
+	/* =-=-=-= Get kappa from quadrtaic eqn =-=-=-=-=   */
+	A = ddot_tensors(SmSo,SmSo);
+	B = 2.0 * ddot_tensors(Sdev,SmSo);
+	C = ddot_tensors(Sdev,Sdev);
+
+	kappa = ( sqrt(B*B - 4.0*A*( C - R * R ) ) - B ) * 0.50 / A ;
+
+	/* =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-   */
 
 	if ( kappa < 0)
 		kappa = kn;
@@ -4169,11 +4178,11 @@ void compute_addforce_nl (mesh_t     *myMesh,
         for (i = 0; i < 8; i++) {
 
             int32_t lnid          = elemp->lnid[i];
-            fvector_t* nodalForce = mySolver->force + lnid;
+            fvector_t* nodalForce2 = mySolver->force + lnid;
 
-            nodalForce->f[0] += localForceDamp[i].f[0];
-            nodalForce->f[1] += localForceDamp[i].f[1];
-            nodalForce->f[2] += localForceDamp[i].f[2];
+            nodalForce2->f[0] += localForceDamp[i].f[0];
+            nodalForce2->f[1] += localForceDamp[i].f[1];
+            nodalForce2->f[2] += localForceDamp[i].f[2];
         }
 
         /* =-=-==-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= */
