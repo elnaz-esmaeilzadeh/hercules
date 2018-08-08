@@ -1619,7 +1619,7 @@ void MatUpd_vMGeneral ( nlconstants_t el_cnt, double *kappa,
 
 	double   Dt=1.0, T=0.0, Dtmin, Dt_sup, kappa_n, load_unload, Den1, Den2, kappa_up, kappa_up_o,
 			 ErrB, ErrS, xi, xi_sup, kappa_o, K, ErrB_o,
-			 G=el_cnt.mu, Lambda = el_cnt.lambda;
+			 G=el_cnt.mu, Lambda = el_cnt.lambda, xi1;
 	tensor_t sigma_n, sigma_up, Num, Sdev, sigma_up_oo;
 	int cnt=0;
 
@@ -1647,7 +1647,7 @@ void MatUpd_vMGeneral ( nlconstants_t el_cnt, double *kappa,
 
 	if ( load_unload > 0 ) {
 
-		*kappa = get_kappaUnLoading_II(  el_cnt, Sdev_n1,  De_dev, ErrMax );
+		*kappa = get_kappaUnLoading_II(  el_cnt, Sdev_n1,  De_dev, ErrMax, &xi1 );
 	    *sigma_ref = copy_tensor( Sdev_n1 );
 
 		  /* ImplicitExponential ( el_cnt,   sigma_n,  De,
@@ -1656,8 +1656,8 @@ void MatUpd_vMGeneral ( nlconstants_t el_cnt, double *kappa,
 
 
 		/* get sigma_n deviatoric */
-		double H_n      = getHardening( el_cnt, *kappa);
-		double xi1      = 2.0 * G / ( 1.0 + 3.0 * G / H_n );
+		//double H_n      = getHardening( el_cnt, *kappa);
+		//double xi1      = 2.0 * G / ( 1.0 + 3.0 * G / H_n );
 		tensor_t DSdev  = scaled_tensor( De_dev, xi1 );
 
 		if ( isnan( tensor_J2(DSdev) ) || isinf( tensor_J2(DSdev) ) ) {
@@ -1799,8 +1799,8 @@ void MatUpd_Exponential ( nlconstants_t el_cnt, double *kappa,
     * Sref          : Updated reference deviator stress tensor          */
 
 	double   kappa_n, load_unload, Den1, Den2,
-			 ErrB, K, G=el_cnt.mu, Lambda = el_cnt.lambda;
-	tensor_t sigma_n, sigma_up, Num;
+			 K, G=el_cnt.mu, Lambda = el_cnt.lambda;
+	tensor_t sigma_n, Num;
 
 	K     = Lambda + 2.0 * G / 3.0;
 
@@ -1823,11 +1823,22 @@ void MatUpd_Exponential ( nlconstants_t el_cnt, double *kappa,
 
 	load_unload = -ddot_tensors(Num,De_dev) / (Den1 + Den2);
 
-
 	if ( load_unload > 0 ) {
 	    *sigma_ref = copy_tensor( Sdev_n1 );
-	   // *kappa_impl = 100;
-	   // *xi_impl    = 2.0*G;
+
+	    /*  -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=    */
+	    *kappa_impl = get_kappaUnLoading_II(  el_cnt, Sdev_n1,  De_dev, ErrMax, xi_impl );
+
+		tensor_t DSdev  = scaled_tensor( De_dev, *xi_impl );
+
+		if ( isnan( tensor_J2(DSdev) ) || isinf( tensor_J2(DSdev) ) ) {
+			fprintf(stdout," NAN at unloading: %f.  \n",tensor_J2(DSdev));
+	        MPI_Abort(MPI_COMM_WORLD, ERROR);
+	        exit(1);
+		}
+
+		*sigma          = add_tensors (  add_tensors( sigma_n, isotropic_tensor(K * De_vol) ),  DSdev  );
+		return;
 	}
 
 	 ImplicitExponential ( el_cnt,     sigma_n,   De,
@@ -1901,7 +1912,7 @@ void ImplicitExponential (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De,
 	tensor_t Sdev_n, S1, Sigma, Sigma_star;
 	double   H_n, K, Det, Su=el_cnt.c, Lambda=el_cnt.lambda, G=el_cnt.mu, R, m=el_cnt.m;
 	double   J11, J12, J21, J22, psi_k, kappa_k, F1, F2;
-	int      cnt=0, cnt_max=200;
+	int      cnt=0, cnt_max=500;
 
 	double   De_vol   = tensor_I1 ( De );
 	tensor_t De_dev   = tensor_deviator( De, tensor_octahedral ( De_vol ) );
@@ -2357,7 +2368,7 @@ double Pegasus(double beta, nlconstants_t el_cnt) {
 }
 
 
-double get_kappaUnLoading_II( nlconstants_t el_cnt, tensor_t Sn, tensor_t De, double *Err ) {
+double get_kappaUnLoading_II( nlconstants_t el_cnt, tensor_t Sn, tensor_t De, double *Err, double *Psi ) {
 
 	double R, A, B, C, kappa1, kappa2, beta, phi, G=el_cnt.mu, Su=el_cnt.c, kn;
 
@@ -2385,9 +2396,10 @@ double get_kappaUnLoading_II( nlconstants_t el_cnt, tensor_t Sn, tensor_t De, do
 			exit(1);
 		}
 
-		beta = phi * 0.50 / G;
-		kn   = Pegasus( beta,  el_cnt);  // this is a check
-		*Err    = ( 1.0 + kn - beta ) - 3.0 * beta * G / getHardening(el_cnt, kn);
+		beta  = phi * 0.50 / G;
+		kn    = Pegasus( beta,  el_cnt);  // this is a check
+		*Err  = ( 1.0 + kn - beta ) - 3.0 * beta * G / getHardening(el_cnt, kn);
+		*Psi  = phi / ( 1.0 + kn );
 
 		if ( fabs(*Err) > theErrorTol  ) {
 			fprintf(stdout," Warning --- UnloadingError/ErrorTolerance= %f/%f \n", fabs(*Err), theErrorTol );
@@ -2403,8 +2415,8 @@ double get_kappaUnLoading_II( nlconstants_t el_cnt, tensor_t Sn, tensor_t De, do
 	} else {
 		fprintf(stdout," =*=*=*=* CHECK FOR UNSTABLE BEHAVIOR =*=*=*=* \n"
 				"Cannot compute kappa at unloading. \n" );
-		MPI_Abort(MPI_COMM_WORLD, ERROR);
-		exit(1);
+		//MPI_Abort(MPI_COMM_WORLD, ERROR);
+		//exit(1);
 	}
 
 	return kn;
@@ -4487,7 +4499,7 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
 				double ErrBA=0;
 
 				double po=90;
-				if (i==0 && eindex == 62 && ( step == 4 || step == 3) ) {
+				if (i==2 && eindex == 63 && ( step == 1201 ) ) {
 					po=89;
 				}
 
