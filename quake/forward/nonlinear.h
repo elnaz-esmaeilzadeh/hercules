@@ -156,6 +156,10 @@ typedef struct nlsolver_t {
                                                                          Hyperbolic.  H = 3mu * kappa^2 / (1+2*kappa)   */
 	qptensors_t   *Sref;          /* Reference stress */
 
+	qpvectors_t   *kappa_impl;
+	qpvectors_t   *xi_impl;
+
+
 } nlsolver_t;
 
 /*typedef struct nlstation_t {
@@ -273,7 +277,7 @@ tensor_t compute_pstrain2            ( nlconstants_t constants, tensor_t pstrain
 
 void material_update ( nlconstants_t constants, tensor_t e_n, tensor_t e_n1, tensor_t ep, tensor_t eta_n, double ep_barn, tensor_t sigma0, double dt,
 		               tensor_t *epl, tensor_t *eta, tensor_t *sigma, double *ep_bar, double *fs, double *psi_n, double *loadunl_n, double *Tao_n,
-		               double *Tao_max, double *kp, tensor_t *sigma_ref,  int *flagTolSubSteps, int *flagNoSubSteps, double *ErrBA );
+		               double *Tao_max, double *kp, tensor_t *sigma_ref,  int *flagTolSubSteps, int *flagNoSubSteps, double *ErrBA, double *kappa_impl, double *xi_impl );
 
 void MatUpd_vMFA (double J2_pr, tensor_t dev_pr, double psi, double c, tensor_t eta_n, tensor_t e_n1, double mu, double Lambda, double Sy,
 		tensor_t *epl, tensor_t ep, double *ep_bar, double ep_barn, tensor_t *eta, tensor_t *sigma, tensor_t stresses,
@@ -281,7 +285,7 @@ void MatUpd_vMFA (double J2_pr, tensor_t dev_pr, double psi, double c, tensor_t 
 
 
 void   MatUpd_vMGeneral      ( nlconstants_t el_cnt, double *kappa, tensor_t e_n, tensor_t e_n1,
-		                       tensor_t *sigma_ref, tensor_t *sigma, int *FlagSubSteps, int *FlagNoSubSteps, double *ErrMax);
+		                       tensor_t *sigma_ref, tensor_t *sigma, int *FlagSubSteps, int *FlagNoSubSteps, double *ErrMax, double *kappa_impl, double *xi_impl);
 double getHardening          ( nlconstants_t el_cnt, double kappa);
 double getDerHardening       ( nlconstants_t el_cnt, double kappa) ;
 double get_kappa             ( nlconstants_t el_cnt, tensor_t Sdev, tensor_t Sref, double kn );
@@ -294,6 +298,11 @@ double Pegasus               (double beta, nlconstants_t el_cnt);
 double evalBackboneFn        (nlconstants_t el_cnt, double gamma_bar, double tao_bar);
 double evalHardFnc           (nlconstants_t el_cnt, double gamma_bar);
 double getHard_Pegassus      (nlconstants_t el_cnt, double kappa);
+
+void ImplicitExponential (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De,
+		          tensor_t *Sigma_ref, tensor_t *sigma_up, double kappa_n, double psi_n,
+		          double *kappa_up, double *psi_up, double *ErrB) ;
+
 
 void   compute_addforce_baseAccel( mesh_t *myMesh, mysolver_t *mySolver, int step, double dt, double depth);
 double baseAccel (  double dt, double step );
