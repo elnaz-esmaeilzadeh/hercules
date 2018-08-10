@@ -1617,10 +1617,10 @@ void MatUpd_vMGeneral ( nlconstants_t el_cnt, double *kappa,
  	* kappa         : Updated hardening variable
     * Sref          : Updated reference deviator stress tensor          */
 
-	double   Dt=1.0, T=0.0, Dtmin, Dt_sup, kappa_n, load_unload, Den1, Den2, kappa_up, kappa_up_o,
-			 ErrB, ErrS, xi, xi_sup, kappa_o, K, ErrB_o,
+	double   Dt=1.0, T=0.0, Dtmin, Dt_sup, kappa_n, load_unload, Den1, Den2, kappa_up,
+			 ErrB, ErrS, xi, xi_sup, kappa_o, K,
 			 G=el_cnt.mu, Lambda = el_cnt.lambda, xi1;
-	tensor_t sigma_n, sigma_up, Num, Sdev, sigma_up_oo;
+	tensor_t sigma_n, sigma_up, Num, Sdev;
 	int cnt=0;
 
 	Dtmin = Dt/theNoSubsteps;
@@ -1678,7 +1678,7 @@ void MatUpd_vMGeneral ( nlconstants_t el_cnt, double *kappa,
 			           sigma_ref,  &sigma_up_oo,  *kappa_impl ,  *xi_impl,
 			           kappa_impl,  xi_impl,  &ErrB_o) ;  */
 
-	double Emax     = 0;
+	//double Emax     = 0;
 	int    step_Emax = -1, i;
 
 	if ( ErrB > theErrorTol ) { // begin sub-stepping
@@ -1718,14 +1718,15 @@ void MatUpd_vMGeneral ( nlconstants_t el_cnt, double *kappa,
 
 	        if ( (Dt == Dtmin) && (ErrB > theErrorTol) ) {
 
-    			//fprintf(stdout," Increase error tolerance, BoundSurf error_found=%f, PsiFnc error=%f, decrease substeps, reduce time-step  \n", ErrB, ErrS);
-    	        //MPI_Abort(MPI_COMM_WORLD, ERROR);
-    	        //exit(1);
+    			fprintf(stdout," Increase error tolerance, increase number of substeps or reduce time-step. \n"
+    					       " BoundSurf error=%f, PsiFnc error=%f, Tol=%f  \n", ErrB, ErrS, theErrorTol);
+    	        MPI_Abort(MPI_COMM_WORLD, ERROR);
+    	        exit(1);
 
-	            if (ErrB > *ErrMax) {
+	          /*  if (ErrB > *ErrMax) {
 	            	*ErrMax = ErrB;
 	                step_Emax = i;
-	            }
+	            }  */
 	        }
 
 	        /* Update initial values  */
@@ -1853,7 +1854,7 @@ void EvalSubStep (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t
 		          double Dt, tensor_t *sigma_ref, tensor_t *sigma_up, double kappa_n,
 		          double *kappa_up, double *ErrB, double *ErrS) {
 
-	tensor_t Sdev_0, DSdev1, DSdev2, Sdev1, Sdev2, Dsigma1, Dsigma2, Dss;
+	tensor_t Sdev_0, DSdev1, DSdev2, Sdev1, Sdev2, Dsigma1, Dsigma2;
 	double   H_n, H_n2, xi1, xi2, K, kappa1, kappa2, Su=el_cnt.c, Lambda=el_cnt.lambda, G=el_cnt.mu, psi_up;
 
 	K       = Lambda + 2.0 * G / 3.0;
@@ -1932,7 +1933,9 @@ void ImplicitExponential (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De,
 	F1   = psi_n * ( 1.0 + 3.0 * G / H_n ) - 2.0 * G;
 	F2   = ddot_tensors(S1,S1) - R * R;
 
-	while ( sqrt( F1 * F1 + F2 * F2 ) > theErrorTol ) {
+	double error = 10000;
+
+	while ( sqrt(error) > theErrorTol ) {
 
 		//Sigma      = add_tensors( Sdev_n, scaled_tensor(De_dev,psi_n));
 		//Sigma_star = subtrac_tensors(Sigma,*Sigma_ref);
@@ -1962,11 +1965,13 @@ void ImplicitExponential (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De,
 		F1   = psi_n * ( 1.0 + 3.0 * G / H_n ) - 2.0 * G;
 		F2   = ddot_tensors(S1,S1) - R * R;
 
+		error =  pow( F1/G, 2 ) + pow( (sqrt(ddot_tensors(S1,S1)) - R)/R, 2 )  ;
+
 		cnt = cnt + 1;
 		if (cnt == cnt_max) {
 			fprintf(stdout," Cannot find roots for implicit exponential \n");
-	        //MPI_Abort(MPI_COMM_WORLD, ERROR);
-	        //exit(1);
+	        MPI_Abort(MPI_COMM_WORLD, ERROR);
+	        exit(1);
 			break;
 		}
 	}
@@ -2247,17 +2252,16 @@ double getHardening(nlconstants_t el_cnt, double kappa) {
 
 double get_kappa( nlconstants_t el_cnt, tensor_t Sdev, tensor_t Sref, double kn ) {
 
-	double R, Fk, Dk, Jk, kappa, A, B, C;
-	int    cnt=0, cnt_max=200;
-	tensor_t SmSo, S1;
+	double R, kappa, A, B, C, toto;
+	tensor_t SmSo;
 
 	double Su=el_cnt.c;
 
-	kappa = kn;
+	//kappa = kn;
 	R = sqrt(8.0/3.0) * Su;
 
 	SmSo = subtrac_tensors(Sdev,Sref);
-	S1   = add_tensors(Sdev, scaled_tensor(SmSo,kappa));
+	// S1   = add_tensors(Sdev, scaled_tensor(SmSo,kappa));
 
 /*	Fk   = sqrt(ddot_tensors(S1,S1)) - R;
 
@@ -2277,11 +2281,31 @@ double get_kappa( nlconstants_t el_cnt, tensor_t Sdev, tensor_t Sref, double kn 
 	B = 2.0 * ddot_tensors(Sdev,SmSo);
 	C = ddot_tensors(Sdev,Sdev);
 
-	kappa = ( sqrt(B*B - 4.0*A*( C - R * R ) ) - B ) * 0.50 / A ;
+	kappa = ( sqrt( B * B - 4.0 * A * ( C - R * R ) ) - B ) * 0.50 / A ;
+
+/*	if ( ( B*B - 4.0*A*(C-R*R) ) > 0 ) {
+
+		kappa = ( sqrt(B*B - 4.0*A*( C - R * R ) ) - B ) * 0.50 / A ;
+
+		// Sanity check. Should not get here !!!
+		if ( kappa < 0.0 ) {
+			toto=89;
+			fprintf(stderr,"Material update error: "
+					"found negative kappa:%f \n",kappa);
+			MPI_Abort(MPI_COMM_WORLD, ERROR);
+			exit(1);
+		}
+
+	} else {
+		fprintf(stdout," =*=*=*=* CHECK FOR UNSTABLE BEHAVIOR =*=*=*=* \n"
+				"Cannot compute kappa. \n" );
+		MPI_Abort(MPI_COMM_WORLD, ERROR);
+		exit(1);
+	}*/
 
 	/* =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-   */
 
-	if ( kappa < 0)
+	if ( kappa < 0.0 || ( B * B - 4.0 * A * ( C - R * R ) ) < 0.0 )
 		kappa = kn;
 
 	return kappa;
@@ -2370,7 +2394,7 @@ double Pegasus(double beta, nlconstants_t el_cnt) {
 
 double get_kappaUnLoading_II( nlconstants_t el_cnt, tensor_t Sn, tensor_t De, double *Err, double *Psi ) {
 
-	double R, A, B, C, kappa1, kappa2, beta, phi, G=el_cnt.mu, Su=el_cnt.c, kn;
+	double R, A, B, C, kappa1, kappa2, beta, phi, G=el_cnt.mu, Su=el_cnt.c, kn=0;
 
 	R     = sqrt(8.0/3.0) * Su;
 
@@ -4498,9 +4522,9 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
 				int flagTolSubSteps=0, flagNoSubSteps=0;
 				double ErrBA=0;
 
-				double po=90;
-				if (i==2 && eindex == 63 && ( step == 1201 ) ) {
-					po=89;
+				double po=91;
+				if (i==0 && eindex == 63 && ( step == 2 ) ) {
+					po=90;
 				}
 
 				material_update ( *enlcons,           tstrains->qp[i],      tstrains1->qp[i],   pstrains1->qp[i],  alphastress1->qp[i], epstr1->qv[i],   sigma0,        theDeltaT,
