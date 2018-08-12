@@ -3607,8 +3607,8 @@ static void solver_init()
                 if (flag != 13)
                 {
                     /* boundary impact */
-                    np->mass_minusaM[axis]  -= (Param.theDeltaT * dashpot[j][axis]);
-                    np->mass2_minusaM[axis] -= (Param.theDeltaT * dashpot[j][axis]);
+                    //np->mass_minusaM[axis]  -= (Param.theDeltaT * dashpot[j][axis]);
+                    //np->mass2_minusaM[axis] -= (Param.theDeltaT * dashpot[j][axis]);
                 }
 #endif /* BOUNDARY */
 

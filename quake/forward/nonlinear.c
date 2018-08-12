@@ -4087,7 +4087,7 @@ void base_displacements_fix( mesh_t     *myMesh,
 
 
     int32_t nindex;
-    double w = PI, t=step*dt, A=2.0;
+    double w = PI, t=(step+1)*dt, A=2.0;
 
     for ( nindex = 0; nindex < myMesh->nharbored; nindex++ ) {
 
@@ -4378,11 +4378,12 @@ void compute_addforce_nl (mesh_t     *myMesh,
         for (i = 0; i < 8; i++) {
 
             int32_t lnid          = elemp->lnid[i];
-            fvector_t* nodalForce2 = mySolver->force + lnid;
+            fvector_t* nodalForce = mySolver->force + lnid;
 
-            nodalForce2->f[0] += localForceDamp[i].f[0];
-            nodalForce2->f[1] += localForceDamp[i].f[1];
-            nodalForce2->f[2] += localForceDamp[i].f[2];
+            nodalForce->f[0] += localForceDamp[i].f[0];
+            nodalForce->f[1] += localForceDamp[i].f[1];
+            nodalForce->f[2] += localForceDamp[i].f[2];
+
         }
 
         /* =-=-==-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= */
