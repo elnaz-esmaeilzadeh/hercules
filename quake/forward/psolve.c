@@ -3600,14 +3600,14 @@ static void solver_init()
                 np->mass_minusaM[axis]	-= (Param.theDeltaT * a * M);
                 np->mass2_minusaM[axis] -= (Param.theDeltaT * a * M);
 
-#ifdef BOUNDARY
-                if (flag != 13)
-                {
-                    /* boundary impact */
-                    np->mass_minusaM[axis]  -= (Param.theDeltaT * dashpot[j][axis]);
-                    np->mass2_minusaM[axis] -= (Param.theDeltaT * dashpot[j][axis]);
-                }
-#endif /* BOUNDARY */
+//#ifdef BOUNDARY
+//                if (flag != 13)
+//                {
+//                    /* boundary impact */
+//                    np->mass_minusaM[axis]  -= (Param.theDeltaT * dashpot[j][axis]);
+//                    np->mass2_minusaM[axis] -= (Param.theDeltaT * dashpot[j][axis]);
+//                }
+//#endif /* BOUNDARY */
 
                 np->mass_minusaM[axis]	+= M;
                 np->mass2_minusaM[axis] += (M * 2);

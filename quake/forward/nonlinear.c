@@ -1906,7 +1906,7 @@ void ImplicitExponential (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De,
 
 	tensor_t Sdev_n, S1, Sigma, Sigma_star;
 	double   H_n, K, Det, Su=el_cnt.c, Lambda=el_cnt.lambda, G=el_cnt.mu, R, m=el_cnt.m;
-	double   J11, J12, J21, J22, psi_k, kappa_k, F1, F2;
+	double   J11, J12, J21, J22, psi_k, kappa_k, F1, F2, err_exp, err1, err2;
 	int      cnt=0, cnt_max=600;
 
 	double   De_vol   = tensor_I1 ( De );
@@ -1927,11 +1927,15 @@ void ImplicitExponential (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De,
 	F1   = psi_n * ( 1.0 + 3.0 * G / H_n ) - 2.0 * G;
 	F2   = ddot_tensors(S1,S1) - R * R;
 
-	//double error = 10000;
+	err1 =   F1/G;
+	err2 =   (sqrt(ddot_tensors(S1,S1)) - R)/R ;
 
-	double error =  pow( F1/G, 2 ) + pow( (sqrt(ddot_tensors(S1,S1)) - R)/R, 2 )  ;
+	err_exp = sqrt(err1*err1 + err2*err2);
 
-	while ( sqrt(error) > theErrorTol ) {
+
+	//Err_exp =  pow( F1/G, 2 ) + pow( (sqrt(ddot_tensors(S1,S1)) - R)/R, 2 )  ;
+
+	while ( err_exp > theErrorTol ) {
 
 		//Sigma      = add_tensors( Sdev_n, scaled_tensor(De_dev,psi_n));
 		//Sigma_star = subtrac_tensors(Sigma,*Sigma_ref);
@@ -1961,21 +1965,32 @@ void ImplicitExponential (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De,
 		F1   = psi_n * ( 1.0 + 3.0 * G / H_n ) - 2.0 * G;
 		F2   = ddot_tensors(S1,S1) - R * R;
 
-		error =  pow( F1/G, 2 ) + pow( (sqrt(ddot_tensors(S1,S1)) - R)/R, 2 )  ;
+		err1 =   F1/G;
+		err2 =   (sqrt(ddot_tensors(S1,S1)) - R)/R ;
+
+		err_exp = sqrt(err1*err1 + err2*err2);
+
+
+		//Err_exp =  pow( F1/G, 2 ) + pow( (sqrt(ddot_tensors(S1,S1)) - R)/R, 2 )  ;
 
 		cnt = cnt + 1;
 		if (cnt == cnt_max) {
 			fprintf(stdout," Cannot find roots for implicit exponential \n");
 	        MPI_Abort(MPI_COMM_WORLD, ERROR);
 	        exit(1);
-			break;
 		}
+	}
+
+	if (kappa_n < 0.0 ) {
+		fprintf(stdout," Negativa kappa:%f \n", kappa_n);
+        //MPI_Abort(MPI_COMM_WORLD, ERROR);
+        //exit(1);
 	}
 
 	*sigma_up = add_tensors (  add_tensors( sigma_n, isotropic_tensor(K*De_vol) ), scaled_tensor(De_dev,psi_n) );
 	*kappa_up = kappa_n;
 	*psi_up   = psi_n;
-	*ErrB     = sqrt( F1 * F1 + F2 * F2 );
+	*ErrB     = err_exp;
 
 }
 
@@ -2781,8 +2796,8 @@ void material_update ( nlconstants_t constants, tensor_t e_n, tensor_t e_n1, ten
 
 	}  else if ( theMaterialModel != MOHR_COULOMB ) {
 
-		MatUpd_vMGeneral ( constants,  kp,  e_n,  e_n1, sigma_ref, sigma, flagTolSubSteps, flagNoSubSteps, ErrBA, kappa_impl, xi_impl );
-		//MatUpd_EXP_Implicit ( constants,  kp,  e_n,  e_n1, sigma_ref, sigma, flagTolSubSteps, flagNoSubSteps, ErrBA, kappa_impl, xi_impl );
+		//MatUpd_vMGeneral ( constants,  kp,  e_n,  e_n1, sigma_ref, sigma, flagTolSubSteps, flagNoSubSteps, ErrBA, kappa_impl, xi_impl );
+		MatUpd_EXP_Implicit ( constants,  kp,  e_n,  e_n1, sigma_ref, sigma, flagTolSubSteps, flagNoSubSteps, ErrBA, kappa_impl, xi_impl );
 
 		return;
 
@@ -4525,7 +4540,7 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
 				double ErrBA=0;
 
 				double po=90;
-				if (i==1 && eindex == 36 && ( step == 149965 ) ) {
+				if (i==7 && eindex == 11 && ( step == 151494 ) ) {
 					po=89;
 				}
 
