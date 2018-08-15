@@ -1927,7 +1927,9 @@ void ImplicitExponential (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De,
 	F1   = psi_n * ( 1.0 + 3.0 * G / H_n ) - 2.0 * G;
 	F2   = ddot_tensors(S1,S1) - R * R;
 
-	double error = 10000;
+	//double error = 10000;
+
+	double error =  pow( F1/G, 2 ) + pow( (sqrt(ddot_tensors(S1,S1)) - R)/R, 2 )  ;
 
 	while ( sqrt(error) > theErrorTol ) {
 
@@ -4523,7 +4525,7 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
 				double ErrBA=0;
 
 				double po=90;
-				if (i==0 && eindex == 0 && ( step == 7 ) ) {
+				if (i==1 && eindex == 36 && ( step == 149965 ) ) {
 					po=89;
 				}
 
