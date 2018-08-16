@@ -1186,6 +1186,20 @@ double tensor_J2(tensor_t dev) {
 }
 
 /*
+ * is_zero_tensor: Checks if a simmetric tensor is zero
+ */
+int is_zero_tensor(tensor_t Tens) {
+	int isZeroTens = 0;
+
+	if ( Tens.xx == 0.0 && Tens.yy == 0.0 && Tens.zz == 0.0 &&
+		 Tens.xy == 0.0 && Tens.xz == 0.0 && Tens.yz == 0.0 ) {
+		isZeroTens = 1;
+	}
+
+    return isZeroTens;
+}
+
+/*
  * combtensor_J2: Returns the combined second invariant J2_comb = (A:B)/2
  * A y B symmetric tensors
  */
@@ -1808,9 +1822,12 @@ void MatUpd_EXP_Implicit ( nlconstants_t el_cnt, double *kappa,
 
 
 	/* total strain increment and deviatoric strain increment */
-	tensor_t De       = subtrac_tensors ( e_n, e_n1 );
-	double   De_vol   = tensor_I1 ( De );
-	tensor_t De_dev   = tensor_deviator( De, tensor_octahedral ( De_vol ) );
+	tensor_t De        = subtrac_tensors ( e_n, e_n1 );
+	double   De_vol    = tensor_I1 ( De );
+	tensor_t De_dev    = tensor_deviator( De, tensor_octahedral ( De_vol ) );
+	tensor_t alpha_n   = scaled_tensor( *sigma_ref, kappa_n/(1.0+kappa_n));
+	tensor_t Salpha_n  = subtrac_tensors( Sdev_n1, alpha_n );
+	double   lo_unlo2  = ddot_tensors(Salpha_n,De_dev) / sqrt( ddot_tensors(Salpha_n,Salpha_n)  );
 
 	Den1 = ddot_tensors(Sdev_n1, subtrac_tensors (Sdev_n1 , *sigma_ref));
 	Den2 = kappa_n * ( ddot_tensors(subtrac_tensors (Sdev_n1 , *sigma_ref), subtrac_tensors (Sdev_n1 , *sigma_ref)) );
@@ -1906,29 +1923,48 @@ void ImplicitExponential (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De,
 
 	tensor_t Sdev_n, S1, Sigma, Sigma_star;
 	double   H_n, K, Det, Su=el_cnt.c, Lambda=el_cnt.lambda, G=el_cnt.mu, R, m=el_cnt.m;
-	double   J11, J12, J21, J22, psi_k, kappa_k, F1, F2, err_exp, err1, err2;
-	int      cnt=0, cnt_max=600;
+	double   J11, J12, J21, J22, psi_k, kappa_k, F1, F2, err_exp, err1, err2, psi_o, kappa_o;
+	int      cnt=0, cnt_max=600, popo;
+
+	// scale strain increment tensor and initial psi
+	De = scaled_tensor(De,G);
+	psi_n = psi_n/G;
+
+	psi_o   = psi_n;
+	kappa_o = kappa_n;
 
 	double   De_vol   = tensor_I1 ( De );
 	tensor_t De_dev   = tensor_deviator( De, tensor_octahedral ( De_vol ) );
+	De_vol            = De_vol/G; // get the original volumetric strain
 
 	R = sqrt(8.0/3.0) * Su;
 	K = Lambda + 2.0 * G / 3.0;
 
 	/* get sigma_n deviatoric */
 	Sdev_n = tensor_deviator( sigma_n, tensor_octahedral ( tensor_I1 ( sigma_n ) ) );
+
 	//SmSo   = subtrac_tensors(Sdev_n, *Sigma_ref);
 	Sigma      = add_tensors( Sdev_n, scaled_tensor(De_dev,psi_n));
 	Sigma_star = subtrac_tensors(Sigma,*Sigma_ref);
 
+	// check for zero reference stress and improve kappa_n
+	if (is_zero_tensor(*Sigma_ref))
+		kappa_n = R / sqrt(ddot_tensors(Sigma,Sigma)) - 1;
+	else
+		popo=89;
+
 	H_n    = getHardening( el_cnt, kappa_n );
 	S1     = add_tensors(Sigma, scaled_tensor(Sigma_star,kappa_n));
 
-	F1   = psi_n * ( 1.0 + 3.0 * G / H_n ) - 2.0 * G;
+//	F1   = psi_n * ( 1.0 + 3.0 * G / H_n ) - 2.0 * G;
+//	F2   = ddot_tensors(S1,S1) - R * R;
+
+	F1   =  psi_n  - 2.0 / ( 1.0 + 3.0 * G / H_n ) ;
 	F2   = ddot_tensors(S1,S1) - R * R;
 
-	err1 =   F1/G;
-	err2 =   (sqrt(ddot_tensors(S1,S1)) - R)/R ;
+	err1 =   F1;
+	err2 =   ( sqrt(ddot_tensors(S1,S1)) -  R )/R;
+	//err2 =   ( (ddot_tensors(S1,S1)) - R * R ) ;
 
 	err_exp = sqrt(err1*err1 + err2*err2);
 
@@ -1940,9 +1976,14 @@ void ImplicitExponential (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De,
 		//Sigma      = add_tensors( Sdev_n, scaled_tensor(De_dev,psi_n));
 		//Sigma_star = subtrac_tensors(Sigma,*Sigma_ref);
 
-		J11 = 1.0 + 3.0*G/H_n;
-		J12 = -3.0 * G * psi_n / ( H_n * H_n ) * ( ( el_cnt.psi0 * G * m ) * pow( kappa_n, m - 1.0 ) ) ;
+		//J11 = 1.0 + 3.0*G/H_n;
+		J11   = 1.0;
+
+		//J12 = -3.0 * G * psi_n / ( H_n * H_n ) * ( ( el_cnt.psi0 * G * m ) * pow( kappa_n, m - 1.0 ) ) ;
+		J12   = -6.0 * G  / ( pow( H_n + 3.0 * G, 2.0 ) ) * ( ( el_cnt.psi0 * G * m ) * pow( kappa_n, m - 1.0 ) ) ;
+
 		J21 = 2.0 * ( 1.0 + kappa_n ) * ( ddot_tensors(add_tensors( Sigma, scaled_tensor(Sigma_star,kappa_n)), De_dev) );
+
 		J22 = 2.0 * ( ddot_tensors(add_tensors( Sigma, scaled_tensor(Sigma_star,kappa_n)), Sigma_star) );
 
 		Det = J11 * J22 - J12 * J21;
@@ -1953,6 +1994,32 @@ void ImplicitExponential (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De,
 		psi_n   = psi_n - psi_k;
 		kappa_n = kappa_n - kappa_k;
 
+		if (kappa_n < 0.0 ) {
+
+			// compute variables using kappa_o and psi_o
+			psi_n = psi_o;
+			kappa_n = kappa_o;
+
+			Sigma      = add_tensors( Sdev_n, scaled_tensor(De_dev,psi_n));
+			Sigma_star = subtrac_tensors(Sigma,*Sigma_ref);
+
+			H_n    = getHardening( el_cnt, kappa_n );
+			S1     = add_tensors(Sigma, scaled_tensor(Sigma_star,kappa_n));
+
+			F1   =  psi_n  - 2.0 / ( 1.0 + 3.0 * G / H_n ) ;
+			F2   = ddot_tensors(S1,S1) - R * R;
+
+			err1 =   F1;
+			err2 =   ( sqrt(ddot_tensors(S1,S1)) -  R )/R;
+
+			err_exp = sqrt(err1*err1 + err2*err2);
+
+			fprintf(stdout," Negativa kappa found \n."
+					" Error using initial estimates:%f \n", err_exp);
+	        MPI_Abort(MPI_COMM_WORLD, ERROR);
+	        exit(1);
+		}
+
 		Sigma      = add_tensors( Sdev_n, scaled_tensor(De_dev,psi_n));
 		Sigma_star = subtrac_tensors(Sigma,*Sigma_ref);
 
@@ -1962,11 +2029,14 @@ void ImplicitExponential (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De,
 		//H_n    = getHardening( el_cnt, kappa_n );
 		//S1     = add_tensors(Sdev_n, scaled_tensor(SmSo,kappa_n));
 
-		F1   = psi_n * ( 1.0 + 3.0 * G / H_n ) - 2.0 * G;
+		//F1   = psi_n * ( 1.0 + 3.0 * G / H_n ) - 2.0 * G;
+		//F2   = ddot_tensors(S1,S1) - R * R;
+
+		F1   =  psi_n  - 2.0 / ( 1.0 + 3.0 * G / H_n ) ;
 		F2   = ddot_tensors(S1,S1) - R * R;
 
-		err1 =   F1/G;
-		err2 =   (sqrt(ddot_tensors(S1,S1)) - R)/R ;
+		err1 =   F1;
+		err2 =   ( sqrt(ddot_tensors(S1,S1)) -  R )/R;
 
 		err_exp = sqrt(err1*err1 + err2*err2);
 
@@ -1981,15 +2051,11 @@ void ImplicitExponential (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De,
 		}
 	}
 
-	if (kappa_n < 0.0 ) {
-		fprintf(stdout," Negativa kappa:%f \n", kappa_n);
-        //MPI_Abort(MPI_COMM_WORLD, ERROR);
-        //exit(1);
-	}
+
 
 	*sigma_up = add_tensors (  add_tensors( sigma_n, isotropic_tensor(K*De_vol) ), scaled_tensor(De_dev,psi_n) );
 	*kappa_up = kappa_n;
-	*psi_up   = psi_n;
+	*psi_up   = psi_n * G;
 	*ErrB     = err_exp;
 
 }
@@ -2451,8 +2517,8 @@ double get_kappaUnLoading_II( nlconstants_t el_cnt, tensor_t Sn, tensor_t De, do
 	} else {
 		fprintf(stdout," =*=*=*=* CHECK FOR UNSTABLE BEHAVIOR =*=*=*=* \n"
 				"Cannot compute kappa at unloading. \n" );
-		//MPI_Abort(MPI_COMM_WORLD, ERROR);
-		//exit(1);
+		MPI_Abort(MPI_COMM_WORLD, ERROR);
+		exit(1);
 	}
 
 	return kn;
@@ -4129,6 +4195,49 @@ void set_top_displacements( mesh_t     *myMesh,
 {
 
 
+	    int32_t nindex;
+
+	    double P = 0.025 , Tt = 100.0, F, Fz;
+	    double t=(step+1)*dt;
+
+	    if (t<=Tt) {
+	        F = P/Tt*t;
+	    }
+	    else if (t>Tt && t <= 3.0*Tt ) {
+	        F = P - P/Tt * (t-Tt);
+	    }
+	    else if (t>3.0*Tt && t <= 5.0*Tt ) {
+	        F = -P + P/Tt * (t-3.0*Tt);
+	    }
+	    else if ( t>5.0*Tt && t <= 6.0*Tt ) {
+	        F = P - P/Tt * (t-5.0*Tt);
+	    }
+	    else
+	        F = 0.0;
+
+	    if (t<=Tt){
+	        Fz = P*t/Tt;
+	    }
+	    else {
+	        Fz = P;
+	    }
+
+	    for ( nindex = 0; nindex < myMesh->nharbored; nindex++ ) {
+
+	        double z_m = (myMesh->ticksize)*(double)myMesh->nodeTable[nindex].z;
+
+	       if ( z_m == 0.0) {
+	        fvector_t *tm2Disp;
+	        tm2Disp = mySolver->tm2 + nindex;
+	        tm2Disp->f[2] = F;
+	        tm2Disp->f[1] = F;
+	        tm2Disp->f[0] = F;
+	       }
+	   }
+
+	    return;
+
+   /*
     int32_t nindex;
     double t=step*dt, A=0.02, disp_y=0, Tt=50.0;
 
@@ -4156,7 +4265,7 @@ void set_top_displacements( mesh_t     *myMesh,
         }
     }
 
-    return;
+    return; */
 }
 
 
@@ -4496,8 +4605,8 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
 				kappa->qv[i] = 1E+06;
 				//kappa->qv[i] = 1.0;
 
-				kappa_im->qv[i] = 1.0;
-				xi_im->qv[i]    = mu;
+				kappa_im->qv[i] = 1.0E+06;
+				xi_im->qv[i]    = 2.0 * mu;
 			}
 		}
 
@@ -4540,7 +4649,7 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
 				double ErrBA=0;
 
 				double po=90;
-				if (i==7 && eindex == 11 && ( step == 151494 ) ) {
+				if (i==4 && eindex == 9 && ( step == 95898 ) ) {
 					po=89;
 				}
 
