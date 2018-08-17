@@ -1651,6 +1651,11 @@ void MatUpd_vMGeneral ( nlconstants_t el_cnt, double *kappa,
 	double   De_vol   = tensor_I1 ( De );
 	tensor_t De_dev   = tensor_deviator( De, tensor_octahedral ( De_vol ) );
 
+	tensor_t alpha_n   = scaled_tensor( *sigma_ref, kappa_n/(1.0+kappa_n));
+	tensor_t Salpha_n  = subtrac_tensors( Sdev_n1, alpha_n );
+	//double   lo_unlo2  = ddot_tensors(Salpha_n,De_dev) / sqrt( ddot_tensors(Salpha_n,Salpha_n)  );
+	//double   norm_de   =  sqrt( ddot_tensors(De_dev,De_dev));
+
 	Den1 = ddot_tensors(Sdev_n1, subtrac_tensors (Sdev_n1 , *sigma_ref));
 	Den2 = kappa_n * ( ddot_tensors(subtrac_tensors (Sdev_n1 , *sigma_ref), subtrac_tensors (Sdev_n1 , *sigma_ref)) );
 	Num  = add_tensors ( scaled_tensor( Sdev_n1, (1.0+kappa_n) ), scaled_tensor( (subtrac_tensors (Sdev_n1 , *sigma_ref) ) ,kappa_n*(1.0+kappa_n) ) );
@@ -1825,9 +1830,9 @@ void MatUpd_EXP_Implicit ( nlconstants_t el_cnt, double *kappa,
 	tensor_t De        = subtrac_tensors ( e_n, e_n1 );
 	double   De_vol    = tensor_I1 ( De );
 	tensor_t De_dev    = tensor_deviator( De, tensor_octahedral ( De_vol ) );
-	tensor_t alpha_n   = scaled_tensor( *sigma_ref, kappa_n/(1.0+kappa_n));
-	tensor_t Salpha_n  = subtrac_tensors( Sdev_n1, alpha_n );
-	double   lo_unlo2  = ddot_tensors(Salpha_n,De_dev) / sqrt( ddot_tensors(Salpha_n,Salpha_n)  );
+	//tensor_t alpha_n   = scaled_tensor( *sigma_ref, kappa_n/(1.0+kappa_n));
+	//tensor_t Salpha_n  = subtrac_tensors( Sdev_n1, alpha_n );
+	//double   lo_unlo2  = ddot_tensors(Salpha_n,De_dev) / sqrt( ddot_tensors(Salpha_n,Salpha_n)  );
 
 	Den1 = ddot_tensors(Sdev_n1, subtrac_tensors (Sdev_n1 , *sigma_ref));
 	Den2 = kappa_n * ( ddot_tensors(subtrac_tensors (Sdev_n1 , *sigma_ref), subtrac_tensors (Sdev_n1 , *sigma_ref)) );
@@ -2862,8 +2867,8 @@ void material_update ( nlconstants_t constants, tensor_t e_n, tensor_t e_n1, ten
 
 	}  else if ( theMaterialModel != MOHR_COULOMB ) {
 
-		//MatUpd_vMGeneral ( constants,  kp,  e_n,  e_n1, sigma_ref, sigma, flagTolSubSteps, flagNoSubSteps, ErrBA, kappa_impl, xi_impl );
-		MatUpd_EXP_Implicit ( constants,  kp,  e_n,  e_n1, sigma_ref, sigma, flagTolSubSteps, flagNoSubSteps, ErrBA, kappa_impl, xi_impl );
+		MatUpd_vMGeneral ( constants,  kp,  e_n,  e_n1, sigma_ref, sigma, flagTolSubSteps, flagNoSubSteps, ErrBA, kappa_impl, xi_impl );
+		//MatUpd_EXP_Implicit ( constants,  kp,  e_n,  e_n1, sigma_ref, sigma, flagTolSubSteps, flagNoSubSteps, ErrBA, kappa_impl, xi_impl );
 
 		return;
 
@@ -4197,7 +4202,7 @@ void set_top_displacements( mesh_t     *myMesh,
 
 	    int32_t nindex;
 
-	    double P = 0.025 , Tt = 100.0, F, Fz;
+	    double P = 0.025 , Tt = 25.0, F, Fz;
 	    double t=(step+1)*dt;
 
 	    if (t<=Tt) {
