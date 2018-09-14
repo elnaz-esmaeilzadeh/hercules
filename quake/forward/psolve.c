@@ -7374,8 +7374,8 @@ mesh_correct_properties( etree_t* cvm )
     edata_t* edata;
     int32_t  eindex;
     double   east_m, north_m, depth_m, VpVsRatio, RhoVpRatio;
-    int	     res, iNorth, iEast, iDepth, numPoints = 3, cnt=0;
-    double   vs, vp, rho;
+    int	     res, iNorth, iEast, iDepth, numPoints = 3, cnt=0, k;
+    double   vs, vp, rho, s_0;
     double   points[3];
     int32_t  lnid0;
 
@@ -7418,6 +7418,7 @@ mesh_correct_properties( etree_t* cvm )
         vs  = 0;
         rho = 0;
         cnt = 0;
+        s_0 = 0;
 
         for (iNorth = 0; iNorth < numPoints; iNorth++) {
 
@@ -7467,6 +7468,21 @@ mesh_correct_properties( etree_t* cvm )
         			vs  += g_props.Vs;
         			rho += g_props.rho;
         			++cnt;
+
+        			// get geostatic stress as 1d column
+        			double nlayers=10, depth_o = depth_m/nlayers, depth_k;
+        			if (iNorth == 1 && iEast == 1 && iDepth ==1 ) {
+
+        				for (k = 0; k < nlayers; k++) {
+        					depth_k = depth_o * (k + 0.5);
+        					res = cvm_query( Global.theCVMEp, east_m, north_m,
+        							depth_k, &g_props );
+        					s_0 += depth_o * (g_props.rho - 1000 ) * 9.81 * (1 + 2*0.5)/3;
+
+        				}
+
+        				edata->sigma_0 = s_0;
+        			}
                 }
             }
         }
