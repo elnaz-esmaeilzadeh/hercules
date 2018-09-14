@@ -1610,7 +1610,7 @@ void MatUpd_vMGeneral ( nlconstants_t el_cnt, double *kappa,
 
 	double   Dt=1.0, T=0.0, Dtmin, Dt_sup, kappa_n, load_unload, Den1, Den2, kappa_up,
 			 ErrB, ErrS, xi, xi_sup, kappa_o, K,
-			 G=el_cnt.mu, Lambda = el_cnt.lambda;
+			 G=el_cnt.mu, Lambda = el_cnt.lambda, xi1;
 	tensor_t sigma_n, sigma_up, Num, Sdev;
 	int cnt=0;
 
@@ -1638,13 +1638,13 @@ void MatUpd_vMGeneral ( nlconstants_t el_cnt, double *kappa,
 
 	if ( load_unload > 0 ) {
 
-		*kappa = get_kappaUnLoading_II(  el_cnt, Sdev_n1,  De_dev, ErrMax );
+		*kappa = get_kappaUnLoading_II(  el_cnt, Sdev_n1,  De_dev, ErrMax, &xi1 );
 	    *sigma_ref = copy_tensor( Sdev_n1 );
 
 
 		/* get sigma_n deviatoric */
-		double H_n      = getHardening( el_cnt, *kappa);
-		double xi1      = 2.0 * G / ( 1.0 + 3.0 * G / H_n );
+		//double H_n      = getHardening( el_cnt, *kappa);
+		//double xi1      = 2.0 * G / ( 1.0 + 3.0 * G / H_n );
 		tensor_t DSdev  = scaled_tensor( De_dev, xi1 );
 
 		if ( isnan( tensor_J2(DSdev) ) || isinf( tensor_J2(DSdev) ) ) {
@@ -1661,7 +1661,11 @@ void MatUpd_vMGeneral ( nlconstants_t el_cnt, double *kappa,
 	EvalSubStep ( el_cnt,  sigma_n,  De,  De_dev,  De_vol, Dt,  sigma_ref,  &sigma_up,  kappa_n, &kappa_up,  &ErrB,  &ErrS);
 
 
-	double Emax     = 0;
+   /* ImplicitExponential ( el_cnt,   sigma_n,  De,
+			           sigma_ref,  &sigma_up_oo,  *kappa_impl ,  *xi_impl,
+			           kappa_impl,  xi_impl,  &ErrB_o) ;  */
+
+	//double Emax     = 0;
 	int    step_Emax = -1, i;
 
 	if ( ErrB > theErrorTol ) { // begin sub-stepping
@@ -1692,16 +1696,24 @@ void MatUpd_vMGeneral ( nlconstants_t el_cnt, double *kappa,
 	    			break;
 
 	    		cnt = cnt + 1;
+	    		if (ErrS>ErrB)
+	    			ErrB=ErrS;
 
 	    		if (cnt > theNoSubsteps)
 	    			break;
 	    	}
 
 	        if ( (Dt == Dtmin) && (ErrB > theErrorTol) ) {
-	            if (ErrB > Emax) {
+
+    			fprintf(stdout," Increase error tolerance, increase number of substeps or reduce time-step. \n"
+    					       " BoundSurf error=%f, PsiFnc error=%f, Tol=%f  \n", ErrB, ErrS, theErrorTol);
+    	        MPI_Abort(MPI_COMM_WORLD, ERROR);
+    	        exit(1);
+
+	          /*  if (ErrB > *ErrMax) {
 	            	*ErrMax = ErrB;
 	                step_Emax = i;
-	            }
+	            }  */
 	        }
 
 	        /* Update initial values  */
@@ -1760,8 +1772,8 @@ void EvalSubStep (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t
 		          double Dt, tensor_t *sigma_ref, tensor_t *sigma_up, double kappa_n,
 		          double *kappa_up, double *ErrB, double *ErrS) {
 
-	tensor_t Sdev_0, DSdev1, DSdev2, Sdev1, Sdev2, Dsigma1, Dsigma2, Dss;
-	double   H_n, H_n2, xi1, xi2, K, kappa1, kappa2, Su=el_cnt.c, Lambda=el_cnt.lambda, G=el_cnt.mu;
+	tensor_t Sdev_0, DSdev1, DSdev2, Sdev1, Sdev2, Dsigma1, Dsigma2;
+	double   H_n, H_n2, xi1, xi2, K, kappa1, kappa2, Su=el_cnt.c, Lambda=el_cnt.lambda, G=el_cnt.mu, psi_up;
 
 	K       = Lambda + 2.0 * G / 3.0;
 	De 		= scaled_tensor(De,Dt);
@@ -1792,8 +1804,12 @@ void EvalSubStep (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t
 	*kappa_up = (kappa1+kappa2)/2;
 
 	/* compute errors */
-	Dss       =  subtrac_tensors(Dsigma2,Dsigma1);
-	*ErrS     =  sqrt(2.0 *  tensor_J2 ( Dss ) ) / sqrt(2.0 *  tensor_J2 ( *sigma_up ) );
+	//Dss       =  subtrac_tensors(Dsigma2,Dsigma1);
+	//*ErrS     =  sqrt(2.0 *  tensor_J2 ( Dss ) ) / sqrt(2.0 *  tensor_J2 ( *sigma_up ) );
+
+	psi_up = (xi1+xi2)/2;
+
+	*ErrS  = psi_up * ( 1.0 + 3.0*G/getHardening( el_cnt, *kappa_up ) ) / G - 2.0 ;
 
 	double R  = Su * sqrt(8.0/3.0);
 
@@ -2073,19 +2089,18 @@ double getHardening(nlconstants_t el_cnt, double kappa) {
 
 double get_kappa( nlconstants_t el_cnt, tensor_t Sdev, tensor_t Sref, double kn ) {
 
-	double R, Fk, Dk, Jk, kappa;
-	int    cnt=0, cnt_max=200;
-	tensor_t SmSo, S1;
+	double R, kappa, A, B, C, toto;
+	tensor_t SmSo;
 
 	double Su=el_cnt.c;
 
-	kappa = kn;
+	//kappa = kn;
 	R = sqrt(8.0/3.0) * Su;
 
 	SmSo = subtrac_tensors(Sdev,Sref);
-	S1   = add_tensors(Sdev, scaled_tensor(SmSo,kappa));
+	// S1   = add_tensors(Sdev, scaled_tensor(SmSo,kappa));
 
-	Fk   = sqrt(ddot_tensors(S1,S1)) - R;
+/*	Fk   = sqrt(ddot_tensors(S1,S1)) - R;
 
 	while ( fabs(Fk) > theErrorTol ) {
 		Jk     = ddot_tensors(SmSo,S1)/(sqrt(ddot_tensors(S1,S1)));
@@ -2096,9 +2111,38 @@ double get_kappa( nlconstants_t el_cnt, tensor_t Sdev, tensor_t Sref, double kn 
 		cnt = cnt + 1;
 		if (cnt == cnt_max)
 			break;
-	}
+	}*/
 
-	if ( kappa < 0)
+	/* =-=-=-= Get kappa from quadrtaic eqn =-=-=-=-=   */
+	A = ddot_tensors(SmSo,SmSo);
+	B = 2.0 * ddot_tensors(Sdev,SmSo);
+	C = ddot_tensors(Sdev,Sdev);
+
+	kappa = ( sqrt( B * B - 4.0 * A * ( C - R * R ) ) - B ) * 0.50 / A ;
+
+/*	if ( ( B*B - 4.0*A*(C-R*R) ) > 0 ) {
+
+		kappa = ( sqrt(B*B - 4.0*A*( C - R * R ) ) - B ) * 0.50 / A ;
+
+		// Sanity check. Should not get here !!!
+		if ( kappa < 0.0 ) {
+			toto=89;
+			fprintf(stderr,"Material update error: "
+					"found negative kappa:%f \n",kappa);
+			MPI_Abort(MPI_COMM_WORLD, ERROR);
+			exit(1);
+		}
+
+	} else {
+		fprintf(stdout," =*=*=*=* CHECK FOR UNSTABLE BEHAVIOR =*=*=*=* \n"
+				"Cannot compute kappa. \n" );
+		MPI_Abort(MPI_COMM_WORLD, ERROR);
+		exit(1);
+	}*/
+
+	/* =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-   */
+
+	if ( kappa < 0.0 || ( B * B - 4.0 * A * ( C - R * R ) ) < 0.0 )
 		kappa = kn;
 
 	return kappa;
@@ -2185,9 +2229,9 @@ double Pegasus(double beta, nlconstants_t el_cnt) {
 }
 
 
-double get_kappaUnLoading_II( nlconstants_t el_cnt, tensor_t Sn, tensor_t De, double *Err ) {
+double get_kappaUnLoading_II( nlconstants_t el_cnt, tensor_t Sn, tensor_t De, double *Err, double *Psi ) {
 
-	double R, A, B, C, kappa1, kappa2, beta, phi, G=el_cnt.mu, Su=el_cnt.c, kn;
+	double R, A, B, C, kappa1, kappa2, beta, phi, G=el_cnt.mu, Su=el_cnt.c, kn=0;
 
 	R     = sqrt(8.0/3.0) * Su;
 
@@ -2213,9 +2257,10 @@ double get_kappaUnLoading_II( nlconstants_t el_cnt, tensor_t Sn, tensor_t De, do
 			exit(1);
 		}
 
-		beta = phi * 0.50 / G;
-		kn   = Pegasus( beta,  el_cnt);  // this is a check
-		*Err    = ( 1.0 + kn - beta ) - 3.0 * beta * G / getHardening(el_cnt, kn);
+		beta  = phi * 0.50 / G;
+		kn    = Pegasus( beta,  el_cnt);  // this is a check
+		*Err  = ( 1.0 + kn - beta ) - 3.0 * beta * G / getHardening(el_cnt, kn);
+		*Psi  = phi / ( 1.0 + kn );
 
 		if ( fabs(*Err) > theErrorTol  ) {
 			fprintf(stdout," Warning --- UnloadingError/ErrorTolerance= %f/%f \n", fabs(*Err), theErrorTol );
@@ -2231,8 +2276,8 @@ double get_kappaUnLoading_II( nlconstants_t el_cnt, tensor_t Sn, tensor_t De, do
 	} else {
 		fprintf(stdout," =*=*=*=* CHECK FOR UNSTABLE BEHAVIOR =*=*=*=* \n"
 				"Cannot compute kappa at unloading. \n" );
-		MPI_Abort(MPI_COMM_WORLD, ERROR);
-		exit(1);
+		//MPI_Abort(MPI_COMM_WORLD, ERROR);
+		//exit(1);
 	}
 
 	return kn;
@@ -3815,6 +3860,10 @@ void compute_addforce_nl (mesh_t     *myMesh,
     int32_t   nl_eindex;
     fvector_t localForce[8];
 
+
+    fvector_t localForceDamp[8];
+    fvector_t curDisp[8];
+
     /* Loop on the number of elements */
     for (nl_eindex = 0; nl_eindex < myNonlinElementsCount; nl_eindex++) {
 
@@ -3822,6 +3871,8 @@ void compute_addforce_nl (mesh_t     *myMesh,
         edata_t *edata;
         double   h, h3, WiJi;
         double   mu, lambda;
+
+        e_t*    ep;
 
         eindex = myNonlinElementsMapping[nl_eindex];
 
@@ -3831,6 +3882,7 @@ void compute_addforce_nl (mesh_t     *myMesh,
          * This is what gives me the connectivity to nodes */
         elemp = &myMesh->elemTable[eindex];
         edata = (edata_t *)elemp->data;
+        ep    = &mySolver->eTable[nl_eindex] ;
 
         h    = (double)edata->edgesize;
         h3   = h * h * h;
@@ -3841,23 +3893,7 @@ void compute_addforce_nl (mesh_t     *myMesh,
         mu     = ec.mu;
         lambda = ec.lambda;
 
-//        if ( theMaterialModel == LINEAR ) {
-
-            stresses = myNonlinSolver->stresses[nl_eindex];
-
-//        } else {
-//
-//            qptensors_t tstrains, pstrains, estrains;
-//
-//            tstrains = myNonlinSolver->strains   [nl_eindex];
-//            pstrains = myNonlinSolver->pstrains1[nl_eindex];
-//
-//            /* compute total strain - plastic strain */
-//            estrains = subtrac_qptensors(tstrains, pstrains);
-//
-//            /* compute the corresponding stress */
-//            stresses = compute_qp_stresses(estrains, mu, lambda);
-//        }
+        stresses = myNonlinSolver->stresses[nl_eindex];
 
         /* Clean memory for the local force vector */
         memset(localForce, 0, 8 * sizeof(fvector_t));
@@ -3913,15 +3949,56 @@ void compute_addforce_nl (mesh_t     *myMesh,
             nodalForce->f[1] -= localForce[i].f[1] * theDeltaTSquared;
             nodalForce->f[2] -= localForce[i].f[2] * theDeltaTSquared;
 
-        	if (  ( ( nodalForce->f[0] >=0 ) || ( nodalForce->f[0] < 0 ) ) &&
-        		  ( ( nodalForce->f[1] >=0 ) || ( nodalForce->f[1] < 0 ) ) &&
-        		  ( ( nodalForce->f[2] >=0 ) || ( nodalForce->f[2] < 0 ) ) ) {
-        	} else {
-
-        	}
-
-
         } /* element nodes */
+
+        /* =-=-==-=-=-=-=-=-=-=-=-=-=-=-= */
+        /* =-=-=-=- Add damping -=-=-=-=- */
+        /* =-=-==-=-=-=-=-=-=-=-=-=-=-=-= */
+
+        memset( localForceDamp, 0, 8 * sizeof(fvector_t) );
+
+        //double b_over_dt = ep->c3 / ep->c1;
+        double b_over_dt = (1.0/100) / ( 10 * PI * sqrt(theDeltaTSquared) ); // Added stiffness damping = 1.0% at 10Hz
+
+        for (i = 0; i < 8; i++) {
+            int32_t    lnid = elemp->lnid[i];
+            fvector_t* tm1Disp = mySolver->tm1 + lnid;
+   	        fvector_t* tm2Disp = mySolver->tm2 + lnid;
+
+            curDisp[i].f[0] = ( tm1Disp->f[0] - tm2Disp->f[0] ) * b_over_dt;
+            curDisp[i].f[1] = ( tm1Disp->f[1] - tm2Disp->f[1] ) * b_over_dt;
+            curDisp[i].f[2] = ( tm1Disp->f[2] - tm2Disp->f[2] ) * b_over_dt;
+        }
+
+        /* Coefficients for new stiffness matrix calculation */
+        if (vector_is_zero( curDisp ) != 0) {
+
+            double first_coeff  = -0.5625 * (ep->c2 + 2 * ep->c1);
+            double second_coeff = -0.5625 * (ep->c2);
+            double third_coeff  = -0.5625 * (ep->c1);
+
+            double atu[24];
+            double firstVec[24];
+
+            aTransposeU( curDisp, atu );
+            firstVector( atu, firstVec, first_coeff, second_coeff, third_coeff );
+            au( localForceDamp, firstVec );
+        }
+
+        for (i = 0; i < 8; i++) {
+
+            int32_t lnid          = elemp->lnid[i];
+            fvector_t* nodalForce = mySolver->force + lnid;
+
+            nodalForce->f[0] += localForceDamp[i].f[0];
+            nodalForce->f[1] += localForceDamp[i].f[1];
+            nodalForce->f[2] += localForceDamp[i].f[2];
+
+        }
+
+        /* =-=-==-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= */
+        /* =-=-==-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= */
+        /* =-=-==-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= */
 
     } /* all elements */
 

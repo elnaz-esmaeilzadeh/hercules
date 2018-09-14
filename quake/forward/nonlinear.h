@@ -285,7 +285,7 @@ void   MatUpd_vMGeneral      ( nlconstants_t el_cnt, double *kappa, tensor_t e_n
 double getHardening          ( nlconstants_t el_cnt, double kappa);
 double getDerHardening       ( nlconstants_t el_cnt, double kappa) ;
 double get_kappa             ( nlconstants_t el_cnt, tensor_t Sdev, tensor_t Sref, double kn );
-double get_kappaUnLoading_II ( nlconstants_t el_cnt, tensor_t Sn, tensor_t De, double *Err ) ;
+double get_kappaUnLoading_II ( nlconstants_t el_cnt, tensor_t Sn, tensor_t De, double *Err, double *Psi ) ;
 void   EvalSubStep           ( nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t De_dev, double De_vol,
                                double Dt, tensor_t *sigma_ref, tensor_t *sigma_up, double kappa_n,
                                double *kappa_up, double *ErrB, double *ErrS);
