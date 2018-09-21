@@ -1100,8 +1100,9 @@ void nonlinear_solver_init(int32_t myID, mesh_t *myMesh, double depth) {
 
             case VONMISES_BAE:
             	//ecp->c         = get_cohesion(elementVs);
+            	ecp->c         = interpolate_property_value(elementVs, theAlphaCohes);
 
-            	ecp->c         = edata->sigma_0 * 0.2;
+            	//ecp->c         = edata->sigma_0 * 0.2;
             	ecp->phi       = 0.0;
             	ecp->dil_angle = 0.0;
 
@@ -1109,15 +1110,15 @@ void nonlinear_solver_init(int32_t myID, mesh_t *myMesh, double depth) {
             	ecp->beta      = 0.0;
             	ecp->gamma     = 0.0;
 
-                get_h_m_from_G_Gmax(*ecp, edata->sigma_0, &ecp->m, &ecp->psi0, &ecp->c);
+                //get_h_m_from_G_Gmax(*ecp, edata->sigma_0, &ecp->m, &ecp->psi0, &ecp->c);
 
-                fprintf(stderr,"m is %f and h is %f and Su is %f kPa \n",ecp->m, ecp->psi0, ecp->c/1000);
+                //fprintf(stderr,"m is %f and h is %f and Su is %f kPa \n",ecp->m, ecp->psi0, ecp->c/1000);
 
             	ecp->Sstrain0  = 0.0;
-            	//ecp->m         = get_h_m//interpolate_property_value(elementVs, theM);
+            	ecp->m         = interpolate_property_value(elementVs, theM);
 
             	ecp->h         = 0.0;
-            	//ecp->psi0      = interpolate_property_value(elementVs, thePsi);
+            	ecp->psi0      = interpolate_property_value(elementVs, thePsi);
             	break;
 
             case VONMISES_BAH:
