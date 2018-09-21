@@ -301,6 +301,8 @@ tensor_t ApproxGravity_tensor(double Szz, double phi, double h, double lz, doubl
 
 int get_displacements ( mysolver_t *solver, elem_t *elemp, fvector_t *u );
 
+void get_h_m_from_G_Gmax(nlconstants_t el_cnt, double sigma0, double *mm, double *hh, double *Suu);
+
 /* -------------------------------------------------------------------------- */
 /*                              Stability methods                             */
 /* -------------------------------------------------------------------------- */

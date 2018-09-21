@@ -291,6 +291,140 @@ double get_gamma_eff (double vs30, double zo)  {
 return gamma_eff;
 }
 
+
+//Elnaz: sigma0 is given from geostatic analysis
+
+void get_h_m_from_G_Gmax(nlconstants_t el_cnt, double sigma0, double *mm, double *hh, double *Suu) {
+
+    double Gmax  = el_cnt.mu;
+    double h     = 0.1*Gmax; //initial guess for psi, BAE
+    double m     = 1.0; // initial guess for m, BAE
+    int maxiter  = 100;
+    double tol   = 1e-6;
+    int iter     = 0;
+    double error = 1;
+
+    double nsigma1  = 200;
+    double nsigma2  = 200;
+
+    //sigma0 = sigma0*2.0;
+
+    double Pa = 1E5; // atomospheric pressure
+
+    double Su = el_cnt.c;
+    double R  = Su*sqrt(8.0/3.0);//el_cnt.c*sqrt(8/3);
+
+    double Rbar = R/sqrt(2.0);
+
+    double Cu = 1.5;//constants.Cu;//uniformity constants
+
+    double gammar = 0.12*pow(Cu,-0.6)*pow(sigma0/Pa,0.5*pow(Cu,-0.15))/100.0;
+    double a      = 0.86+0.1*log(sigma0/Pa);
+
+    double gammac = 0.1;
+    double Gc     = 1.0/(1.0+pow(gammac/gammar,a))*Gmax;
+    double Rbarc  = gammac*Gc;
+
+    if (Rbar<=1.1*Rbarc) {
+
+        fprintf(stderr,"Rbar reached the critical point!. This S_o: %f and this is Gmax: %f \n", sigma0, Gmax );
+
+        Rbar = 1.10*Rbarc;
+        R    = Rbar*sqrt(2.0);
+        Su   = R*sqrt(3.0/8.0);
+        *Suu = Su;
+
+    }
+
+    double b1 = 0.7;//for gamma1
+    double b2 = 0.3;//for gamma2
+
+    double gamma1 = gammar*exp(1.0/a*log((1.0-b1)/b1));
+    double gamma2 = gammar*exp(1.0/a*log((1.0-b2)/b2));
+
+
+    double G1 = 1.0/(1.0+pow(gamma1/gammar,a))*Gmax;
+    double G2 = 1.0/(1.0+pow(gamma2/gammar,a))*Gmax;
+
+    double sigma1 = G1*gamma1;
+    double sigma2 = G2*gamma2;
+
+    double dsigma1 = 2.0*sigma1/nsigma1;
+    double dsigma2 = 2.0*sigma2/nsigma2;
+
+    double int1, int2, tau, f1, f2, J11, J22, J12, J21, detJ = 0.0;
+
+    do {
+
+        iter = iter + 1;
+
+        // gamma1
+        int1 = 0.0 + pow(2.0*sigma1/(Rbar-sigma1),m);
+
+        int2 = 0.0 + log(2.0*sigma1/(Rbar-sigma1))*int1;
+
+        //fprintf(stderr,"Rbar is %f, int1 is %f, int2 is %f \n", Rbar, int1,int2);
+
+        tau = 0.0;
+
+        for (int i = 2; i < nsigma1; i = i+1) {
+
+            tau = tau + dsigma1;
+
+            int1 = int1 + 2.0*pow(tau/(Rbar+sigma1-tau),m);
+            int2 = int2 + 2.0*log(tau/(Rbar+sigma1-tau))*pow(tau/(Rbar+sigma1-tau),m);
+        }
+
+        int1 = int1*dsigma1/2.0;
+        int2 = int2*dsigma1/2.0;
+
+        //fprintf(stderr,"int1 is %f, int2 is %f \n", int1,int2);
+
+        f1   = 1.0-3.0/2.0/h/gamma1*int1-G1/Gmax;
+        J11  = 3.0/2.0/h/h/gamma1*int1;
+        J12  = -3.0/2.0/h/gamma1*int2;
+
+        // gamma2
+        int1 = 0.0 + pow(2.0*sigma2/(Rbar-sigma2),m);
+        int2 = 0.0 + log(2.0*sigma2/(Rbar-sigma2))*int1;
+
+        tau = 0.0;
+
+        for (int i = 2; i < nsigma2; i = i+1) {
+
+            tau = tau + dsigma2;
+
+            int1 = int1 + 2.0*pow(tau/(Rbar+sigma2-tau),m);
+            int2 = int2 + 2.0*log(tau/(Rbar+sigma2-tau))*pow(tau/(Rbar+sigma2-tau),m);
+        }
+
+        int1 = int1*dsigma2/2.0;
+        int2 = int2*dsigma2/2.0;
+
+        f2   = 1.0-3.0/2.0/h/gamma2*int1-G2/Gmax;
+        J21  = 3.0/2.0/h/h/gamma2*int1;
+        J22  = -3.0/2.0/h/gamma2*int2;
+
+        // newton method
+        detJ = J11*J22-J12*J21;
+        h = h-1.0/detJ*( J22*f1-J12*f2);
+        m = m-1.0/detJ*(-J21*f1+J11*f2);
+
+        error = sqrt(f1*f1+f2*f2);
+
+        //fprintf(stderr,"gammar is %f, Gmax is %f, psi is %f and m is %f \n", gammar, Gmax, h/Gmax, m);
+
+    } while (iter <= maxiter && error > tol);
+
+    //update material constant
+    *mm = m;
+    *hh = h/Gmax;
+
+    //fprintf(stderr,"gamma1 is %f, G1 is %f, gamma2 is %f and G2 is %f \n", gamma1, G1, gamma2, G2);
+    //fprintf(stderr,"Gmax is %f, psi is %f and m is %f \n", Gmax, h/Gmax, m);
+}
+
+
 /* -------------------------------------------------------------------------- */
 /*       Initialization of parameters, structures and memory allocations      */
 /* -------------------------------------------------------------------------- */
@@ -975,11 +1109,15 @@ void nonlinear_solver_init(int32_t myID, mesh_t *myMesh, double depth) {
             	ecp->beta      = 0.0;
             	ecp->gamma     = 0.0;
 
+                get_h_m_from_G_Gmax(*ecp, edata->sigma_0, &ecp->m, &ecp->psi0, &ecp->c);
+
+                fprintf(stderr,"m is %f and h is %f and Su is %f kPa \n",ecp->m, ecp->psi0, ecp->c/1000);
+
             	ecp->Sstrain0  = 0.0;
-            	ecp->m         = interpolate_property_value(elementVs, theM);
+            	//ecp->m         = get_h_m//interpolate_property_value(elementVs, theM);
 
             	ecp->h         = 0.0;
-            	ecp->psi0      = interpolate_property_value(elementVs, thePsi);
+            	//ecp->psi0      = interpolate_property_value(elementVs, thePsi);
             	break;
 
             case VONMISES_BAH:
