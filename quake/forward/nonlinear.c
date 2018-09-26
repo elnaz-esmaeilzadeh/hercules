@@ -31,6 +31,7 @@
 #include "psolve.h"
 #include "quake_util.h"
 #include "util.h"
+#include "stiffness.h"
 
 #define  QC  qc = 0.577350269189 /* sqrt(3.0)/3.0; */
 
@@ -75,6 +76,8 @@ static double                theBackboneErrorTol     = 1E-05;
 static double                theGeostaticCushionT = 0;
 static int                   theGeostaticFinalStep;
 static int                   theNoSubsteps=1000;
+static double                theStiffDamp   = 0.0;
+static double                theStiffDampFreq = 10.0;
 static int32_t              *myStationsElementIndices;
 //static nlstation_t          *myNonlinStations;
 static int32_t              *myNonlinStationsMapping;
@@ -436,7 +439,7 @@ void nonlinear_init( int32_t     myID,
                      double      theDeltaT,
                      double      theEndT )
 {
-    double  double_message[4];
+    double  double_message[6];
     int     int_message[8];
 
     /* Capturing data from file --- only done by PE0 */
@@ -454,6 +457,8 @@ void nonlinear_init( int32_t     myID,
     double_message[1] = theGeostaticCushionT;
     double_message[2] = theErrorTol;
     double_message[3] = theBackboneErrorTol;
+    double_message[4] = theStiffDamp;
+    double_message[5] = theStiffDampFreq;
 
     int_message[0] = (int)theMaterialModel;
     int_message[1] = thePropertiesCount;
@@ -464,13 +469,15 @@ void nonlinear_init( int32_t     myID,
     int_message[6] = (int)theTensionCutoff;
     int_message[7] = (int)theNoSubsteps;
 
-    MPI_Bcast(double_message, 4, MPI_DOUBLE, 0, comm_solver);
+    MPI_Bcast(double_message, 6, MPI_DOUBLE, 0, comm_solver);
     MPI_Bcast(int_message,    8, MPI_INT,    0, comm_solver);
 
     theGeostaticLoadingT  = double_message[0];
     theGeostaticCushionT  = double_message[1];
     theErrorTol           = double_message[2];
     theBackboneErrorTol   = double_message[3];
+    theStiffDamp          = double_message[4];
+    theStiffDampFreq      = double_message[5];
 
     theMaterialModel      = int_message[0];
     thePropertiesCount    = int_message[1];
@@ -532,7 +539,7 @@ int32_t nonlinear_initparameters ( const char *parametersin,
     int32_t  properties_count, no_substeps;
     int      row;
     double   geostatic_loading_t, geostatic_cushion_t, errorTol, backbone_errorTol,
-            *auxiliar;
+            *auxiliar, stff_dmp, stff_dmp_freq;
     char     material_model[64],
              plasticity_type[64], approx_geostatic_state[64], tension_cutoff[64];
 
@@ -558,6 +565,8 @@ int32_t nonlinear_initparameters ( const char *parametersin,
          (parsetext(fp, "material_plasticity_type",     's', &plasticity_type        ) != 0) ||
          (parsetext(fp, "material_properties_count",    'i', &properties_count       ) != 0) ||
          (parsetext(fp, "no_substeps",                  'i', &no_substeps            ) != 0) ||
+         (parsetext(fp, "stiff_damp",                   'd', &stff_dmp               ) != 0) ||
+         (parsetext(fp, "freq_stiff_damp",              'd', &stff_dmp_freq          ) != 0) ||
          (parsetext(fp, "tension_cutoff",               's', &tension_cutoff         ) != 0) )
     {
         fprintf(stderr, "Error parsing nonlinear parameters from %s\n", parametersin);
@@ -671,6 +680,8 @@ int32_t nonlinear_initparameters ( const char *parametersin,
     theApproxGeoState     = approxgeostatic;
     theTensionCutoff      = tensioncutoff;
     theNoSubsteps         = no_substeps;
+    theStiffDamp          = stff_dmp;
+    theStiffDampFreq      = stff_dmp_freq;
 
     auxiliar             = (double*)malloc( sizeof(double) * thePropertiesCount * 16 );
     theVsLimits          = (double*)malloc( sizeof(double) * thePropertiesCount );
@@ -4099,7 +4110,7 @@ void compute_addforce_nl (mesh_t     *myMesh,
         memset( localForceDamp, 0, 8 * sizeof(fvector_t) );
 
         //double b_over_dt = ep->c3 / ep->c1;
-        double b_over_dt = (1.0/100) / ( 10 * PI * sqrt(theDeltaTSquared) ); // Added stiffness damping = 1.0% at 10Hz
+        double b_over_dt = theStiffDamp / ( theStiffDampFreq * PI * sqrt(theDeltaTSquared) ); // Added stiffness damping to improve stability
 
         for (i = 0; i < 8; i++) {
             int32_t    lnid = elemp->lnid[i];
