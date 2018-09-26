@@ -1455,19 +1455,21 @@ setrec( octant_t* leaf, double ticksize, void* data )
 
 */
 //		 Reset Shear Velocities. Doriam for cubic basin
-                res = cvm_query( Global.theCVMEp, y_m, x_m, z_m, &g_props );
-                if ( ( y_m <= 96.0 ) && ( y_m >= 32.0 ) && ( x_m <= 96.0) && ( x_m >= 32.0 ) && (z_m>=0.0) && (z_m<=32.0)) {
+                res = cvm_query( Global.theCVMEp, 64.0, 64.0, 120.0, &g_props );
+/*                if ( ( y_m <= 96.0 ) && ( y_m >= 32.0 ) && ( x_m <= 96.0) && ( x_m >= 32.0 ) && (z_m>=0.0) && (z_m<=32.0)) {
                     g_props.Vs = 200.0;
                     g_props.Vp = 346.41;
                     g_props.rho = 1800.00;
                 }
                 else if (( y_m <= 96.0 ) && ( y_m >= 32.0 ) && ( x_m <= 96.0) && ( x_m >= 32.0 ) && (z_m>=32.0) && (z_m <= 64.0)) {
-                    g_props.Vs = 400.0;
-                    g_props.Vp = 692.82;
+                    //g_props.Vs = 400.0;
+                    //g_props.Vp = 692.82;
+                    g_props.Vs = 200.0;
+                    g_props.Vp = 346.41;
                     g_props.rho = 1800.00;
                 }
 
-		if (res != 0) {
+*/		if (res != 0) {
 		    continue;
 		}
 
@@ -7587,17 +7589,19 @@ mesh_correct_properties( etree_t* cvm )
 */
 //            		 Reset Shear Velocities. Doriam
                     res = cvm_query( Global.theCVMEp, east_m, north_m, depth_m, &g_props );
-                    if ( ( east_m <= 96.0 ) && ( east_m >= 32.0 ) && ( north_m <= 96.0) && ( north_m >= 32.0 ) && (depth_m>=0.0) && (depth_m<=32.0)) {
+/*                    if ( ( east_m <= 96.0 ) && ( east_m >= 32.0 ) && ( north_m <= 96.0) && ( north_m >= 32.0 ) && (depth_m>=0.0) && (depth_m<=32.0)) {
                         g_props.Vs = 200.0; 
                         g_props.Vp = 346.41;
                         g_props.rho = 1800.00;
                     }
                     else if (( east_m <= 96.0 ) && ( east_m >= 32.0 ) && ( north_m <= 96.0) && ( north_m >= 32.0 ) && (depth_m>=32.0) && (depth_m <= 64.0)) {
-                        g_props.Vs = 400.0;
-                        g_props.Vp = 692.82;
+                       // g_props.Vs = 400.0;
+                       // g_props.Vp = 692.82;
+                        g_props.Vs = 200.0;
+                        g_props.Vp = 346.41;
                         g_props.rho = 1800.00;
                     }
-                    if (res != 0) {
+*/                  if (res != 0) {
                         fprintf(stderr, "Cannot find the query point: east = %lf, north = %lf, depth = %lf",east_m, north_m,depth_m);
                         exit(1);
                     }
