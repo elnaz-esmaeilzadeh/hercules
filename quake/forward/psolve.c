@@ -4053,7 +4053,7 @@ static void solver_nonlinear_state( mysolver_t *solver,
     if ( Param.includeNonlinearAnalysis == YES ) {
         Timer_Start( "Compute Non-linear Entities" );
         compute_nonlinear_state ( mesh, solver, Param.theNumberOfStations,
-                                  Param.myNumberOfStations, Param.myStations, Param.theDeltaT );
+                                  Param.myNumberOfStations, Param.myStations, Param.theDeltaT, step );
         if ( get_geostatic_total_time() > 0 ) {
             compute_bottom_reactions( mesh, solver, k1, k2, step, Param.theDeltaT );
         }
@@ -7777,7 +7777,6 @@ int main( int argc, char** argv )
     Timer_Reduce("Mesh Stats Print", MAX | MIN, comm_solver);
 
 
-
     if ( Param.theNumberOfStations !=0 ){
         output_stations_init(Param.parameters_input_file);
     }
@@ -7786,6 +7785,7 @@ int main( int argc, char** argv )
     if ( ( Param.includeTopography == YES ) && ( Param.theNumberOfStations !=0 ) ) {
             topography_stations_init(Global.myMesh, Param.myStations, Param.myNumberOfStations);
         }
+
 
     /* Initialize the output planes */
     if ( Param.theNumberOfPlanes != 0 ) {
