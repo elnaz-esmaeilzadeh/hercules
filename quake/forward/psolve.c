@@ -6653,7 +6653,7 @@ compute_csi_eta_dzeta( octant_t* octant, vector3D_t pointcoords,
 
 	//FILE  *topoinfo = hu_fopen( "topoElem.txt", "w" );
 
-	if ( ( Param.includeTopography == YES ) && ( isTopoElement ( Global.myMesh, eindex) )
+	if ( ( Param.includeTopography == YES ) && ( isTopoElement ( Global.myMesh, eindex, 0) )
 		 && (get_topo_meth() == VT ) && (Param.drmImplement == NO) ) {
 		elem_t  *elemp;
 		edata_t *edata;
@@ -7782,9 +7782,8 @@ int main( int argc, char** argv )
     }
 
     /* include additional info for topo stations */
-    if ( ( Param.includeTopography == YES ) && ( Param.theNumberOfStations !=0 ) ) {
+    if ( ( Param.includeTopography == YES ) && ( Param.theNumberOfStations !=0 ) )
             topography_stations_init(Global.myMesh, Param.myStations, Param.myNumberOfStations);
-        }
 
 
     /* Initialize the output planes */
@@ -7812,6 +7811,10 @@ int main( int argc, char** argv )
         nonlinear_stats(Global.myID, Global.theGroupSize);
     }
     
+    /* include additional info for topo stations */
+    if ( Param.includeTopography == YES  )
+            topo_stats(Global.myID, Global.theGroupSize);
+
 
     if ( Param.includeIncidentPlaneWaves == YES ){
     	PlaneWaves_solver_init( Global.myID, Global.myMesh, Global.mySolver );

@@ -39,6 +39,7 @@ typedef struct topoconstants_t {
     double       rho;
     double       h;
     double       tetraVol[5];
+    int          isTopoNonlin;
 
 } topoconstants_t;
 
@@ -67,7 +68,7 @@ double get_thebase_topo();
 int    BelongstoTopography    (mesh_t *myMesh, int32_t eindex);
 etreetype_t get_theetree_type ();
 int    topo_correctproperties ( edata_t *edata );
-int    isTopoElement (mesh_t *myMesh, int32_t eindex);
+int    isTopoElement (mesh_t *myMesh, int32_t eindex, int32_t topoNonlin_flag);
 
 int    topo_toexpand            ( octant_t *leaf, double    ticksize, edata_t  *edata, double VsFactor );
 void   topo_init                ( int32_t myID, const char *parametersin );
@@ -103,5 +104,11 @@ void compute_addforce_topoDRM ( mesh_t     *myMesh,
                                 double      theDeltaT,
                                 int         step,
                                 fmatrix_t (*theK1)[8], fmatrix_t (*theK2)[8]);
+
+void topo_stats(int32_t myID, int32_t theGroupSize) ;
+void topo_print_stats(int32_t *topoElementsCount,
+                           int32_t *topoStationsCount,
+                           int32_t *topoNonlinElementsCount,
+                           int32_t  theGroupSize) ;
 
 #endif /* TOPOGRAPHY_H_ */

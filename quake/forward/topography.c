@@ -51,6 +51,8 @@ static int32_t            myTopoElementsCount = 0;
 static int32_t            *myTopoElementsMapping;
 static topometh_t         theTopoMethod;
 static topostation_t      *myTopoStations;
+static int32_t            myNumberOfTopoStations = 0;
+static int32_t            myNumberOfTopoNonLinElements = 0;
 
 /*static double The_hypocenter_lat_deg = 0;
 static double The_hypocenter_long_deg = 0;
@@ -159,7 +161,7 @@ double get_thebase_topo() {
 
 
 //returns YES if  element belongs to topography
-int isTopoElement (mesh_t *myMesh, int32_t eindex) {
+int isTopoElement (mesh_t *myMesh, int32_t eindex, int32_t topoNonlin_flag) {
 
     int32_t topo_eindex;
     elem_t  *elemp;
@@ -181,8 +183,14 @@ int isTopoElement (mesh_t *myMesh, int32_t eindex) {
 
 		eindexT = myTopoElementsMapping[topo_eindex];
 
-		if ( eindexT == eindex )
+		if ( eindexT == eindex ) {
+			if ( topoNonlin_flag == 1 ) {
+				topoconstants_t *ecp    = myTopoSolver->topoconstants + topo_eindex;
+				ecp->isTopoNonlin = 1;
+				myNumberOfTopoNonLinElements++;
+			}
 			return YES;
+		}
 
 	} /* for all topograhy elements */
 
@@ -1247,6 +1255,93 @@ void toponodes_mass(int32_t eindex, double nodes_mass[8], double M,
 
 }
 
+/*
+ * Prints statistics about number of topo elements and stations
+ * Modified form nonlinear_print_stats.
+ */
+void topo_print_stats(int32_t *topoElementsCount,
+                           int32_t *topoStationsCount,
+                           int32_t *topoNonlinElementsCount,
+                           int32_t  theGroupSize)
+{
+
+    int pid;
+    global_id_t totalElements = 0;
+    global_id_t totalStations = 0;
+    global_id_t totaltopoNonlin = 0;
+
+    FILE *fp = hu_fopen( "stat-topo.txt", "w" );
+
+    fputs( "\n"
+           "# -------------------------------------------------------- \n"
+           "#            Topo elements and stations count:             \n"
+           "# -------------------------------------------------------- \n"
+           "# Rank     Elements     TopoNonlin_Elements    Stations    \n"
+           "# -------------------------------------------------------- \n", fp );
+
+    for ( pid = 0; pid < theGroupSize; pid++ ) {
+
+        fprintf( fp, "%06d %11d    %11d       %11d\n", pid,
+        		topoElementsCount[pid],
+        		topoNonlinElementsCount[pid],
+        		topoStationsCount[pid]);
+
+        totalElements += topoElementsCount[pid];
+        totalStations += topoStationsCount[pid];
+        totaltopoNonlin += topoNonlinElementsCount[pid];
+    }
+
+    fprintf( fp,
+             "# ------------------------------------------------------------- \n"
+             "# Total%11"INT64_FMT"    %11"INT64_FMT"       %11"INT64_FMT"    \n"
+             "# ------------------------------------------------------------- \n\n",
+             totalElements, totaltopoNonlin, totalStations );
+
+    hu_fclosep( &fp );
+
+    /* output aggregate information to the monitor file / stdout */
+    fprintf( stdout,
+             "\nTopo mesh information\n"
+             "Total number of topo elements: %15"INT64_FMT"\n"
+             "Total number of topoNonlinear elements: %6"INT64_FMT"\n"
+             "Total number of topo stations: %15"INT64_FMT"\n\n",
+             totalElements, totaltopoNonlin, totalStations );
+
+    fflush( stdout );
+
+}
+
+void topo_stats(int32_t myID, int32_t theGroupSize) {
+
+    int32_t *topoElementsCount = NULL;
+    int32_t *topoStationsCount = NULL;
+    int32_t *topoNonlinElementsCount = NULL;
+
+    if ( myID == 0 ) {
+        XMALLOC_VAR_N( topoElementsCount, int32_t, theGroupSize);
+        XMALLOC_VAR_N( topoStationsCount, int32_t, theGroupSize);
+        XMALLOC_VAR_N( topoNonlinElementsCount, int32_t, theGroupSize);
+    }
+
+    MPI_Gather( &myTopoElementsCount,    1, MPI_INT,
+    		    topoElementsCount,       1, MPI_INT, 0, comm_solver );
+    MPI_Gather( &myNumberOfTopoStations, 1, MPI_INT,
+    		   topoStationsCount, 1, MPI_INT, 0, comm_solver );
+    MPI_Gather( &myNumberOfTopoNonLinElements, 1, MPI_INT,
+    		     topoNonlinElementsCount, 1, MPI_INT, 0, comm_solver );
+
+    if ( myID == 0 ) {
+
+        topo_print_stats( topoElementsCount, topoStationsCount,topoNonlinElementsCount,
+                               theGroupSize);
+
+        xfree_int32_t( &topoElementsCount );
+    }
+
+    return;
+}
+
+
 void topography_elements_count(int32_t myID, mesh_t *myMesh ) {
 
     int32_t eindex;
@@ -1967,7 +2062,8 @@ void topography_stations_init( mesh_t    *myMesh,
                 		                   myTopoStations[iStation].local_coord,
                 		                   xo, yo, zo, ecp->h );
 
-                ++count;
+                myNumberOfTopoStations++;
+                //++count;
 
                 break;
             }
@@ -1977,7 +2073,7 @@ void topography_stations_init( mesh_t    *myMesh,
     } /* for all my stations */
 
 
-    fprintf(stdout,"Topographic Stations count = %d",count);
+    //fprintf(stdout,"Topographic Stations count = %d",count);
 
 }
 
