@@ -25,13 +25,17 @@
 #include <gsl/gsl_poly.h>
 #include <stdio.h>
 
+//#include "octor.h"
 #include "geometrics.h"
 #include "nonlinear.h"
-#include "octor.h"
-#include "psolve.h"
+//#include "psolve.h"
 #include "quake_util.h"
 #include "util.h"
-#include "stiffness.h"
+//#include "stiffness.h"
+#include "topography.h"
+
+
+
 
 #define  QC  qc = 0.577350269189 /* sqrt(3.0)/3.0; */
 
@@ -1239,6 +1243,9 @@ void nonlinear_solver_init(int32_t myID, mesh_t *myMesh, double depth) {
                 break;
         }
 
+        // verify for TopoNolinear element
+
+        ecp->isTopoNonlin =  isTopoElement ( myMesh, eindex);
 
         ecp->strainrate  =
         		interpolate_property_value(elementVs, theStrainRates  );

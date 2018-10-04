@@ -19,6 +19,10 @@
 #ifndef TOPOGRAPHY_H_
 #define TOPOGRAPHY_H_
 
+#include "nonlinear.h"
+#include "octor.h"
+#include "cvm.h"
+
 
 /* -------------------------------------------------------------------------- */
 /*                        Structures and definitions                          */

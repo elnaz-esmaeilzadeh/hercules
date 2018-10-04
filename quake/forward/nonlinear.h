@@ -130,6 +130,8 @@ typedef struct nlconstants_t {
     double maxFs;
     double avgFs;
 
+    int isTopoNonlin;
+
 } nlconstants_t;
 
 typedef struct nlsolver_t {

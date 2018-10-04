@@ -24,16 +24,16 @@
 #include <stdio.h>
 
 #include "psolve.h"
-#include "octor.h"
+//#include "octor.h"
 #include "util.h"
-#include "stiffness.h"
+//#include "stiffness.h"
 #include "quake_util.h"
 #include "quakesource.h"
 //#include "commutil.h"
-#include "cvm.h"
+//#include "cvm.h"
 #include "nonlinear.h"
 #include "topography.h"
-#include "geometrics.h"
+//#include "geometrics.h"
 
 
 /* -------------------------------------------------------------------------- */
