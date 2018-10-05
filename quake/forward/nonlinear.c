@@ -4204,6 +4204,7 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
 		double         h;          /* Element edge-size in meters   */
 		double         mu, lambda; /* Elasticity material constants */
 		double         XI, QC;
+		double         ngp;
 		fvector_t      u[8];
 		qptensors_t   *stresses, *tstrains, *tstrains1, *pstrains1, *pstrains2, *alphastress1, *alphastress2, *Sref;
 		qpvectors_t   *epstr1, *epstr2,   *psi_n,   *lounlo_n,   *Sv_n,   *Sv_max, *kappa;
@@ -4253,19 +4254,29 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
 			continue;
 		}
 
+		if ( enlcons->isTopoNonlin == 1 )
+			ngp = 5;
+		else
+			ngp = 8;
+
 		/* Loop over the quadrature points */
-		for (i = 0; i < 8; i++) {
+		for (i = 0; i < ngp; i++) {
 
 			tensor_t  sigma0;
 
-			/* Quadrature point local coordinates */
-			double lx = xi[0][i] * qc ;
-			double ly = xi[1][i] * qc ;
-			double lz = xi[2][i] * qc ;
+			if ( ngp == 8 ) {
+				/* Quadrature point local coordinates */
+				double lx = xi[0][i] * qc ;
+				double ly = xi[1][i] * qc ;
+				double lz = xi[2][i] * qc ;
 
-			tstrains1->qp[i]    = copy_tensor ( tstrains->qp[i] ); // get elastic strains at t-1
-			/* Calculate total strains */
-			tstrains->qp[i] = point_strain(u, lx, ly, lz, h);
+				tstrains1->qp[i]    = copy_tensor ( tstrains->qp[i] ); // get elastic strains at t-1
+				/* Calculate total strains */
+				tstrains->qp[i] = point_strain(u, lx, ly, lz, h);
+			} else {
+				//compute tetrahedron strains
+
+			}
 
 			/* strain and backstress predictor  */
 	        pstrains1->qp[i]    = copy_tensor ( pstrains2->qp[i] );     /* The strain predictor assumes that the current plastic strains equal those from the previous step   */
@@ -4277,9 +4288,9 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
 				continue;
 			} else {
 
-				if ( theApproxGeoState == YES )
-					sigma0 = ApproxGravity_tensor(enlcons->sigmaZ_st, enlcons->phi, h, lz, edata->rho);
-				else
+			//	if ( theApproxGeoState == YES )
+			//		sigma0 = ApproxGravity_tensor(enlcons->sigmaZ_st, enlcons->phi, h, lz, edata->rho);
+			//	else
 					sigma0 = zero_tensor();
 
 				int flagTolSubSteps=0, flagNoSubSteps=0;
