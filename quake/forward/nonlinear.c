@@ -1244,7 +1244,8 @@ void nonlinear_solver_init(int32_t myID, mesh_t *myMesh, double depth) {
         }
 
         // check and update if topo database if TopoNolinear element
-        isTopoElement ( myMesh, eindex, 1);
+        if ( isTopoElement ( myMesh, eindex, 1) )
+        	ecp->isTopoNonlin = 1;
 
         ecp->strainrate  =
         		interpolate_property_value(elementVs, theStrainRates  );

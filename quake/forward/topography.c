@@ -1604,52 +1604,53 @@ void compute_addforce_topoEffective ( mesh_t     *myMesh,
 			node0dat                = &myMesh->nodeTable[elemp->lnid[0]];
 			ep                      = &mySolver->eTable[eindex];
 
-	        /* get coordinates of element zero node */
-			double xo = (node0dat->x)*(myMesh->ticksize);
-			double yo = (node0dat->y)*(myMesh->ticksize);
-			double zo = (node0dat->z)*(myMesh->ticksize);
+			if ( topo_ec.isTopoNonlin == 0 ) {
+				/* get coordinates of element zero node */
+				double xo = (node0dat->x)*(myMesh->ticksize);
+				double yo = (node0dat->y)*(myMesh->ticksize);
+				double zo = (node0dat->z)*(myMesh->ticksize);
 
-			memset( localForce, 0, 8 * sizeof(fvector_t) );
+				memset( localForce, 0, 8 * sizeof(fvector_t) );
 
-			double b_over_dt = ep->c3 / ep->c1;
-			/* get cube's displacements */
-	        for (i = 0; i < 8; i++) {
-	            int32_t    lnid = elemp->lnid[i];
-	            fvector_t* tm1Disp = mySolver->tm1 + lnid;
-	            fvector_t* tm2Disp = mySolver->tm2 + lnid;
+				double b_over_dt = ep->c3 / ep->c1;
+				/* get cube's displacements */
+				for (i = 0; i < 8; i++) {
+					int32_t    lnid = elemp->lnid[i];
+					fvector_t* tm1Disp = mySolver->tm1 + lnid;
+					fvector_t* tm2Disp = mySolver->tm2 + lnid;
 
-	            /* Rayleigh damping is considered simultaneously   */
-	            curDisp[i].f[0] = tm1Disp->f[0] * ( 1.0 + b_over_dt ) - b_over_dt * tm2Disp->f[0];
-	            curDisp[i].f[1] = tm1Disp->f[1] * ( 1.0 + b_over_dt ) - b_over_dt * tm2Disp->f[1];
-	            curDisp[i].f[2] = tm1Disp->f[2] * ( 1.0 + b_over_dt ) - b_over_dt * tm2Disp->f[2];
-	        }
+					/* Rayleigh damping is considered simultaneously   */
+					curDisp[i].f[0] = tm1Disp->f[0] * ( 1.0 + b_over_dt ) - b_over_dt * tm2Disp->f[0];
+					curDisp[i].f[1] = tm1Disp->f[1] * ( 1.0 + b_over_dt ) - b_over_dt * tm2Disp->f[1];
+					curDisp[i].f[2] = tm1Disp->f[2] * ( 1.0 + b_over_dt ) - b_over_dt * tm2Disp->f[2];
+				}
 
 
-	        if (vector_is_zero( curDisp ) != 0)
-	        	TetraForces( curDisp, localForce, topo_ec.tetraVol ,
-	        			     edata, topo_ec.mu, topo_ec.lambda,
-	        			     xo, yo, zo );
+				if (vector_is_zero( curDisp ) != 0)
+					TetraForces( curDisp, localForce, topo_ec.tetraVol ,
+								 edata, topo_ec.mu, topo_ec.lambda,
+								 xo, yo, zo );
 
-			/* Loop over the 8 element nodes:
-			 * Add the contribution calculated above to the node
-			 * forces carried from the source and stiffness.
-			 */
+				/* Loop over the 8 element nodes:
+				 * Add the contribution calculated above to the node
+				 * forces carried from the source and stiffness.
+				 */
 
-			for (i = 0; i < 8; i++) {
+				for (i = 0; i < 8; i++) {
 
-				int32_t    lnid;
-				fvector_t *nodalForce;
+					int32_t    lnid;
+					fvector_t *nodalForce;
 
-				lnid = elemp->lnid[i];
+					lnid = elemp->lnid[i];
 
-				nodalForce = mySolver->force + lnid;
+					nodalForce = mySolver->force + lnid;
 
-				nodalForce->f[0] -= localForce[i].f[0] * theDeltaTSquared;
-				nodalForce->f[1] -= localForce[i].f[1] * theDeltaTSquared;
-				nodalForce->f[2] -= localForce[i].f[2] * theDeltaTSquared;
+					nodalForce->f[0] -= localForce[i].f[0] * theDeltaTSquared;
+					nodalForce->f[1] -= localForce[i].f[1] * theDeltaTSquared;
+					nodalForce->f[2] -= localForce[i].f[2] * theDeltaTSquared;
 
-			} /* element nodes */
-
+				} /* element nodes */
+			}
 	}
 
 	return;
