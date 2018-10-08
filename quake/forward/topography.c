@@ -53,6 +53,8 @@ static topometh_t         theTopoMethod;
 static topostation_t      *myTopoStations;
 static int32_t            myNumberOfTopoStations = 0;
 static int32_t            myNumberOfTopoNonLinElements = 0;
+static noyesflag_t        considerNonlinTopo  = NO;
+
 
 /*static double The_hypocenter_lat_deg = 0;
 static double The_hypocenter_long_deg = 0;
@@ -988,7 +990,7 @@ topography_initparameters ( const char *parametersin )
 
     FILE        *fp;
     int 		my_Maxoctlevel;
-    char        my_etree_model[64], my_fem_meth[64];
+    char        my_etree_model[64], my_fem_meth[64], consider_topo_nonlin[64];
     double      my_thebase_zcoord,my_L_ew, my_L_ns, my_theLy, my_theBR, my_theHR, my_theFLR,
     			my_theSLR, my_theFLRaiR, my_theSLRaiR, my_theVs1R, my_theVs2R,
     			my_theVsHS,my_theVpHS,my_therhoHS, my_theRotation;
@@ -996,8 +998,11 @@ topography_initparameters ( const char *parametersin )
     topometh_t          my_topo_method;
 
 
-    /* Opens parametersin file */
 
+
+    noyesflag_t          considerTopoNonlin = -1;
+
+    /* Opens parametersin file */
     if ( ( fp = fopen(parametersin, "r" ) ) == NULL ) {
         fprintf( stderr,
                  "Error opening %s\n at topography_initparameters",
@@ -1007,25 +1012,26 @@ topography_initparameters ( const char *parametersin )
 
     /* Parses parametersin to capture topography single-value parameters */
 
-    if ( ( parsetext(fp, "maximum_octant_level",    'i', &my_Maxoctlevel           ) != 0) ||
-         ( parsetext(fp, "computation_method",      's', &my_fem_meth              ) != 0) ||
-         ( parsetext(fp, "topographybase_zcoord",   'd', &my_thebase_zcoord           ) != 0) ||
-         ( parsetext(fp, "region_length_east_m",    'd', &my_L_ew                  ) != 0) ||
-         ( parsetext(fp, "region_length_north_m",   'd', &my_L_ns                  ) != 0) ||
-         ( parsetext(fp, "type_of_etree",           's', &my_etree_model           ) != 0) ||
-         ( parsetext(fp, "Mnt_YLong",               'd', &my_theLy                 ) != 0) ||
-         ( parsetext(fp, "Base_ratio",              'd', &my_theBR                 ) != 0) ||
-         ( parsetext(fp, "Height_ratio",            'd', &my_theHR                 ) != 0) ||
-         ( parsetext(fp, "Fst_lay_ratio",           'd', &my_theFLR                ) != 0) ||
-         ( parsetext(fp, "Snd_lay_ratio",           'd', &my_theSLR                ) != 0) ||
-         ( parsetext(fp, "Fst_lay_Raising_ratio",   'd', &my_theFLRaiR             ) != 0) ||
-         ( parsetext(fp, "Snd_lay_Raising_ratio",   'd', &my_theSLRaiR             ) != 0) ||
-         ( parsetext(fp, "Vs1_ratio",               'd', &my_theVs1R               ) != 0) ||
-         ( parsetext(fp, "Vs2_ratio",               'd', &my_theVs2R               ) != 0) ||
-         ( parsetext(fp, "VsHs",                    'd', &my_theVsHS               ) != 0) ||
-         ( parsetext(fp, "VpHs",                    'd', &my_theVpHS               ) != 0) ||
-         ( parsetext(fp, "Rotation",                'd', &my_theRotation           ) != 0) ||
-         ( parsetext(fp, "rhoHs",                   'd', &my_therhoHS              ) != 0)  )
+    if ( ( parsetext(fp, "maximum_octant_level",    		'i', &my_Maxoctlevel           ) != 0) ||
+         ( parsetext(fp, "computation_method",      		's', &my_fem_meth              ) != 0) ||
+         ( parsetext(fp, "topographybase_zcoord",   		'd', &my_thebase_zcoord        ) != 0) ||
+         ( parsetext(fp, "consider_nonlinear_topography",  	's', &consider_topo_nonlin     ) != 0) ||
+         ( parsetext(fp, "region_length_east_m",    		'd', &my_L_ew                  ) != 0) ||
+         ( parsetext(fp, "region_length_north_m",   		'd', &my_L_ns                  ) != 0) ||
+         ( parsetext(fp, "type_of_etree",           		's', &my_etree_model           ) != 0) ||
+         ( parsetext(fp, "Mnt_YLong",               		'd', &my_theLy                 ) != 0) ||
+         ( parsetext(fp, "Base_ratio",              		'd', &my_theBR                 ) != 0) ||
+         ( parsetext(fp, "Height_ratio",            		'd', &my_theHR                 ) != 0) ||
+         ( parsetext(fp, "Fst_lay_ratio",           		'd', &my_theFLR                ) != 0) ||
+         ( parsetext(fp, "Snd_lay_ratio",           		'd', &my_theSLR                ) != 0) ||
+         ( parsetext(fp, "Fst_lay_Raising_ratio",   		'd', &my_theFLRaiR             ) != 0) ||
+         ( parsetext(fp, "Snd_lay_Raising_ratio",   		'd', &my_theSLRaiR             ) != 0) ||
+         ( parsetext(fp, "Vs1_ratio",               		'd', &my_theVs1R               ) != 0) ||
+         ( parsetext(fp, "Vs2_ratio",               		'd', &my_theVs2R               ) != 0) ||
+         ( parsetext(fp, "VsHs",                    		'd', &my_theVsHS               ) != 0) ||
+         ( parsetext(fp, "VpHs",                    		'd', &my_theVpHS               ) != 0) ||
+         ( parsetext(fp, "Rotation",                		'd', &my_theRotation           ) != 0) ||
+         ( parsetext(fp, "rhoHs",                   		'd', &my_therhoHS              ) != 0)  )
     {
         fprintf( stderr,
                  "Error parsing topography parameters from %s\n",
@@ -1053,6 +1059,18 @@ topography_initparameters ( const char *parametersin )
         fprintf(stderr,
                 "Illegal computation_method for topography analysis"
                 "(vt, fem): %s\n", my_fem_meth);
+        return -1;
+    }
+
+    if ( strcasecmp(consider_topo_nonlin, "yes") == 0 ) {
+        considerTopoNonlin = YES;
+    } else if ( strcasecmp(consider_topo_nonlin, "no") == 0 ) {
+    	considerTopoNonlin = NO;
+    } else {
+        fprintf(stderr,
+        		"Unknown response for considering "
+                " nonlinear topography (yes or no): %s\n",
+                consider_topo_nonlin );
         return -1;
     }
 
@@ -1604,7 +1622,7 @@ void compute_addforce_topoEffective ( mesh_t     *myMesh,
 			node0dat                = &myMesh->nodeTable[elemp->lnid[0]];
 			ep                      = &mySolver->eTable[eindex];
 
-			if ( topo_ec.isTopoNonlin == 0 ) {
+			if ( topo_ec.isTopoNonlin == 0 || considerNonlinTopo == NO ) {
 				/* get coordinates of element zero node */
 				double xo = (node0dat->x)*(myMesh->ticksize);
 				double yo = (node0dat->y)*(myMesh->ticksize);
