@@ -53,7 +53,7 @@ static topometh_t         theTopoMethod;
 static topostation_t      *myTopoStations;
 static int32_t            myNumberOfTopoStations = 0;
 static int32_t            myNumberOfTopoNonLinElements = 0;
-static noyesflag_t        considerNonlinTopo  = NO;
+static noyesflag_t        theNonlinTopo_flag  = NO;
 
 
 /*static double The_hypocenter_lat_deg = 0;
@@ -186,7 +186,7 @@ int isTopoElement (mesh_t *myMesh, int32_t eindex, int32_t topoNonlin_flag) {
 		eindexT = myTopoElementsMapping[topo_eindex];
 
 		if ( eindexT == eindex ) {
-			if ( topoNonlin_flag == 1 ) {
+			if ( topoNonlin_flag == 1 && theNonlinTopo_flag == YES ) {
 				topoconstants_t *ecp    = myTopoSolver->topoconstants + topo_eindex;
 				ecp->isTopoNonlin = 1;
 				myNumberOfTopoNonLinElements++;
@@ -990,7 +990,7 @@ topography_initparameters ( const char *parametersin )
 
     FILE        *fp;
     int 		my_Maxoctlevel;
-    char        my_etree_model[64], my_fem_meth[64], consider_topo_nonlin[64];
+    char        my_etree_model[64], my_fem_meth[64], consider_topo_nonlin[64], include_nonlin_analysis[64];
     double      my_thebase_zcoord,my_L_ew, my_L_ns, my_theLy, my_theBR, my_theHR, my_theFLR,
     			my_theSLR, my_theFLRaiR, my_theSLRaiR, my_theVs1R, my_theVs2R,
     			my_theVsHS,my_theVpHS,my_therhoHS, my_theRotation;
@@ -1016,6 +1016,7 @@ topography_initparameters ( const char *parametersin )
          ( parsetext(fp, "computation_method",      		's', &my_fem_meth              ) != 0) ||
          ( parsetext(fp, "topographybase_zcoord",   		'd', &my_thebase_zcoord        ) != 0) ||
          ( parsetext(fp, "consider_nonlinear_topography",  	's', &consider_topo_nonlin     ) != 0) ||
+         ( parsetext(fp, "include_nonlinear_analysis",  	's', &include_nonlin_analysis  ) != 0) ||
          ( parsetext(fp, "region_length_east_m",    		'd', &my_L_ew                  ) != 0) ||
          ( parsetext(fp, "region_length_north_m",   		'd', &my_L_ns                  ) != 0) ||
          ( parsetext(fp, "type_of_etree",           		's', &my_etree_model           ) != 0) ||
@@ -1064,6 +1065,14 @@ topography_initparameters ( const char *parametersin )
 
     if ( strcasecmp(consider_topo_nonlin, "yes") == 0 ) {
         considerTopoNonlin = YES;
+        if ( strcasecmp(include_nonlin_analysis, "no") == 0 ) {
+            fprintf(stderr,
+            		"Must turn on nonlinear analysis \n"
+                    "to consider topographic nonlinearity. \n"
+            		"include_nonlinear_analysis: %s\n",
+                    include_nonlin_analysis );
+            return -1;
+        }
     } else if ( strcasecmp(consider_topo_nonlin, "no") == 0 ) {
     	considerTopoNonlin = NO;
     } else {
@@ -1101,6 +1110,7 @@ topography_initparameters ( const char *parametersin )
     /* Initialize the static global variables */
 	theMaxoctlevel      = my_Maxoctlevel;
 	theTopoMethod       = my_topo_method;
+	theNonlinTopo_flag  = considerTopoNonlin;
 	thebase_zcoord		= my_thebase_zcoord;
 	theDomainLong_ew    = my_L_ew;
 	theDomainLong_ns    = my_L_ns;
@@ -1124,7 +1134,7 @@ topography_initparameters ( const char *parametersin )
 
 void topo_init ( int32_t myID, const char *parametersin ) {
 
-    int     int_message[3];
+    int     int_message[4];
     double  double_message[16];
 
     /* Capturing data from file --- only done by PE0 */
@@ -1160,10 +1170,11 @@ void topo_init ( int32_t myID, const char *parametersin ) {
     int_message   [0]    = theMaxoctlevel;
     int_message   [1]    = (int)theEtreeType;
     int_message   [2]    = (int)theTopoMethod;
+    int_message   [3]    = (int)theNonlinTopo_flag;
 
 
     MPI_Bcast(double_message, 16, MPI_DOUBLE, 0, comm_solver);
-    MPI_Bcast(int_message,    3, MPI_INT,    0, comm_solver);
+    MPI_Bcast(int_message,    4, MPI_INT,    0, comm_solver);
 
     thebase_zcoord       =  double_message[0];
     theDomainLong_ew     =  double_message[1];
@@ -1185,6 +1196,7 @@ void topo_init ( int32_t myID, const char *parametersin ) {
     theMaxoctlevel       = int_message[0];
     theEtreeType         = int_message[1];
     theTopoMethod        = int_message[2];
+    theNonlinTopo_flag   = int_message[3];
 
     return;
 
@@ -1622,7 +1634,7 @@ void compute_addforce_topoEffective ( mesh_t     *myMesh,
 			node0dat                = &myMesh->nodeTable[elemp->lnid[0]];
 			ep                      = &mySolver->eTable[eindex];
 
-			if ( topo_ec.isTopoNonlin == 0 || considerNonlinTopo == NO ) {
+			if ( topo_ec.isTopoNonlin == 0 || theNonlinTopo_flag == NO ) {
 				/* get coordinates of element zero node */
 				double xo = (node0dat->x)*(myMesh->ticksize);
 				double yo = (node0dat->y)*(myMesh->ticksize);
