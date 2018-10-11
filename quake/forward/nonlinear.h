@@ -363,7 +363,7 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
                                double      theDeltaT,
                                int         step );
 
-tensor_t point_strain_tetrah (fvector_t *u, double h, int teth_i);
+tensor_t point_strain_tetrah (fvector_t *u, double h, int teth_i, double xo, double yo);
 tensor_t point_strain_tetrah_symm (fvector_t *u, double h, int teth_i);
 
 /* -------------------------------------------------------------------------- */

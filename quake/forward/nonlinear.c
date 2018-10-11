@@ -1460,94 +1460,182 @@ tensor_t point_strain (fvector_t *u, double lx, double ly, double lz, double h) 
 /*
  * Compute strain tensor of a given point in the element.
  */
-tensor_t point_strain_tetrah (fvector_t *u, double h, int teth_i) {
+tensor_t point_strain_tetrah (fvector_t *u, double h, int teth_i, double xo, double yo) {
 
-    tensor_t strain = init_tensor();
-    int32_t  N0, N1, N2, N3;
+	tensor_t strain = init_tensor();
+	int32_t  N0, N1, N2, N3;
 
-    switch ( teth_i ) {
+	double theDomainLong_ns = get_theDomain_Lew();
+	double theDomainLong_ew = get_theDomain_Lns();
 
-    case ( 0 ):
-    	N0 = 0;
-    	N1 = 2;
-    	N2 = 1;
-    	N3 = 4;
-		strain.xx =  -( u[N0].f[0] - u[N2].f[0] ) / h; // -(u0 - u2)/h
-		strain.yy =  -( u[N0].f[1] - u[N1].f[1] ) / h; // -(v0 - v1)/h
-		strain.zz =  -( u[N0].f[2] - u[N3].f[2] ) / h; // -(w0 - w3)/h
+	if ( ( ( xo <  theDomainLong_ns / 2.0  ) && ( yo <  theDomainLong_ew / 2.0 ) ) ||
+			( ( xo >= theDomainLong_ns / 2.0 ) && ( yo >= theDomainLong_ew / 2.0 ) ) )
+	{
+		switch ( teth_i ) {
+			case ( 0 ):
+				N0 = 0;
+				N1 = 2;
+				N2 = 1;
+				N3 = 4;
+				strain.xx =  -( u[N0].f[0] - u[N2].f[0] ) / h; // -(u0 - u2)/h
+				strain.yy =  -( u[N0].f[1] - u[N1].f[1] ) / h; // -(v0 - v1)/h
+				strain.zz =  -( u[N0].f[2] - u[N3].f[2] ) / h; // -(w0 - w3)/h
 
-        strain.xy = -0.5 * ( u[N0].f[0] - u[N1].f[0] + u[N0].f[1] - u[N2].f[1] ) / h; // -(u0 - u1 + v0 - v2)/(2*h)
-        strain.yz = -0.5 * ( u[N0].f[1] - u[N3].f[1] + u[N0].f[2] - u[N1].f[2] ) / h; // -(v0 - v3 + w0 - w1)/(2*h)
-        strain.xz = -0.5 * ( u[N0].f[0] - u[N3].f[0] + u[N0].f[2] - u[N2].f[2] ) / h; // -(u0 - u3 + w0 - w2)/(2*h)
+				strain.xy = -0.5 * ( u[N0].f[0] - u[N1].f[0] + u[N0].f[1] - u[N2].f[1] ) / h; // -(u0 - u1 + v0 - v2)/(2*h)
+				strain.yz = -0.5 * ( u[N0].f[1] - u[N3].f[1] + u[N0].f[2] - u[N1].f[2] ) / h; // -(v0 - v3 + w0 - w1)/(2*h)
+				strain.xz = -0.5 * ( u[N0].f[0] - u[N3].f[0] + u[N0].f[2] - u[N2].f[2] ) / h; // -(u0 - u3 + w0 - w2)/(2*h)
 
-        break;
+				break;
 
-    case ( 1 ):
-    	N0 = 3;
-    	N1 = 1;
-    	N2 = 2;
-    	N3 = 7;
+			case ( 1 ):
+				N0 = 3;
+				N1 = 1;
+				N2 = 2;
+				N3 = 7;
 
-		strain.xx =   ( u[N0].f[0] - u[N2].f[0] ) / h; //  (u0 - u2)/h
-		strain.yy =   ( u[N0].f[1] - u[N1].f[1] ) / h; //  (v0 - v1)/h
-		strain.zz =  -( u[N0].f[2] - u[N3].f[2] ) / h; // -(w0 - w3)/h
+				strain.xx =   ( u[N0].f[0] - u[N2].f[0] ) / h; //  (u0 - u2)/h
+				strain.yy =   ( u[N0].f[1] - u[N1].f[1] ) / h; //  (v0 - v1)/h
+				strain.zz =  -( u[N0].f[2] - u[N3].f[2] ) / h; // -(w0 - w3)/h
 
-        strain.xy =  0.5 * ( u[N0].f[0] - u[N1].f[0] + u[N0].f[1] - u[N2].f[1] ) / h; //  (u0 - u1 + v0 - v2)/(2*h)
-        strain.yz = -0.5 * ( u[N0].f[1] - u[N3].f[1] - u[N0].f[2] + u[N1].f[2] ) / h; // -(v0 - v3 - w0 + w1)/(2*h)
-        strain.xz = -0.5 * ( u[N0].f[0] - u[N3].f[0] - u[N0].f[2] + u[N2].f[2] ) / h; // -(u0 - u3 - w0 + w2)/(2*h)
+				strain.xy =  0.5 * ( u[N0].f[0] - u[N1].f[0] + u[N0].f[1] - u[N2].f[1] ) / h; //  (u0 - u1 + v0 - v2)/(2*h)
+				strain.yz = -0.5 * ( u[N0].f[1] - u[N3].f[1] - u[N0].f[2] + u[N1].f[2] ) / h; // -(v0 - v3 - w0 + w1)/(2*h)
+				strain.xz = -0.5 * ( u[N0].f[0] - u[N3].f[0] - u[N0].f[2] + u[N2].f[2] ) / h; // -(u0 - u3 - w0 + w2)/(2*h)
 
-        break;
+				break;
 
-    case ( 2 ):
-		N0 = 6;
-		N1 = 4;
-		N2 = 7;
-		N3 = 2;
+			case ( 2 ):
+				N0 = 6;
+				N1 = 4;
+				N2 = 7;
+				N3 = 2;
 
-		strain.xx =   ( u[N0].f[0] - u[N2].f[0] ) / h; //   (u0 - u2)/h
-		strain.yy =  -( u[N0].f[1] - u[N1].f[1] ) / h; //  -(v0 - v1)/h
-		strain.zz =   ( u[N0].f[2] - u[N3].f[2] ) / h; //   (w0 - w3)/h
+				strain.xx =   ( u[N0].f[0] - u[N2].f[0] ) / h; //   (u0 - u2)/h
+				strain.yy =  -( u[N0].f[1] - u[N1].f[1] ) / h; //  -(v0 - v1)/h
+				strain.zz =   ( u[N0].f[2] - u[N3].f[2] ) / h; //   (w0 - w3)/h
 
-        strain.xy = -0.5 * ( u[N0].f[0] - u[N1].f[0] - u[N0].f[1] + u[N2].f[1] ) / h; //  -(u0 - u1 - v0 + v2)/(2*h)
-        strain.yz =  0.5 * ( u[N0].f[1] - u[N3].f[1] - u[N0].f[2] + u[N1].f[2] ) / h; //   (v0 - v3 - w0 + w1)/(2*h)
-        strain.xz =  0.5 * ( u[N0].f[0] - u[N3].f[0] + u[N0].f[2] - u[N2].f[2] ) / h; //   (u0 - u3 + w0 - w2)/(2*h)
+				strain.xy = -0.5 * ( u[N0].f[0] - u[N1].f[0] - u[N0].f[1] + u[N2].f[1] ) / h; //  -(u0 - u1 - v0 + v2)/(2*h)
+				strain.yz =  0.5 * ( u[N0].f[1] - u[N3].f[1] - u[N0].f[2] + u[N1].f[2] ) / h; //   (v0 - v3 - w0 + w1)/(2*h)
+				strain.xz =  0.5 * ( u[N0].f[0] - u[N3].f[0] + u[N0].f[2] - u[N2].f[2] ) / h; //   (u0 - u3 + w0 - w2)/(2*h)
 
-        break;
+				break;
 
-    case ( 3 ):
-		N0 = 5;
-		N1 = 7;
-		N2 = 4;
-		N3 = 1;
+			case ( 3 ):
+				N0 = 5;
+				N1 = 7;
+				N2 = 4;
+				N3 = 1;
 
-		strain.xx =  -( u[N0].f[0] - u[N2].f[0] ) / h; //  -(u0 - u2)/h
-		strain.yy =   ( u[N0].f[1] - u[N1].f[1] ) / h; //   (v0 - v1)/h
-		strain.zz =   ( u[N0].f[2] - u[N3].f[2] ) / h; //   (w0 - w3)/h
+				strain.xx =  -( u[N0].f[0] - u[N2].f[0] ) / h; //  -(u0 - u2)/h
+				strain.yy =   ( u[N0].f[1] - u[N1].f[1] ) / h; //   (v0 - v1)/h
+				strain.zz =   ( u[N0].f[2] - u[N3].f[2] ) / h; //   (w0 - w3)/h
 
-        strain.xy =  0.5 * ( u[N0].f[0] - u[N1].f[0] - u[N0].f[1] + u[N2].f[1] ) / h; //  (u0 - u1 - v0 + v2)/(2*h)
-        strain.yz =  0.5 * ( u[N0].f[1] - u[N3].f[1] + u[N0].f[2] - u[N1].f[2] ) / h; //  (v0 - v3 + w0 - w1)/(2*h)
-        strain.xz =  0.5 * ( u[N0].f[0] - u[N3].f[0] - u[N0].f[2] + u[N2].f[2] ) / h; //  (u0 - u3 - w0 + w2)/(2*h)
+				strain.xy =  0.5 * ( u[N0].f[0] - u[N1].f[0] - u[N0].f[1] + u[N2].f[1] ) / h; //  (u0 - u1 - v0 + v2)/(2*h)
+				strain.yz =  0.5 * ( u[N0].f[1] - u[N3].f[1] + u[N0].f[2] - u[N1].f[2] ) / h; //  (v0 - v3 + w0 - w1)/(2*h)
+				strain.xz =  0.5 * ( u[N0].f[0] - u[N3].f[0] - u[N0].f[2] + u[N2].f[2] ) / h; //  (u0 - u3 - w0 + w2)/(2*h)
 
-        break;
+				break;
 
-    case ( 4 ):
-		N0 = 2;
-		N1 = 4;
-		N2 = 7;
-		N3 = 1;
+			case ( 4 ):
+				N0 = 2;
+				N1 = 4;
+				N2 = 7;
+				N3 = 1;
 
-		strain.xx =   0.5 * ( u[N0].f[0] -       u[N1].f[0] - u[N2].f[0] + u[N3].f[0] ) / h; //   (u0 - u1   - u2  + u3)/(2*h)
-		strain.yy =   0.5 * ( u[N1].f[1] - 3.0 * u[N0].f[1] + u[N2].f[1] + u[N3].f[1] ) / h; //   (v1 - 3*v0 + v2  + v3)/(2*h)
-		strain.zz =   0.5 * ( u[N0].f[2] +       u[N1].f[2] - u[N2].f[2] - u[N3].f[2] ) / h; //   (w0 + w1   - w2  - w3)/(2*h)
+				strain.xx =   0.5 * ( u[N0].f[0] -       u[N1].f[0] - u[N2].f[0] + u[N3].f[0] ) / h; //   (u0 - u1   - u2  + u3)/(2*h)
+				strain.yy =   0.5 * ( u[N1].f[1] - 3.0 * u[N0].f[1] + u[N2].f[1] + u[N3].f[1] ) / h; //   (v1 - 3*v0 + v2  + v3)/(2*h)
+				strain.zz =   0.5 * ( u[N0].f[2] +       u[N1].f[2] - u[N2].f[2] - u[N3].f[2] ) / h; //   (w0 + w1   - w2  - w3)/(2*h)
 
-        strain.xy =   0.25 * ( u[N1].f[0] - 3.0 * u[N0].f[0] + u[N2].f[0] + u[N3].f[0] +       u[N0].f[1] - u[N1].f[1] - u[N2].f[1] + u[N3].f[1] ) / h; //  (u1 - 3*u0 + u2 + u3 + v0   - v1 - v2 + v3)/(4*h)
-        strain.yz =   0.25 * ( u[N0].f[1] +       u[N1].f[1] - u[N2].f[1] - u[N3].f[1] - 3.0 * u[N0].f[2] + u[N1].f[2] + u[N2].f[2] + u[N3].f[2] ) / h; //  (v0 + v1   - v2 - v3 - 3*w0 + w1 + w2 + w3)/(4*h)
-        strain.xz =   0.25 * ( u[N0].f[0] +       u[N1].f[0] - u[N2].f[0] - u[N3].f[0] +       u[N0].f[2] - u[N1].f[2] - u[N2].f[2] + u[N3].f[2] ) / h; //  (u0 + u1   - u2 - u3 + w0   - w1 - w2 + w3)/(4*h)
+				strain.xy =   0.25 * ( u[N1].f[0] - 3.0 * u[N0].f[0] + u[N2].f[0] + u[N3].f[0] +       u[N0].f[1] - u[N1].f[1] - u[N2].f[1] + u[N3].f[1] ) / h; //  (u1 - 3*u0 + u2 + u3 + v0   - v1 - v2 + v3)/(4*h)
+				strain.yz =   0.25 * ( u[N0].f[1] +       u[N1].f[1] - u[N2].f[1] - u[N3].f[1] - 3.0 * u[N0].f[2] + u[N1].f[2] + u[N2].f[2] + u[N3].f[2] ) / h; //  (v0 + v1   - v2 - v3 - 3*w0 + w1 + w2 + w3)/(4*h)
+				strain.xz =   0.25 * ( u[N0].f[0] +       u[N1].f[0] - u[N2].f[0] - u[N3].f[0] +       u[N0].f[2] - u[N1].f[2] - u[N2].f[2] + u[N3].f[2] ) / h; //  (u0 + u1   - u2 - u3 + w0   - w1 - w2 + w3)/(4*h)
 
-        break;
-    }
+			break;
 
-    return strain;
+		} }  else {
+				switch ( teth_i ) {
+
+					case ( 0 ):
+						N0 = 0;
+						N1 = 3;
+						N2 = 1;
+						N3 = 5;
+						strain.xx =  -( u[N0].f[0] - u[N2].f[0] ) / h;                           // -(u0 - u2)/h
+						strain.yy =   ( u[N0].f[1] + u[N1].f[1] - u[N2].f[1] - u[N3].f[1] ) / h; //  (v0 + v1 - v2 - v3)/h
+						strain.zz =  -( u[N0].f[2] - u[N3].f[2] ) / h;                           // -(w0 - w3)/h
+
+						strain.xy =  0.5 * ( u[N0].f[0] + u[N1].f[0] - u[N2].f[0] - u[N3].f[0] - u[N0].f[1] + u[N2].f[1] ) / h; //   (u0 + u1 - u2 - u3 - v0 + v2)/(2*h)
+						strain.yz = -0.5 * ( u[N0].f[1] - u[N3].f[1] - u[N0].f[2] - u[N1].f[2] + u[N2].f[2] + u[N3].f[2] ) / h; //  -(v0 - v3 - w0 - w1 + w2 + w3)/(2*h)
+						strain.xz = -0.5 * ( u[N0].f[0] - u[N3].f[0] + u[N0].f[2] - u[N2].f[2] ) / h;                           //  -(u0 - u3 + w0 - w2)/(2*h)
+
+						break;
+
+					case ( 1 ):
+						N0 = 0;
+						N1 = 2;
+						N2 = 3;
+						N3 = 6;
+
+						strain.xx =   ( u[N0].f[0] - u[N1].f[0] + u[N2].f[0] - u[N3].f[0] ) / h; //  (u0 - u1 + u2 - u3)/h
+						strain.yy =  -( u[N0].f[1] - u[N1].f[1] ) / h;                           // -(v0 - v1)/h
+						strain.zz =  -( u[N0].f[2] - u[N3].f[2] ) / h;                           // -(w0 - w3)/h
+
+						strain.xy = -0.5 * ( u[N0].f[0] - u[N1].f[0] - u[N0].f[1] + u[N1].f[1] - u[N2].f[1] + u[N3].f[1] ) / h;  //  -(u0 - u1 - v0 + v1 - v2 + v3)/(2*h)
+						strain.yz = -0.5 * ( u[N0].f[1] - u[N3].f[1] + u[N0].f[2] - u[N1].f[2] ) / h;                            //  -(v0 - v3 + w0 - w1)/(2*h)
+						strain.xz = -0.5 * ( u[N0].f[0] - u[N3].f[0] - u[N0].f[2] + u[N1].f[2] - u[N2].f[2] + u[N3].f[2] ) / h;  //  -(u0 - u3 - w0 + w1 - w2 + w3)/(2*h)
+
+						break;
+
+					case ( 2 ):
+						N0 = 4;
+						N1 = 5;
+						N2 = 6;
+						N3 = 0;
+
+						strain.xx =  -( u[N0].f[0] - u[N1].f[0] ) / h; //  -(u0 - u1)/h
+						strain.yy =  -( u[N0].f[1] - u[N2].f[1] ) / h; //  -(v0 - v2)/h
+						strain.zz =   ( u[N0].f[2] - u[N3].f[2] ) / h; //   (w0 - w3)/h
+
+						strain.xy = -0.5 * ( u[N0].f[0] - u[N2].f[0] + u[N0].f[1] - u[N1].f[1] ) / h; //  -(u0 - u2 + v0 - v1)/(2*h)
+						strain.yz =  0.5 * ( u[N0].f[1] - u[N3].f[1] - u[N0].f[2] + u[N2].f[2] ) / h; //   (v0 - v3 - w0 + w2)/(2*h)
+						strain.xz =  0.5 * ( u[N0].f[0] - u[N3].f[0] - u[N0].f[2] + u[N1].f[2] ) / h; //   (u0 - u3 - w0 + w1)/(2*h)
+
+						break;
+
+					case ( 3 ):
+						N0 = 6;
+						N1 = 5;
+						N2 = 7;
+						N3 = 3;
+
+						strain.xx =   ( u[N0].f[0] -       u[N2].f[0] ) / h;                                 //     (u0 - u2)/h
+						strain.yy =   ( u[N1].f[1] - 3.0 * u[N0].f[1] + u[N2].f[1] + u[N3].f[1] ) / h;       //     (v1 - 3*v0 + v2 + v3)/h
+						strain.zz =   ( u[N0].f[2] -       u[N3].f[2] ) / h;                                 //     (w0 - w3)/h
+
+						strain.xy =  0.5 * ( u[N1].f[0] - 3.0 * u[N0].f[0] + u[N2].f[0] + u[N3].f[0] + u[N0].f[1] - u[N2].f[1] ) / h; //    (u1 - 3*u0 + u2   + u3 + v0 - v2)/(2*h)
+						strain.yz =  0.5 * ( u[N0].f[1] - u[N3].f[1] - 3.0 * u[N0].f[2] + u[N1].f[2] + u[N2].f[2] + u[N3].f[2] ) / h; //    (v0 - v3   - 3*w0 + w1 + w2 + w3)/(2*h)
+						strain.xz =  0.5 * ( u[N0].f[0] - u[N3].f[0] + u[N0].f[2] - u[N2].f[2] ) / h;                                 //    (u0 - u3   + w0   - w2          )/(2*h)
+
+						break;
+
+					case ( 4 ):
+						N0 = 0;
+						N1 = 6;
+						N2 = 3;
+						N3 = 5;
+
+						strain.xx =  -0.5 * ( u[N0].f[0] + u[N1].f[0] - u[N2].f[0] - u[N3].f[0] ) / h; //     -(u0 + u1 - u2 - u3)/(2*h)
+						strain.yy =  -0.5 * ( u[N0].f[1] - u[N1].f[1] - u[N2].f[1] + u[N3].f[1] ) / h; //	  -(v0 - v1 - v2 + v3)/(2*h)
+						strain.zz =  -0.5 * ( u[N0].f[2] - u[N1].f[2] + u[N2].f[2] - u[N3].f[2] ) / h; //	  -(w0 - w1 + w2 - w3)/(2*h)
+
+						strain.xy =  -0.25 * ( u[N0].f[0] - u[N1].f[0] - u[N2].f[0] + u[N3].f[0] + u[N0].f[1] + u[N1].f[1] - u[N2].f[1] - u[N3].f[1] ) / h; //	-(u0 - u1 - u2 + u3 + v0 + v1 - v2 - v3)/(4*h)
+						strain.yz =  -0.25 * ( u[N0].f[1] - u[N1].f[1] + u[N2].f[1] - u[N3].f[1] + u[N0].f[2] - u[N1].f[2] - u[N2].f[2] + u[N3].f[2] ) / h; //	-(v0 - v1 + v2 - v3 + w0 - w1 - w2 + w3)/(4*h)
+						strain.xz =  -0.25 * ( u[N0].f[0] - u[N1].f[0] + u[N2].f[0] - u[N3].f[0] + u[N0].f[2] + u[N1].f[2] - u[N2].f[2] - u[N3].f[2] ) / h; //	-(u0 - u1 + u2 - u3 + w0 + w1 - w2 - w3)/(4*h)
+
+						break;
+					}
+		}
+
+	return strain;
 }
 
 
@@ -1639,12 +1727,6 @@ tensor_t point_strain_tetrah_symm (fvector_t *u, double h, int teth_i) {
         strain.xz =  -0.25 * ( u[N0].f[0] - u[N1].f[0] + u[N2].f[0] - u[N3].f[0] + u[N0].f[2] + u[N1].f[2] - u[N2].f[2] - u[N3].f[2] ) / h; //	-(u0 - u1 + u2 - u3 + w0 + w1 - w2 - w3)/(4*h)
 
         break;
-
-
-
-
-
-
 
     }
 
