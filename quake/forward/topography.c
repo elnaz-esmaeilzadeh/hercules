@@ -161,6 +161,14 @@ double get_thebase_topo() {
     return thebase_zcoord;
 }
 
+double get_theDomain_Lew () {
+    return theDomainLong_ew;
+}
+
+double get_theDomain_Lns () {
+    return theDomainLong_ns;
+}
+
 
 //returns YES if  element belongs to topography
 int isTopoElement (mesh_t *myMesh, int32_t eindex, int32_t topoNonlin_flag) {

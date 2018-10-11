@@ -111,4 +111,7 @@ void topo_print_stats(int32_t *topoElementsCount,
                            int32_t *topoNonlinElementsCount,
                            int32_t  theGroupSize) ;
 
+double get_theDomain_Lew ();
+double get_theDomain_Lns ();
+
 #endif /* TOPOGRAPHY_H_ */
