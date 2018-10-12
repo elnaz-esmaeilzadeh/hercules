@@ -40,6 +40,7 @@ typedef struct topoconstants_t {
     double       h;
     double       tetraVol[5];
     int          isTopoNonlin;
+    int          cube_part;
 
 } topoconstants_t;
 

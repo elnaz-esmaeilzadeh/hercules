@@ -683,6 +683,214 @@ void TetraHVol ( double xo, double yo, double zo, double esize,
 }
 
 
+/* Returns the real volume held by the Tetrahedral elements and
+ * chooses the cubic partition with less tetrahedal elments */
+void TetraHVol_2 ( double xo, double yo, double zo, double esize,
+		         double VolTetr[5], int *topoPart ) {
+
+	int i, j, m;
+	double GP56, NGp=56;
+	double TETRACOOR, TETRACOORSYMM;
+	//double lx, ly, lz, qpx, qpy, qpz;
+	double xm, ym, zm, zt, vols1[5]={0.0}, vols2[5]={0.0};
+
+
+	/* point coordinates for the five internal tetrahedral */
+	double MCx[5][4],   MCy[5][4],  MCz[5][4];
+	double MCx2[5][4], MCy2[5][4], MCz2[5][4];
+
+	for ( i = 0; i < 5; ++i ) {
+		for ( j = 0; j < 4; ++j ) {
+			MCx[i][j] = xo + esize * tetraCoor[ 3 * i ][j];
+			MCy[i][j] = yo + esize * tetraCoor[ 3 * i + 1 ][j];
+			MCz[i][j] = zo + esize * tetraCoor[ 3 * i + 2 ][j];
+		}
+	}
+
+	for ( i = 0; i < 5; ++i ) {
+		for ( j = 0; j < 4; ++j ) {
+			MCx2[i][j] = xo + esize * tetraCoorSymm[ 3 * i ][j];
+			MCy2[i][j] = yo + esize * tetraCoorSymm[ 3 * i + 1 ][j];
+			MCz2[i][j] = zo + esize * tetraCoorSymm[ 3 * i + 2 ][j];
+		}
+	}
+
+	double x21, x31, x41;
+	double y21, y31, y41;
+	double z21, z31, z41;
+	double Vpr, Vo;
+
+	//double r, s, t;     /* natural coordinates of the tetrahedron with sides = 2   */
+	double eta,psi,gam; /* natural coordinates of the tetrahedron with sides = 1  */
+	double x1, x2, x3;
+
+	// get volumes for the first partition
+	for ( m = 0; m < 5; ++m ) {
+
+		x21 = MCx[m][1] - MCx[m][0];
+		x31 = MCx[m][2] - MCx[m][0];
+		x41 = MCx[m][3] - MCx[m][0];
+
+		y21 = MCy[m][1] - MCy[m][0];
+		y31 = MCy[m][2] - MCy[m][0];
+		y41 = MCy[m][3] - MCy[m][0];
+
+		z21 = MCz[m][1] - MCz[m][0];
+		z31 = MCz[m][2] - MCz[m][0];
+		z41 = MCz[m][3] - MCz[m][0];
+
+		Vo =   x31 * y21 * z41 + x41 * y31 * z21 + z31 * x21 * y41
+		   - ( x31 * y41 * z21 + y31 * x21 * z41 + z31 * x41 * y21 );
+
+		Vpr = 0.0;
+
+		for ( i = 0; i < NGp; ++i ) {
+
+			/* Gauss points wrt the equilateral tetrahedron's center. See Shun and Ham paper */
+			x1 = - 0.50             * gp56[0][i] +            0.50  * gp56[1][i];
+			x2 = - sqrt(3.0) / 6.0  * gp56[0][i] - sqrt(3.0) / 6.0  * gp56[1][i] + sqrt(3.0) / 3.0  * gp56[2][i];
+			x3 = - sqrt(6.0) / 12.0 * gp56[0][i] - sqrt(6.0) / 12.0 * gp56[1][i] - sqrt(6.0) / 12.0 * gp56[2][i] + sqrt(6.0) / 4.0 * gp56[3][i];
+
+			/* shift coordinates wrt the first node coordinate*/
+            x1 +=  0.50;
+            x2 += sqrt(3.0) / 6.0;
+            x3 += sqrt(6.0) / 12.0;
+
+            /*  mapping to the natural rectangular tetrahedron */
+            psi = 2.0 / sqrt(3.0) * x2 - 1.0 / sqrt(6.0) * x3;
+            eta =                   x1 - 1.0 / sqrt(3.0) * x2 - 1.0 / sqrt(6.0) * x3;
+            gam = 3.0 / sqrt(6.0) * x3;
+
+            /* get real coord of Gauss point */
+            xm = ( 1 - eta - psi - gam ) * MCx[m][0] + psi * MCx[m][1] + eta * MCx[m][2] + gam * MCx[m][3];
+            ym = ( 1 - eta - psi - gam ) * MCy[m][0] + psi * MCy[m][1] + eta * MCy[m][2] + gam * MCy[m][3];
+            zm = ( 1 - eta - psi - gam ) * MCz[m][0] + psi * MCz[m][1] + eta * MCz[m][2] + gam * MCz[m][3];
+
+            zt = point_elevation ( xm, ym );
+
+            if ( zm >= zt ) {
+            	Vpr +=  gp56[4][i];
+            }
+
+		}
+
+		if ( Vpr<=0.01 )
+			Vpr=0.0;
+
+		vols1[m] = Vpr; /* percentage of the tetrahedron's volume filled by topography  */
+
+	} /* for each tetrahedra */
+
+/* =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= */
+/*            get volumes for the second partition             */
+/* =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= */
+	for ( m = 0; m < 5; ++m ) {
+
+		x21 = MCx2[m][1] - MCx2[m][0];
+		x31 = MCx2[m][2] - MCx2[m][0];
+		x41 = MCx2[m][3] - MCx2[m][0];
+
+		y21 = MCy2[m][1] - MCy2[m][0];
+		y31 = MCy2[m][2] - MCy2[m][0];
+		y41 = MCy2[m][3] - MCy2[m][0];
+
+		z21 = MCz2[m][1] - MCz2[m][0];
+		z31 = MCz2[m][2] - MCz2[m][0];
+		z41 = MCz2[m][3] - MCz2[m][0];
+
+		Vo =   x31 * y21 * z41 + x41 * y31 * z21 + z31 * x21 * y41
+		   - ( x31 * y41 * z21 + y31 * x21 * z41 + z31 * x41 * y21 );
+
+		Vpr = 0.0;
+
+		for ( i = 0; i < NGp; ++i ) {
+
+			/* Gauss points wrt the equilateral tetrahedron's center. See Shun and Ham paper */
+			x1 = - 0.50             * gp56[0][i] +            0.50  * gp56[1][i];
+			x2 = - sqrt(3.0) / 6.0  * gp56[0][i] - sqrt(3.0) / 6.0  * gp56[1][i] + sqrt(3.0) / 3.0  * gp56[2][i];
+			x3 = - sqrt(6.0) / 12.0 * gp56[0][i] - sqrt(6.0) / 12.0 * gp56[1][i] - sqrt(6.0) / 12.0 * gp56[2][i] + sqrt(6.0) / 4.0 * gp56[3][i];
+
+			/* shift coordinates wrt the first node coordinate*/
+            x1 +=  0.50;
+            x2 += sqrt(3.0) / 6.0;
+            x3 += sqrt(6.0) / 12.0;
+
+            /*  mapping to the natural rectangular tetrahedron */
+            psi = 2.0 / sqrt(3.0) * x2 - 1.0 / sqrt(6.0) * x3;
+            eta =                   x1 - 1.0 / sqrt(3.0) * x2 - 1.0 / sqrt(6.0) * x3;
+            gam = 3.0 / sqrt(6.0) * x3;
+
+            /* get real coord of Gauss point */
+            xm = ( 1 - eta - psi - gam ) * MCx2[m][0] + psi * MCx2[m][1] + eta * MCx2[m][2] + gam * MCx2[m][3];
+            ym = ( 1 - eta - psi - gam ) * MCy2[m][0] + psi * MCy2[m][1] + eta * MCy2[m][2] + gam * MCy2[m][3];
+            zm = ( 1 - eta - psi - gam ) * MCz2[m][0] + psi * MCz2[m][1] + eta * MCz2[m][2] + gam * MCz2[m][3];
+
+            zt = point_elevation ( xm, ym );
+
+            if ( zm >= zt ) {
+            	Vpr +=  gp56[4][i];
+            }
+		}
+
+		if ( Vpr<=0.01 )
+			Vpr=0.0;
+
+		vols2[m] = Vpr; /* percentage of the tetrahedron's volume filled by topography  */
+
+	} /* for each tetrahedra */
+
+	// get zero volume tetrahedral
+	int tetr1=5, tetr2=5;
+	for ( i = 0; i < 5; ++i ) {
+		if ( vols1[i]==0.0	)
+			tetr1--;
+		if ( vols2[i]==0.0	)
+			tetr2--;
+	}
+
+	double mass1=0, mass2=0, dev1=0, dev2=0;
+
+	if ( tetr1 < tetr2  ) {
+		for ( i = 0; i < 5; ++i ) {
+			VolTetr[i] = vols1[i];
+		}
+		*topoPart = 1;
+		return;
+	} else if ( tetr2 < tetr1  ) {
+		for ( i = 0; i < 5; ++i ) {
+			VolTetr[i] = vols2[i];
+		}
+		*topoPart = 2;
+		return;
+	} else { // get the one with better mass distribution
+		for ( i = 0; i < 5; ++i ) {
+			mass1 += vols1[i];
+			mass2 += vols2[i];
+		}
+
+		for ( i = 0; i < 5; ++i ) {
+			dev1 += ( vols1[i] - mass1 ) * ( vols1[i] - mass1 );
+			dev2 += ( vols2[i] - mass2 ) * ( vols2[i] - mass2 );
+		}
+
+		if ( dev1 < dev2  ) {
+			for ( i = 0; i < 5; ++i ) {
+				VolTetr[i] = vols1[i];
+			}
+			*topoPart = 1;
+			return;
+		} else {
+			for ( i = 0; i < 5; ++i ) {
+				VolTetr[i] = vols2[i];
+			}
+			*topoPart = 2;
+			return;
+		}
+	}
+
+}
+
+
 double interp_lin ( double xi, double yi, double xf, double yf, double xo  ){
 	return ( yi + ( yf - yi ) / ( xf - xi ) * xo );
 }
@@ -1592,8 +1800,11 @@ void topo_solver_init(int32_t myID, mesh_t *myMesh) {
         ecp->h      = esize;
 
         /* get Tetrahedra volumes using Shunn and Ham quadrature rule */
-        if ( theTopoMethod == VT )
-        	TetraHVol ( xo, yo, zo, esize, ecp->tetraVol );
+        if ( theTopoMethod == VT ) {
+        	//TetraHVol ( xo, yo, zo, esize, ecp->tetraVol );
+        	TetraHVol_2( xo, yo, zo, esize, ecp->tetraVol, &ecp->cube_part );
+        }
+
 
      //   fprintf( TopoElements, "%11d          %8.4f            %8.4f               %8.4f            %8.4f            %8.4f            %8.4f            %8.4f            %8.4f            %8.4f\n",
      //   		 eindex, xo, yo, zo, esize, ecp->tetraVol[0], ecp->tetraVol[1], ecp->tetraVol[2], ecp->tetraVol[3], ecp->tetraVol[4]);
