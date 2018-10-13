@@ -1600,7 +1600,7 @@ void topography_elements_count(int32_t myID, mesh_t *myMesh ) {
         node_t     *node0dat;
         double      Vp, xo, yo, zo, esize, Vol;
     	double      aux_vol[5] = { 0 };
-        int32_t	    node0;
+        int32_t	    node0, aux_int=0;
 
         elemp    = &myMesh->elemTable[eindex]; //Takes the information of the "eindex" element
         edata    = (edata_t *)elemp->data;
@@ -1626,7 +1626,8 @@ void topography_elements_count(int32_t myID, mesh_t *myMesh ) {
 				( yo + esize != theDomainLong_ew ) ) ) {
 			/* Check for enclosed volume   */
 			if (theTopoMethod == VT) {
-				TetraHVol ( xo, yo, zo, esize, aux_vol );
+				//TetraHVol ( xo, yo, zo, esize, aux_vol );
+				TetraHVol_2 ( xo, yo, zo, esize, aux_vol, &aux_int );
 				if ( ( aux_vol[0]==0 ) && ( aux_vol[1]==0 ) && ( aux_vol[2]==0 ) && ( aux_vol[3]==0 ) && ( aux_vol[4]==0 ) )  /* small enclosed volume */
 					get_airprops_topo( edata );  /* consider the element as an  air element */
 				else
