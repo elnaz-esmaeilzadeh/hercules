@@ -77,9 +77,12 @@ void   topo_solver_init         ( int32_t  myID, mesh_t *myMesh );
 void   toponodes_mass           ( int32_t eindex, double nodes_mass[8], double M, double xo, double yo, double zo);
 void   compute_addforce_topo    ( mesh_t *myMesh, mysolver_t *mySolver, double theDeltaTSquared );
 void   TetraForces              ( fvector_t* un, fvector_t* resVec, double tetraVol[5], edata_t *edata,
-		                          double mu, double lambda, double xo, double yo, double zo  );
+		                          double mu, double lambda, int cube_part );
 void   compute_addforce_topoEffective    ( mesh_t *myMesh, mysolver_t *mySolver, double theDeltaTSquared );
-void   compute_tetra_localcoord ( vector3D_t point, elem_t *elemp, int32_t *localNode, double *localCoord, double xo, double yo, double zo, double h );
+void   compute_tetra_localcoord ( vector3D_t point, elem_t *elemp, int32_t *localNode,
+		                          double *localCoord, double xo, double yo, double zo,
+		                          double h, int cube_part );
+
 void   topography_stations_init ( mesh_t    *myMesh, station_t *myStations, int32_t    myNumberOfStations);
 int    compute_tetra_displ      (double *dis_x, double *dis_y, double *dis_z,
 						 	 	 double *vel_x, double *vel_y, double *vel_z,
@@ -114,5 +117,6 @@ void topo_print_stats(int32_t *topoElementsCount,
 
 double get_theDomain_Lew ();
 double get_theDomain_Lns ();
+int    get_cube_partition(int32_t eindex);
 
 #endif /* TOPOGRAPHY_H_ */

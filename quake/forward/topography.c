@@ -161,13 +161,38 @@ double get_thebase_topo() {
     return thebase_zcoord;
 }
 
-double get_theDomain_Lew () {
+/*double get_theDomain_Lew () {
     return theDomainLong_ew;
 }
 
 double get_theDomain_Lns () {
     return theDomainLong_ns;
+}*/
+
+/* gets cube topo partition */
+int get_cube_partition(int32_t eindex) {
+
+	int32_t          myeindex, topo_eindex;
+	topoconstants_t  *ecp;
+
+	/* look for element in myTopolist elements */
+	for (topo_eindex = 0; topo_eindex < myTopoElementsCount; topo_eindex++) {
+
+		myeindex = myTopoElementsMapping[topo_eindex];
+
+		if ( myeindex == eindex ) { /* element found */
+			ecp    = myTopoSolver->topoconstants + topo_eindex;
+			return ecp->cube_part;
+		}
+	}
+
+	fprintf(stderr, "error getting cube's partition.\n");
+	MPI_Abort(MPI_COMM_WORLD, ERROR);
+	exit(1);
+	return 2; // should not get here
+
 }
+
 
 
 //returns YES if  element belongs to topography
@@ -1439,7 +1464,7 @@ void toponodes_mass(int32_t eindex, double nodes_mass[8], double M,
 	/* Tetrahedra local nodes IDs */
 	int32_t M_Nodes[5][4];
 
-	if ( ( ( xo <  theDomainLong_ns / 2.0  ) && ( yo <  theDomainLong_ew / 2.0 ) ) ||
+/*	if ( ( ( xo <  theDomainLong_ns / 2.0  ) && ( yo <  theDomainLong_ew / 2.0 ) ) ||
 	     ( ( xo >= theDomainLong_ns / 2.0 ) && ( yo >= theDomainLong_ew / 2.0 ) ) )
 	{
 
@@ -1457,7 +1482,7 @@ void toponodes_mass(int32_t eindex, double nodes_mass[8], double M,
 			}
 		}
 
-	}
+	}*/
 
 	/* end tetrahedra nodes */
 
@@ -1471,6 +1496,20 @@ void toponodes_mass(int32_t eindex, double nodes_mass[8], double M,
 		if ( myeindex == eindex ) { /* element found */
 
 			ecp    = myTopoSolver->topoconstants + topo_eindex;
+
+			if ( ecp->cube_part == 1 ) {
+				for ( i = 0; i < 5; ++i ) {
+					for ( j = 0; j < 4; ++j ) {
+						M_Nodes[i][j] = mnod[i][j];
+					}
+				}
+			} else {
+				for ( i = 0; i < 5; ++i ) {
+					for ( j = 0; j < 4; ++j ) {
+						M_Nodes[i][j] = mnodsymm[i][j];
+					}
+				}
+			}
 
 			/* adjust mass from each tetrahedra  */
 			double VTetr = ecp->h * ecp->h * ecp->h / 6.0; /* full tetrahedron volume */
@@ -1500,6 +1539,7 @@ void toponodes_mass(int32_t eindex, double nodes_mass[8], double M,
 	return;
 
 }
+
 
 /*
  * Prints statistics about number of topo elements and stations
@@ -1856,9 +1896,9 @@ void compute_addforce_topoEffective ( mesh_t     *myMesh,
 
 			if ( topo_ec.isTopoNonlin == 0 || theNonlinTopo_flag == NO ) {
 				/* get coordinates of element zero node */
-				double xo = (node0dat->x)*(myMesh->ticksize);
-				double yo = (node0dat->y)*(myMesh->ticksize);
-				double zo = (node0dat->z)*(myMesh->ticksize);
+				//double xo = (node0dat->x)*(myMesh->ticksize);
+				//double yo = (node0dat->y)*(myMesh->ticksize);
+				//double zo = (node0dat->z)*(myMesh->ticksize);
 
 				memset( localForce, 0, 8 * sizeof(fvector_t) );
 
@@ -1879,7 +1919,7 @@ void compute_addforce_topoEffective ( mesh_t     *myMesh,
 				if (vector_is_zero( curDisp ) != 0)
 					TetraForces( curDisp, localForce, topo_ec.tetraVol ,
 								 edata, topo_ec.mu, topo_ec.lambda,
-								 xo, yo, zo );
+								 topo_ec.cube_part );
 
 				/* Loop over the 8 element nodes:
 				 * Add the contribution calculated above to the node
@@ -1911,7 +1951,7 @@ void compute_addforce_topoEffective ( mesh_t     *myMesh,
 /* -------------------------------------------------------------------------- */
 
 void TetraForces( fvector_t* un, fvector_t* resVec, double tetraVol[5], edata_t *edata,
-		          double mu, double lambda, double xo, double yo, double zo )
+		          double mu, double lambda, int cube_part )
 {
 
 	int k;
@@ -1921,11 +1961,8 @@ void TetraForces( fvector_t* un, fvector_t* resVec, double tetraVol[5], edata_t 
 	double VTetr = edata->edgesize * edata->edgesize * edata->edgesize / 6.0; /* full tetrahedron volume */
 
 	/*  distribution for the first and third quadrants */
-	if ( ( ( xo <  theDomainLong_ns / 2.0  ) && ( yo <  theDomainLong_ew / 2.0 ) ) ||
-			( ( xo >= theDomainLong_ns / 2.0 ) && ( yo >= theDomainLong_ew / 2.0 ) ) )
+	if ( cube_part == 1 )
 	{
-
-
 		for ( k = 0; k < 5; k++ ) { /* for each tetrahedron */
 
 			if ( k == 4 )
@@ -2070,7 +2107,6 @@ void TetraForces( fvector_t* un, fvector_t* resVec, double tetraVol[5], edata_t 
 			}
 		}
 	}  else  {
-
 		/*  distribution for the second and fourth quadrants */
 		for ( k = 0; k < 5; k++ ) { /* for each tetrahedron */
 
@@ -2311,10 +2347,9 @@ void topography_stations_init( mesh_t    *myMesh,
                 compute_tetra_localcoord ( point, elemp,
                 		                   myTopoStations[iStation].nodes_to_interpolate,
                 		                   myTopoStations[iStation].local_coord,
-                		                   xo, yo, zo, ecp->h );
+                		                   xo, yo, zo, ecp->h, ecp->cube_part );
 
                 myNumberOfTopoStations++;
-                //++count;
 
                 break;
             }
@@ -2330,21 +2365,14 @@ void topography_stations_init( mesh_t    *myMesh,
 
 void compute_tetra_localcoord ( vector3D_t point, elem_t *elemp,
 		                        int32_t *localNode, double *localCoord,
-		                        double xo, double yo, double zo, double h )
+		                        double xo, double yo, double zo, double h, int cube_part )
 {
 
 	int i;
 	double eta, psi, gamma;
 	double xp1, yp1, zp1, tol=-1.0e-5;
 
-//	double po;
-//
-//	if ( point.x[0]==42900.000000 && point.x[1]==49100.000000 && point.x[2]==3700.000000)
-//		po=98;
-
-
-	if ( ( ( xo <  theDomainLong_ns / 2.0  ) && ( yo <  theDomainLong_ew / 2.0 ) ) ||
-	     ( ( xo >= theDomainLong_ns / 2.0 ) && ( yo >= theDomainLong_ew / 2.0 ) ) )
+	if ( cube_part == 1)
 	{
 
 		for (i = 0 ;  i < 5; i++) {
@@ -2480,7 +2508,6 @@ void compute_tetra_localcoord ( vector3D_t point, elem_t *elemp,
 					return;
 				}
 				break;
-
 			}
 
 		}
@@ -2621,11 +2648,8 @@ void compute_tetra_localcoord ( vector3D_t point, elem_t *elemp,
 
 				}
 				break;
-
 			}
-
 		}
-
 	}
 
 	/* Should not get here */

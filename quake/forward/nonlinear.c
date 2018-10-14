@@ -1460,16 +1460,12 @@ tensor_t point_strain (fvector_t *u, double lx, double ly, double lz, double h) 
 /*
  * Compute strain tensor of a given point in the element.
  */
-tensor_t point_strain_tetrah (fvector_t *u, double h, int teth_i, double xo, double yo) {
+tensor_t point_strain_tetrah (fvector_t *u, double h, int teth_i, int cube_part ) {
 
 	tensor_t strain = init_tensor();
 	int32_t  N0, N1, N2, N3;
 
-	double theDomainLong_ns = get_theDomain_Lew();
-	double theDomainLong_ew = get_theDomain_Lns();
-
-	if ( ( ( xo <  theDomainLong_ns / 2.0  ) && ( yo <  theDomainLong_ew / 2.0 ) ) ||
-			( ( xo >= theDomainLong_ns / 2.0 ) && ( yo >= theDomainLong_ew / 2.0 ) ) )
+	if ( cube_part == 1 )
 	{
 		switch ( teth_i ) {
 			case ( 0 ):

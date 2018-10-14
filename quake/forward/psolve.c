@@ -6667,9 +6667,10 @@ compute_csi_eta_dzeta( octant_t* octant, vector3D_t pointcoords,
 		double zo = Global.myMesh->ticksize * octant->lz;
 
 		double aux[3] = {0};
+		int cube_part = get_cube_partition( eindex );
 
 		compute_tetra_localcoord ( pointcoords, elemp,
-				localNodeID, aux, xo, yo, zo, h );
+				localNodeID, aux, xo, yo, zo, h, cube_part  );
 
 		localcoords->x[0] = aux[0];
 		localcoords->x[1] = aux[1];
