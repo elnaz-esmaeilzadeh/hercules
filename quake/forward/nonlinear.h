@@ -365,6 +365,7 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
 
 tensor_t point_strain_tetrah (fvector_t *u, double h, int teth_i, int cube_part );
 tensor_t point_strain_tetrah_symm (fvector_t *u, double h, int teth_i);
+void TetraForces_from_stresses( fvector_t* resVec, double tetraVol[5], edata_t *edata, int cube_part, qptensors_t stresses );
 
 /* -------------------------------------------------------------------------- */
 /*                        Nonlinear Output to Stations                        */
