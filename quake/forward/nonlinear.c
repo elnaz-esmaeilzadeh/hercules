@@ -4415,14 +4415,9 @@ void compute_addforce_nl (mesh_t     *myMesh,
 void TetraForces_from_stresses( fvector_t* resVec, double tetraVol[5], edata_t *edata,
 		                        int cube_part, qptensors_t stresses )
 {
-
 	int k=0;
     double h = edata->edgesize, fce_cte;
     int32_t N0, N1, N2, N3;
-
-	//double VTetr = edata->edgesize * edata->edgesize * edata->edgesize / 6.0; /* full tetrahedron volume */
-
-
 
 	/*  distribution for the first and third quadrants */
 	if ( cube_part == 1 )
@@ -4520,7 +4515,47 @@ void TetraForces_from_stresses( fvector_t* resVec, double tetraVol[5], edata_t *
 				N2 = 7;
 				N3 = 2;
 
-				/*   Sxx - Sxy + Sxz
+				/*   Sxy - Sxx + Sxz
+					 Syy - Sxy + Syz
+					 Syz - Sxz + Szz
+
+								-Sxy
+								-Syy
+								-Syz
+
+								 Sxx
+								 Sxy
+								 Sxz
+
+								-Sxz
+								-Syz
+								-Szz */
+
+
+				resVec[N0].f[0] +=  (  stresses.qp[k].xy - stresses.qp[k].xx + stresses.qp[k].xz ) * fce_cte;
+				resVec[N0].f[1] +=  (  stresses.qp[k].yy - stresses.qp[k].xy + stresses.qp[k].yz ) * fce_cte;
+				resVec[N0].f[2] +=  (  stresses.qp[k].yz - stresses.qp[k].xz + stresses.qp[k].zz ) * fce_cte;
+				/* ================ */
+				resVec[N1].f[0] +=   -stresses.qp[k].xy * fce_cte;
+				resVec[N1].f[1] +=   -stresses.qp[k].yy * fce_cte;
+				resVec[N1].f[2] +=   -stresses.qp[k].yz * fce_cte;
+				/* ================ */
+				resVec[N2].f[0] +=   stresses.qp[k].xx * fce_cte;
+				resVec[N2].f[1] +=   stresses.qp[k].xy * fce_cte;
+				resVec[N2].f[2] +=   stresses.qp[k].xz * fce_cte;
+				/* ================ */
+				resVec[N3].f[0] +=  -stresses.qp[k].xz * fce_cte;
+				resVec[N3].f[1] +=  -stresses.qp[k].yz * fce_cte;
+				resVec[N3].f[2] +=  -stresses.qp[k].zz * fce_cte;
+				break;
+
+				case ( 3 ):
+				N0 = 5;
+				N1 = 7;
+				N2 = 4;
+				N3 = 1;
+
+			 /*      Sxx - Sxy + Sxz
 					 Sxy - Syy + Syz
 					 Sxz - Syz + Szz
 
@@ -4536,57 +4571,17 @@ void TetraForces_from_stresses( fvector_t* resVec, double tetraVol[5], edata_t *
 								-Syz
 								-Szz */
 
-
-				resVec[N0].f[0] +=  (  stresses.qp[k].xx - stresses.qp[k].xy + stresses.qp[k].xz ) * fce_cte;
-				resVec[N0].f[1] +=  (  stresses.qp[k].xy - stresses.qp[k].yy + stresses.qp[k].yz ) * fce_cte;
-				resVec[N0].f[2] +=  (  stresses.qp[k].xz - stresses.qp[k].yz + stresses.qp[k].zz ) * fce_cte;
+				resVec[N0].f[0] +=  ( stresses.qp[k].xx - stresses.qp[k].xy + stresses.qp[k].xz ) * fce_cte;
+				resVec[N0].f[1] +=  ( stresses.qp[k].xy - stresses.qp[k].yy + stresses.qp[k].yz ) * fce_cte;
+				resVec[N0].f[2] +=  ( stresses.qp[k].xz - stresses.qp[k].yz + stresses.qp[k].zz ) * fce_cte;
 				/* ================ */
-				resVec[N1].f[0] +=   stresses.qp[k].xy * fce_cte;
-				resVec[N1].f[1] +=   stresses.qp[k].yy * fce_cte;
-				resVec[N1].f[2] +=   stresses.qp[k].yz * fce_cte;
+				resVec[N1].f[0] +=    stresses.qp[k].xy * fce_cte;
+				resVec[N1].f[1] +=    stresses.qp[k].yy * fce_cte;
+				resVec[N1].f[2] +=    stresses.qp[k].yz * fce_cte;
 				/* ================ */
-				resVec[N2].f[0] +=  -stresses.qp[k].xx * fce_cte;
-				resVec[N2].f[1] +=  -stresses.qp[k].xy * fce_cte;
-				resVec[N2].f[2] +=  -stresses.qp[k].xz * fce_cte;
-				/* ================ */
-				resVec[N3].f[0] +=  -stresses.qp[k].xz * fce_cte;
-				resVec[N3].f[1] +=  -stresses.qp[k].yz * fce_cte;
-				resVec[N3].f[2] +=  -stresses.qp[k].zz * fce_cte;
-				break;
-
-				case ( 3 ):
-				N0 = 5;
-				N1 = 7;
-				N2 = 4;
-				N3 = 1;
-
-			 /*  Sxy - Sxx + Sxz
-				 Syy - Sxy + Syz
-				 Syz - Sxz + Szz
-
-							-Sxy
-							-Syy
-							-Syz
-
-							 Sxx
-							 Sxy
-							 Sxz
-
-							-Sxz
-							-Syz
-							-Szz */
-
-				resVec[N0].f[0] +=  ( stresses.qp[k].xy - stresses.qp[k].xx + stresses.qp[k].xz ) * fce_cte;
-				resVec[N0].f[1] +=  ( stresses.qp[k].yy - stresses.qp[k].xy + stresses.qp[k].yz ) * fce_cte;
-				resVec[N0].f[2] +=  ( stresses.qp[k].yz - stresses.qp[k].xz + stresses.qp[k].zz ) * fce_cte;
-				/* ================ */
-				resVec[N1].f[0] +=   -stresses.qp[k].xy * fce_cte;
-				resVec[N1].f[1] +=   -stresses.qp[k].yy * fce_cte;
-				resVec[N1].f[2] +=   -stresses.qp[k].yz * fce_cte;
-				/* ================ */
-				resVec[N2].f[0] +=   stresses.qp[k].xx * fce_cte;
-				resVec[N2].f[1] +=   stresses.qp[k].xy * fce_cte;
-				resVec[N2].f[2] +=   stresses.qp[k].xz * fce_cte;
+				resVec[N2].f[0] +=   -stresses.qp[k].xx * fce_cte;
+				resVec[N2].f[1] +=   -stresses.qp[k].xy * fce_cte;
+				resVec[N2].f[2] +=   -stresses.qp[k].xz * fce_cte;
 				/* ================ */
 				resVec[N3].f[0] +=  -stresses.qp[k].xz * fce_cte;
 				resVec[N3].f[1] +=  -stresses.qp[k].yz * fce_cte;
@@ -4599,37 +4594,37 @@ void TetraForces_from_stresses( fvector_t* resVec, double tetraVol[5], edata_t *
 				N2 = 7;
 				N3 = 1;
 
-				/*     Sxx - 3*Sxy + Sxz]
-					   Sxy - 3*Syy + Syz]
-					   Sxz - 3*Syz + Szz]
+				/*   Sxy - Sxx - Sxz]
+					 Syy - Sxy - Syz]
+					 Syz - Sxz - Szz]
 
-					   Sxy - Sxx + Sxz]
-					   Syy - Sxy + Syz]
-					   Syz - Sxz + Szz]
+					 Sxz - Sxy - Sxx]
+					 Syz - Syy - Sxy]
+					 Szz - Syz - Sxz]
 
-					   Sxy - Sxx - Sxz]
-					   Syy - Sxy - Syz]
-					   Syz - Sxz - Szz]
+					 Sxx + Sxy + Sxz]
+					 Sxy + Syy + Syz]
+					 Sxz + Syz + Szz]
 
-					   Sxx + Sxy - Sxz]
-					   Sxy + Syy - Syz]
-					   Sxz + Syz - Szz] */
+					 Sxx - Sxy - Sxz]
+					 Sxy - Syy - Syz]
+					 Sxz - Syz - Szz] */
 
-				resVec[N0].f[0] +=  (  stresses.qp[k].xx - 3.0 * stresses.qp[k].xy + stresses.qp[k].xz ) * fce_cte;
-				resVec[N0].f[1] +=  (  stresses.qp[k].xy - 3.0 * stresses.qp[k].yy + stresses.qp[k].yz ) * fce_cte;
-				resVec[N0].f[2] +=  (  stresses.qp[k].xz - 3.0 * stresses.qp[k].yz + stresses.qp[k].zz ) * fce_cte;
+				resVec[N0].f[0] +=  (  stresses.qp[k].xy - stresses.qp[k].xx - stresses.qp[k].xz ) * fce_cte;
+				resVec[N0].f[1] +=  (  stresses.qp[k].yy - stresses.qp[k].xy - stresses.qp[k].yz ) * fce_cte;
+				resVec[N0].f[2] +=  (  stresses.qp[k].yz - stresses.qp[k].xz - stresses.qp[k].zz ) * fce_cte;
 				/* ================ */
-				resVec[N1].f[0] +=  (  stresses.qp[k].xy - stresses.qp[k].xx + stresses.qp[k].xz ) * fce_cte;
-				resVec[N1].f[1] +=  (  stresses.qp[k].yy - stresses.qp[k].xy + stresses.qp[k].yz ) * fce_cte;
-				resVec[N1].f[2] +=  (  stresses.qp[k].yz - stresses.qp[k].xz + stresses.qp[k].zz ) * fce_cte;
+				resVec[N1].f[0] +=  (  stresses.qp[k].xz - stresses.qp[k].xy - stresses.qp[k].xx ) * fce_cte;
+				resVec[N1].f[1] +=  (  stresses.qp[k].yz - stresses.qp[k].yy - stresses.qp[k].xy ) * fce_cte;
+				resVec[N1].f[2] +=  (  stresses.qp[k].zz - stresses.qp[k].yz - stresses.qp[k].xz ) * fce_cte;
 				/* ================ */
-				resVec[N2].f[0] +=  (  stresses.qp[k].xy - stresses.qp[k].xx - stresses.qp[k].xz ) * fce_cte;
-				resVec[N2].f[1] +=  (  stresses.qp[k].yy - stresses.qp[k].xy - stresses.qp[k].yz ) * fce_cte;
-				resVec[N2].f[2] +=  (  stresses.qp[k].yz - stresses.qp[k].xz - stresses.qp[k].zz ) * fce_cte;
+				resVec[N2].f[0] +=  (  stresses.qp[k].xx + stresses.qp[k].xy + stresses.qp[k].xz ) * fce_cte;
+				resVec[N2].f[1] +=  (  stresses.qp[k].xy + stresses.qp[k].yy + stresses.qp[k].yz ) * fce_cte;
+				resVec[N2].f[2] +=  (  stresses.qp[k].xz + stresses.qp[k].yz + stresses.qp[k].zz ) * fce_cte;
 				/* ================ */
-				resVec[N3].f[0] +=  (  stresses.qp[k].xx + stresses.qp[k].xy - stresses.qp[k].xz ) * fce_cte;
-				resVec[N3].f[1] +=  (  stresses.qp[k].xy + stresses.qp[k].yy - stresses.qp[k].yz ) * fce_cte;
-				resVec[N3].f[2] +=  (  stresses.qp[k].xz + stresses.qp[k].yz - stresses.qp[k].zz ) * fce_cte;
+				resVec[N3].f[0] +=  (  stresses.qp[k].xx - stresses.qp[k].xy - stresses.qp[k].xz ) * fce_cte;
+				resVec[N3].f[1] +=  (  stresses.qp[k].xy - stresses.qp[k].yy - stresses.qp[k].yz ) * fce_cte;
+				resVec[N3].f[2] +=  (  stresses.qp[k].xz - stresses.qp[k].yz - stresses.qp[k].zz ) * fce_cte;
 				break;
 				}
 			}
@@ -4650,37 +4645,37 @@ void TetraForces_from_stresses( fvector_t* resVec, double tetraVol[5], edata_t *
 				N2 = 1;
 				N3 = 5;
 
-				/* [  Sxy - Sxx - Sxz
-					[ Syy - Sxy - Syz
-					[ Syz - Sxz - Szz
+				/*  [            -Sxx
+					[            -Sxy
+					[            -Sxz
 
 					[             Sxy
 					[             Syy
 					[             Syz
 
-					[       Sxx - Sxy
-					[       Sxy - Syy
-					[       Sxz - Syz
+					[ Sxx - Sxy - Sxz
+					[ Sxy - Syy - Syz
+					[ Sxz - Syz - Szz
 
-					[       Sxz - Sxy
-					[       Syz - Syy
-					[       Szz - Syz */
+					[             Sxz
+					[             Syz
+					[             Szz*/
 
-				resVec[N0].f[0] +=  (  stresses.qp[k].xy - stresses.qp[k].xx - stresses.qp[k].xz ) * fce_cte;
-				resVec[N0].f[1] +=  (  stresses.qp[k].yy - stresses.qp[k].xy - stresses.qp[k].yz ) * fce_cte;
-				resVec[N0].f[2] +=  (  stresses.qp[k].yz - stresses.qp[k].xz - stresses.qp[k].zz ) * fce_cte;
+				resVec[N0].f[0] +=  -stresses.qp[k].xx * fce_cte;
+				resVec[N0].f[1] +=  -stresses.qp[k].xy * fce_cte;
+				resVec[N0].f[2] +=  -stresses.qp[k].xz * fce_cte;
 				/* ================ */
-				resVec[N1].f[0] +=  stresses.qp[k].xy * fce_cte;
-				resVec[N1].f[1] +=  stresses.qp[k].yy * fce_cte;
-				resVec[N1].f[2] +=  stresses.qp[k].yz * fce_cte;
+				resVec[N1].f[0] +=   stresses.qp[k].xy * fce_cte;
+				resVec[N1].f[1] +=   stresses.qp[k].yy * fce_cte;
+				resVec[N1].f[2] +=   stresses.qp[k].yz * fce_cte;
 				/* ================ */
-				resVec[N2].f[0] +=  ( stresses.qp[k].xx - stresses.qp[k].xy ) * fce_cte;
-				resVec[N2].f[1] +=  ( stresses.qp[k].xy - stresses.qp[k].yy ) * fce_cte;
-				resVec[N2].f[2] +=  ( stresses.qp[k].xz - stresses.qp[k].yz ) * fce_cte;
+				resVec[N2].f[0] +=  (  stresses.qp[k].xx - stresses.qp[k].xy - stresses.qp[k].xz ) * fce_cte;
+				resVec[N2].f[1] +=  (  stresses.qp[k].xy - stresses.qp[k].yy - stresses.qp[k].yz ) * fce_cte;
+				resVec[N2].f[2] +=  (  stresses.qp[k].xz - stresses.qp[k].yz - stresses.qp[k].zz ) * fce_cte;
 				/* ================ */
-				resVec[N3].f[0] +=  ( stresses.qp[k].xz - stresses.qp[k].xy ) * fce_cte;
-				resVec[N3].f[1] +=  ( stresses.qp[k].yz - stresses.qp[k].yy ) * fce_cte;
-				resVec[N3].f[2] +=  ( stresses.qp[k].zz - stresses.qp[k].yz ) * fce_cte;
+				resVec[N3].f[0] +=   stresses.qp[k].xz * fce_cte;
+				resVec[N3].f[1] +=   stresses.qp[k].yz * fce_cte;
+				resVec[N3].f[2] +=   stresses.qp[k].zz * fce_cte;
 				break;
 
 				case ( 1 ):
@@ -4689,37 +4684,37 @@ void TetraForces_from_stresses( fvector_t* resVec, double tetraVol[5], edata_t *
 				N2 = 3;
 				N3 = 6;
 
-				/*   Sxx - Sxy - Sxz
-					 Sxy - Syy - Syz
-					 Sxz - Syz - Szz
+				/*          -Sxy
+							-Syy
+							-Syz
 
-						   Sxy - Sxx
-						   Syy - Sxy
-						   Syz - Sxz
+				 Sxy - Sxx - Sxz
+				 Syy - Sxy - Syz
+				 Syz - Sxz - Szz
 
-								 Sxx
-								 Sxy
-								 Sxz
+							 Sxx
+							 Sxy
+							 Sxz
 
-						   Sxz - Sxx
-						   Syz - Sxy
-						   Szz - Sxz */
+							 Sxz
+							 Syz
+							 Szz */
 
-				resVec[N0].f[0] +=  (  stresses.qp[k].xx - stresses.qp[k].xy - stresses.qp[k].xz ) * fce_cte;
-				resVec[N0].f[1] +=  (  stresses.qp[k].xy - stresses.qp[k].yy - stresses.qp[k].yz ) * fce_cte;
-				resVec[N0].f[2] +=  (  stresses.qp[k].xz - stresses.qp[k].yz - stresses.qp[k].zz ) * fce_cte;
+				resVec[N0].f[0] +=   -stresses.qp[k].xy * fce_cte;
+				resVec[N0].f[1] +=   -stresses.qp[k].yy * fce_cte;
+				resVec[N0].f[2] +=   -stresses.qp[k].yz * fce_cte;
 				/* ================ */
-				resVec[N1].f[0] +=  ( stresses.qp[k].xy - stresses.qp[k].xx ) * fce_cte;
-				resVec[N1].f[1] +=  ( stresses.qp[k].yy - stresses.qp[k].xy ) * fce_cte;
-				resVec[N1].f[2] +=  ( stresses.qp[k].yz - stresses.qp[k].xz ) * fce_cte;
+				resVec[N1].f[0] +=  (  stresses.qp[k].xy - stresses.qp[k].xx - stresses.qp[k].xz ) * fce_cte;
+				resVec[N1].f[1] +=  (  stresses.qp[k].yy - stresses.qp[k].xy - stresses.qp[k].yz ) * fce_cte;
+				resVec[N1].f[2] +=  (  stresses.qp[k].yz - stresses.qp[k].xz - stresses.qp[k].zz ) * fce_cte;
 				/* ================ */
 				resVec[N2].f[0] +=   stresses.qp[k].xx * fce_cte;
 				resVec[N2].f[1] +=   stresses.qp[k].xy * fce_cte;
 				resVec[N2].f[2] +=   stresses.qp[k].xz * fce_cte;
 				/* ================ */
-				resVec[N3].f[0] +=  ( stresses.qp[k].xz - stresses.qp[k].xx ) * fce_cte;
-				resVec[N3].f[1] +=  ( stresses.qp[k].yz - stresses.qp[k].xy ) * fce_cte;
-				resVec[N3].f[2] +=  ( stresses.qp[k].zz - stresses.qp[k].xz ) * fce_cte;
+				resVec[N3].f[0] +=   stresses.qp[k].xz * fce_cte;
+				resVec[N3].f[1] +=   stresses.qp[k].yz * fce_cte;
+				resVec[N3].f[2] +=   stresses.qp[k].zz * fce_cte;
 				break;
 
 				case ( 2 ):
@@ -4742,7 +4737,7 @@ void TetraForces_from_stresses( fvector_t* resVec, double tetraVol[5], edata_t *
 
 								-Sxz
 								-Syz
-								-Szz */
+								-Szz*/
 
 				resVec[N0].f[0] +=  ( stresses.qp[k].xz - stresses.qp[k].xy - stresses.qp[k].xx ) * fce_cte;
 				resVec[N0].f[1] +=  ( stresses.qp[k].yz - stresses.qp[k].yy - stresses.qp[k].xy ) * fce_cte;
@@ -4767,38 +4762,37 @@ void TetraForces_from_stresses( fvector_t* resVec, double tetraVol[5], edata_t *
 				N2 = 7;
 				N3 = 3;
 
-				/*   Sxx - 3*Sxy + Sxz
-					 Sxy - 3*Syy + Syz
-					 Sxz - 3*Syz + Szz
+				/*          -Sxx
+							-Sxy
+							-Sxz
 
-								   Sxy
-								   Syy
-								   Syz
+							-Sxy
+							-Syy
+							-Syz
 
-							 Sxy - Sxx
-							 Syy - Sxy
-							 Syz - Sxz
+				 Sxx + Sxy + Sxz
+				 Sxy + Syy + Syz
+				 Sxz + Syz + Szz
 
-							 Sxy - Sxz
-							 Syy - Syz
-							 Syz - Szz */
+							-Sxz
+							-Syz
+							-Szz */
 
-
-				resVec[N0].f[0] +=  (  stresses.qp[k].xx - 3.0 * stresses.qp[k].xy + stresses.qp[k].xz ) * fce_cte;
-				resVec[N0].f[1] +=  (  stresses.qp[k].xy - 3.0 * stresses.qp[k].yy + stresses.qp[k].yz ) * fce_cte;
-				resVec[N0].f[2] +=  (  stresses.qp[k].xz - 3.0 * stresses.qp[k].yz + stresses.qp[k].zz ) * fce_cte;
+				resVec[N0].f[0] += -stresses.qp[k].xx * fce_cte;
+				resVec[N0].f[1] += -stresses.qp[k].xy * fce_cte;
+				resVec[N0].f[2] += -stresses.qp[k].xz * fce_cte;
 				/* ================ */
-				resVec[N1].f[0] +=  stresses.qp[k].xy * fce_cte;
-				resVec[N1].f[1] +=  stresses.qp[k].yy * fce_cte;
-				resVec[N1].f[2] +=  stresses.qp[k].yz * fce_cte;
+				resVec[N1].f[0] += -stresses.qp[k].xy * fce_cte;
+				resVec[N1].f[1] += -stresses.qp[k].yy * fce_cte;
+				resVec[N1].f[2] += -stresses.qp[k].yz * fce_cte;
 				/* ================ */
-				resVec[N2].f[0] +=  ( stresses.qp[k].xy - stresses.qp[k].xx ) * fce_cte;
-				resVec[N2].f[1] +=  ( stresses.qp[k].yy - stresses.qp[k].xy ) * fce_cte;
-				resVec[N2].f[2] +=  ( stresses.qp[k].yz - stresses.qp[k].xz ) * fce_cte;
+				resVec[N2].f[0] +=  (  stresses.qp[k].xx + stresses.qp[k].xy + stresses.qp[k].xz ) * fce_cte;
+				resVec[N2].f[1] +=  (  stresses.qp[k].xy + stresses.qp[k].yy + stresses.qp[k].yz ) * fce_cte;
+				resVec[N2].f[2] +=  (  stresses.qp[k].xz + stresses.qp[k].yz + stresses.qp[k].zz ) * fce_cte;
 				/* ================ */
-				resVec[N3].f[0] +=  ( stresses.qp[k].xy - stresses.qp[k].xz ) * fce_cte;
-				resVec[N3].f[1] +=  ( stresses.qp[k].yy - stresses.qp[k].yz ) * fce_cte;
-				resVec[N3].f[2] +=  ( stresses.qp[k].yz - stresses.qp[k].zz ) * fce_cte;
+				resVec[N3].f[0] += -stresses.qp[k].xz * fce_cte;
+				resVec[N3].f[1] += -stresses.qp[k].yz * fce_cte;
+				resVec[N3].f[2] += -stresses.qp[k].zz * fce_cte;
 				break;
 
 				case ( 4 ):
@@ -4822,7 +4816,6 @@ void TetraForces_from_stresses( fvector_t* resVec, double tetraVol[5], edata_t *
 				   Sxx - Sxy + Sxz]
 				   Sxy - Syy + Syz]
 				   Sxz - Syz + Szz] */
-
 
 				resVec[N0].f[0] +=  ( -stresses.qp[k].xx - stresses.qp[k].xy - stresses.qp[k].xz ) * fce_cte;
 				resVec[N0].f[1] +=  ( -stresses.qp[k].xy - stresses.qp[k].yy - stresses.qp[k].yz ) * fce_cte;
