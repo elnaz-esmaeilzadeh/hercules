@@ -118,5 +118,6 @@ void topo_print_stats(int32_t *topoElementsCount,
 double get_theDomain_Lew ();
 double get_theDomain_Lns ();
 int    get_cube_partition(int32_t eindex);
+void   get_tetraProps(int32_t eindex, double tetrVols[5], int *topoPart ) ;
 
 #endif /* TOPOGRAPHY_H_ */

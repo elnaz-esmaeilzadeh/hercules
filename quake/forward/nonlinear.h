@@ -130,7 +130,10 @@ typedef struct nlconstants_t {
     double maxFs;
     double avgFs;
 
-    int isTopoNonlin;
+    int    isTopoNonlin; /* variables for topononlin elements */
+    double tetraVol[5];
+    int    topoPart;
+
 
 } nlconstants_t;
 

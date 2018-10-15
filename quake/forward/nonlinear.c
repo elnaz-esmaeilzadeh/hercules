@@ -1243,9 +1243,11 @@ void nonlinear_solver_init(int32_t myID, mesh_t *myMesh, double depth) {
                 break;
         }
 
-        // check and update if topo database if TopoNolinear element
-        if ( isTopoElement ( myMesh, eindex, 1) )
-        	ecp->isTopoNonlin = 1;
+        // check and update topo-database if this is a toponolinear element
+        if ( isTopoElement ( myMesh, eindex, 1) ) {
+        	ecp->isTopoNonlin = 1; // Identify it as topononlinear
+        	get_tetraProps( eindex, ecp->tetraVol, &ecp->topoPart ); // get tetrahedral volumes and cube partition
+        }
 
         ecp->strainrate  =
         		interpolate_property_value(elementVs, theStrainRates  );
@@ -4290,10 +4292,12 @@ void compute_addforce_nl (mesh_t     *myMesh,
     int32_t   eindex;
     int32_t   nl_eindex;
     fvector_t localForce[8];
-
+    nlconstants_t *enlcons;
 
     fvector_t localForceDamp[8];
     fvector_t curDisp[8];
+
+	double b_over_dt = theStiffDamp / ( theStiffDampFreq * PI * sqrt(theDeltaTSquared) ); // stiffness damping added to improve stability
 
     /* Loop on the number of elements */
     for (nl_eindex = 0; nl_eindex < myNonlinElementsCount; nl_eindex++) {
@@ -4315,6 +4319,8 @@ void compute_addforce_nl (mesh_t     *myMesh,
         edata = (edata_t *)elemp->data;
         ep    = &mySolver->eTable[nl_eindex] ;
 
+        enlcons = myNonlinSolver->constants + nl_eindex;
+
         h    = (double)edata->edgesize;
         h3   = h * h * h;
         WiJi = h3 * 0.125; /* (h^3)/8 */
@@ -4326,107 +4332,165 @@ void compute_addforce_nl (mesh_t     *myMesh,
 
         stresses = myNonlinSolver->stresses[nl_eindex];
 
-        /* Clean memory for the local force vector */
-        memset(localForce, 0, 8 * sizeof(fvector_t));
+    	/* Clean memory for the local force vector */
+    	memset(localForce, 0, 8 * sizeof(fvector_t));
 
-        /* Loop over the 8 element nodes:
-         * Calculates the forces on each vertex */
-        for (i = 0; i < 8; i++) {
+        if ( enlcons->isTopoNonlin == 0 ) {
 
-            fvector_t *toForce;
 
-            /* Points the loop force to the element force */
-            toForce = &localForce[i];
+        	/* Loop over the 8 element nodes:
+        	 * Calculates the forces on each vertex */
+        	for (i = 0; i < 8; i++) {
 
-            /* Loop over the 8 quadrature points */
-            for (j = 0; j < 8; j++) {
+        		fvector_t *toForce;
 
-                double dx, dy, dz;
+        		/* Points the loop force to the element force */
+        		toForce = &localForce[i];
 
-                compute_qp_dxi (&dx, &dy, &dz, i, j, h);
+        		/* Loop over the 8 quadrature points */
+        		for (j = 0; j < 8; j++) {
 
-                /* Gauss integration: Sum(DeltaPsi * Sigma * wi * Ji) */
+        			double dx, dy, dz;
 
-                toForce->f[0] += ( ( dx * stresses.qp[j].xx )
-                                 + ( dy * stresses.qp[j].xy )
-                                 + ( dz * stresses.qp[j].xz ) ) * WiJi;
+        			compute_qp_dxi (&dx, &dy, &dz, i, j, h);
 
-                toForce->f[1] += ( ( dy * stresses.qp[j].yy )
-                                 + ( dx * stresses.qp[j].xy )
-                                 + ( dz * stresses.qp[j].yz ) ) * WiJi;
+        			/* Gauss integration: Sum(DeltaPsi * Sigma * wi * Ji) */
 
-                toForce->f[2] += ( ( dz * stresses.qp[j].zz )
-                                 + ( dy * stresses.qp[j].yz )
-                                 + ( dx * stresses.qp[j].xz ) ) * WiJi;
+        			toForce->f[0] += ( ( dx * stresses.qp[j].xx )
+        					+ ( dy * stresses.qp[j].xy )
+        					+ ( dz * stresses.qp[j].xz ) ) * WiJi;
 
-            } /* quadrature points */
+        			toForce->f[1] += ( ( dy * stresses.qp[j].yy )
+        					+ ( dx * stresses.qp[j].xy )
+        					+ ( dz * stresses.qp[j].yz ) ) * WiJi;
 
-        } /* element nodes */
+        			toForce->f[2] += ( ( dz * stresses.qp[j].zz )
+        					+ ( dy * stresses.qp[j].yz )
+        					+ ( dx * stresses.qp[j].xz ) ) * WiJi;
 
-        /* Loop over the 8 element nodes:
-         * Add the contribution calculated above to the node
-         * forces carried from the source and stiffness.
-         */
-        for (i = 0; i < 8; i++) {
+        		} /* quadrature points */
 
-            int32_t    lnid;
-            fvector_t *nodalForce;
+        	} /* element nodes */
 
-            lnid = elemp->lnid[i];
+        	/* Loop over the 8 element nodes:
+        	 * Add the contribution calculated above to the node
+        	 * forces carried from the source and stiffness.
+        	 */
+        	for (i = 0; i < 8; i++) {
 
-            nodalForce = mySolver->force + lnid;
+        		int32_t    lnid;
+        		fvector_t *nodalForce;
 
-            nodalForce->f[0] -= localForce[i].f[0] * theDeltaTSquared;
-            nodalForce->f[1] -= localForce[i].f[1] * theDeltaTSquared;
-            nodalForce->f[2] -= localForce[i].f[2] * theDeltaTSquared;
+        		lnid = elemp->lnid[i];
 
-        } /* element nodes */
+        		nodalForce = mySolver->force + lnid;
 
-        /* =-=-==-=-=-=-=-=-=-=-=-=-=-=-= */
-        /* =-=-=-=- Add damping -=-=-=-=- */
-        /* =-=-==-=-=-=-=-=-=-=-=-=-=-=-= */
+        		nodalForce->f[0] -= localForce[i].f[0] * theDeltaTSquared;
+        		nodalForce->f[1] -= localForce[i].f[1] * theDeltaTSquared;
+        		nodalForce->f[2] -= localForce[i].f[2] * theDeltaTSquared;
 
-        memset( localForceDamp, 0, 8 * sizeof(fvector_t) );
+        	} /* element nodes */
 
-        //double b_over_dt = ep->c3 / ep->c1;
-        double b_over_dt = theStiffDamp / ( theStiffDampFreq * PI * sqrt(theDeltaTSquared) ); // Added stiffness damping to improve stability
+        	/* =-=-==-=-=-=-=-=-=-=-=-=-=-=-= */
+        	/* =-=-=-=- Add damping -=-=-=-=- */
+        	/* =-=-==-=-=-=-=-=-=-=-=-=-=-=-= */
+        	if ( b_over_dt != 0 ) {
+        		memset( localForceDamp, 0, 8 * sizeof(fvector_t) );
 
-        for (i = 0; i < 8; i++) {
-            int32_t    lnid = elemp->lnid[i];
-            fvector_t* tm1Disp = mySolver->tm1 + lnid;
-   	        fvector_t* tm2Disp = mySolver->tm2 + lnid;
 
-            curDisp[i].f[0] = ( tm1Disp->f[0] - tm2Disp->f[0] ) * b_over_dt;
-            curDisp[i].f[1] = ( tm1Disp->f[1] - tm2Disp->f[1] ) * b_over_dt;
-            curDisp[i].f[2] = ( tm1Disp->f[2] - tm2Disp->f[2] ) * b_over_dt;
+        		for (i = 0; i < 8; i++) {
+        			int32_t    lnid = elemp->lnid[i];
+        			fvector_t* tm1Disp = mySolver->tm1 + lnid;
+        			fvector_t* tm2Disp = mySolver->tm2 + lnid;
+
+        			curDisp[i].f[0] = ( tm1Disp->f[0] - tm2Disp->f[0] ) * b_over_dt;
+        			curDisp[i].f[1] = ( tm1Disp->f[1] - tm2Disp->f[1] ) * b_over_dt;
+        			curDisp[i].f[2] = ( tm1Disp->f[2] - tm2Disp->f[2] ) * b_over_dt;
+        		}
+
+        		/* Coefficients for new stiffness matrix calculation */
+        		if (vector_is_zero( curDisp ) != 0) {
+
+        			double first_coeff  = -0.5625 * (ep->c2 + 2 * ep->c1);
+        			double second_coeff = -0.5625 * (ep->c2);
+        			double third_coeff  = -0.5625 * (ep->c1);
+
+        			double atu[24];
+        			double firstVec[24];
+
+        			aTransposeU( curDisp, atu );
+        			firstVector( atu, firstVec, first_coeff, second_coeff, third_coeff );
+        			au( localForceDamp, firstVec );
+
+        			for (i = 0; i < 8; i++) {
+
+        				int32_t lnid          = elemp->lnid[i];
+        				fvector_t* nodalForce = mySolver->force + lnid;
+
+        				nodalForce->f[0] += localForceDamp[i].f[0];
+        				nodalForce->f[1] += localForceDamp[i].f[1];
+        				nodalForce->f[2] += localForceDamp[i].f[2];
+        			}
+        		}
+        	}
+
+        } else { // it has to be a topononlin element
+
+        	memset(localForce, 0, 8 * sizeof(fvector_t));
+
+        	TetraForces_from_stresses( localForce, enlcons->tetraVol, edata,
+        			                        enlcons->topoPart ,  stresses );
+
+        	/* Loop over the 8 element nodes:
+        	 * Add the contribution calculated above to the node
+        	 * forces carried from the source and stiffness.
+        	 */
+        	for (i = 0; i < 8; i++) {
+
+        		int32_t    lnid;
+        		fvector_t *nodalForce;
+
+        		lnid = elemp->lnid[i];
+
+        		nodalForce = mySolver->force + lnid;
+
+        		nodalForce->f[0] -= localForce[i].f[0] * theDeltaTSquared;
+        		nodalForce->f[1] -= localForce[i].f[1] * theDeltaTSquared;
+        		nodalForce->f[2] -= localForce[i].f[2] * theDeltaTSquared;
+
+        	} /* element nodes */
+
+        	/* =-=-==-=-=-=-=-=-=-=-=-=-=-=-= */
+        	/* =-=-=-=- Add damping -=-=-=-=- */
+        	/* =-=-==-=-=-=-=-=-=-=-=-=-=-=-= */
+        	if ( b_over_dt != 0 ) {
+        		memset( localForceDamp, 0, 8 * sizeof(fvector_t) );
+
+        		for (i = 0; i < 8; i++) {
+        			int32_t    lnid = elemp->lnid[i];
+        			fvector_t* tm1Disp = mySolver->tm1 + lnid;
+        			fvector_t* tm2Disp = mySolver->tm2 + lnid;
+
+        			curDisp[i].f[0] = ( tm1Disp->f[0] - tm2Disp->f[0] ) * b_over_dt;
+        			curDisp[i].f[1] = ( tm1Disp->f[1] - tm2Disp->f[1] ) * b_over_dt;
+        			curDisp[i].f[2] = ( tm1Disp->f[2] - tm2Disp->f[2] ) * b_over_dt;
+        		}
+
+        		if ( vector_is_zero( curDisp ) != 0 ) {
+        			TetraForces( curDisp, localForceDamp, ec.tetraVol, edata, mu, lambda, ec.topoPart );
+
+        			for (i = 0; i < 8; i++) {
+
+        				int32_t lnid          = elemp->lnid[i];
+        				fvector_t* nodalForce = mySolver->force + lnid;
+
+        				nodalForce->f[0] -= localForceDamp[i].f[0];
+        				nodalForce->f[1] -= localForceDamp[i].f[1];
+        				nodalForce->f[2] -= localForceDamp[i].f[2];
+        			}
+        		}
+        	}
         }
-
-        /* Coefficients for new stiffness matrix calculation */
-        if (vector_is_zero( curDisp ) != 0) {
-
-            double first_coeff  = -0.5625 * (ep->c2 + 2 * ep->c1);
-            double second_coeff = -0.5625 * (ep->c2);
-            double third_coeff  = -0.5625 * (ep->c1);
-
-            double atu[24];
-            double firstVec[24];
-
-            aTransposeU( curDisp, atu );
-            firstVector( atu, firstVec, first_coeff, second_coeff, third_coeff );
-            au( localForceDamp, firstVec );
-        }
-
-        for (i = 0; i < 8; i++) {
-
-            int32_t lnid          = elemp->lnid[i];
-            fvector_t* nodalForce = mySolver->force + lnid;
-
-            nodalForce->f[0] += localForceDamp[i].f[0];
-            nodalForce->f[1] += localForceDamp[i].f[1];
-            nodalForce->f[2] += localForceDamp[i].f[2];
-
-        }
-
         /* =-=-==-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= */
         /* =-=-==-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= */
         /* =-=-==-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= */

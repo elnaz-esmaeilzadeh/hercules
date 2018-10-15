@@ -189,7 +189,39 @@ int get_cube_partition(int32_t eindex) {
 	fprintf(stderr, "error getting cube's partition.\n");
 	MPI_Abort(MPI_COMM_WORLD, ERROR);
 	exit(1);
-	return 2; // should not get here
+	return 3; // should not get here
+
+}
+
+/* gets tetrahedral volumes and partition type */
+void get_tetraProps(int32_t eindex, double tetrVols[5], int *topoPart ) {
+
+	int32_t          myeindex, topo_eindex;
+	topoconstants_t  *ecp;
+
+	/* look for element in myTopolist elements */
+	for (topo_eindex = 0; topo_eindex < myTopoElementsCount; topo_eindex++) {
+
+		myeindex = myTopoElementsMapping[topo_eindex];
+
+		if ( myeindex == eindex ) { /* element found */
+			ecp    = myTopoSolver->topoconstants + topo_eindex;
+
+			tetrVols[0] = ecp->tetraVol[0];
+			tetrVols[1] = ecp->tetraVol[1];
+			tetrVols[2] = ecp->tetraVol[2];
+			tetrVols[3] = ecp->tetraVol[3];
+			tetrVols[4] = ecp->tetraVol[4];
+
+			*topoPart   = ecp->cube_part;
+			return;
+
+		}
+	}
+
+	fprintf(stderr, "could get tetrahedral volumes.\n");
+	MPI_Abort(MPI_COMM_WORLD, ERROR);
+	exit(1);
 
 }
 
