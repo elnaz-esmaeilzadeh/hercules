@@ -4526,8 +4526,8 @@ void TetraForces_from_stresses( fvector_t* resVec, double tetraVol[5], edata_t *
 				N3 = 4;
 
 				resVec[N0].f[0] +=  ( -2.0 * stresses.qp[0].xx -       stresses.qp[0].xy -       stresses.qp[0].xz ) * h * h / 12 * tetraVol[k];
-				resVec[N0].f[1] +=  (       -stresses.qp[0].xy - 2.0 * stresses.qp[0].yy -       stresses.qp[0].yz ) * h * h / 12;
-				resVec[N0].f[2] +=  (       -stresses.qp[0].xz -       stresses.qp[0].yz - 2.0 * stresses.qp[0].zz ) * h * h / 12;
+				resVec[N0].f[1] +=  (       -stresses.qp[0].xy - 2.0 * stresses.qp[0].yy -       stresses.qp[0].yz ) * h * h / 12 * tetraVol[k];
+				resVec[N0].f[2] +=  (       -stresses.qp[0].xz -       stresses.qp[0].yz - 2.0 * stresses.qp[0].zz ) * h * h / 12 * tetraVol[k];
 				/* ================ */
 				resVec[N1].f[0] +=           stresses.qp[0].xy * h * h / 12 * tetraVol[k];
 				resVec[N1].f[1] +=     2.0 * stresses.qp[0].yy * h * h / 12 * tetraVol[k];
@@ -4875,11 +4875,9 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
 				/* Calculate total strains */
 				tstrains->qp[i] = point_strain(u, lx, ly, lz, h);
 			} else {
-				//get cube partition
-				int cube_part = get_cube_partition( eindex );
 
 				//compute tetrahedron strains
-				tstrains->qp[i] = point_strain_tetrah ( u, h, i,  cube_part );
+				tstrains->qp[i] = point_strain_tetrah ( u, h, i, enlcons->topoPart  );
 
 			}
 
