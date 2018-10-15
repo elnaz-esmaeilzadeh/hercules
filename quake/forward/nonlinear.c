@@ -4509,13 +4509,15 @@ void TetraForces_from_stresses( fvector_t* resVec, double tetraVol[5], edata_t *
     int32_t N0, N1, N2, N3;
 
 	//double VTetr = edata->edgesize * edata->edgesize * edata->edgesize / 6.0; /* full tetrahedron volume */
-    fce_cte =  h * h / 6.0 * tetraVol[k];
+
 
 
 	/*  distribution for the first and third quadrants */
 	if ( cube_part == 1 )
 	{
 		for ( k = 0; k < 5; k++ ) { /* for each tetrahedron */
+
+			fce_cte =  h * h / 6.0 * tetraVol[k];
 
 			if ( tetraVol[k] != 0 ) {
 
@@ -4723,6 +4725,8 @@ void TetraForces_from_stresses( fvector_t* resVec, double tetraVol[5], edata_t *
 	}  else  {
 		/*  distribution for the second partition */
 		for ( k = 0; k < 5; k++ ) { /* for each tetrahedron */
+
+			fce_cte =  h * h / 6.0 * tetraVol[k];
 
 			if ( tetraVol[k] != 0 ) {
 
