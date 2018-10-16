@@ -310,6 +310,10 @@ topometh_t get_topo_meth() {
     return theTopoMethod;
 }
 
+int get_topo_nonlin_flag() {
+    return theNonlinTopo_flag;
+}
+
 int topo_correctproperties ( edata_t *edata )
 {
     if ( edata->Vp < 0) {

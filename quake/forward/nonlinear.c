@@ -116,8 +116,12 @@ int isThisElementNonLinear(mesh_t *myMesh, int32_t eindex) {
 	elemp = &myMesh->elemTable[eindex];
 	edata = (edata_t *)elemp->data;
 
-	if ( ( edata->Vs <=  theVsLimits[thePropertiesCount-1] ) && ( edata->Vs >=  theVsLimits[0] ) )
+	if ( ( edata->Vs <=  theVsLimits[thePropertiesCount-1] ) && ( edata->Vs >=  theVsLimits[0] ) ) {
+		if ( get_thebase_topo == 0 || get_topo_nonlin_flag == 1 || ( get_topo_nonlin_flag == 0 && isTopoElement ( myMesh, eindex, 1) == 0 ) )
 		return YES;
+	}
+
+
 
 	return NO;
 }
@@ -1244,7 +1248,7 @@ void nonlinear_solver_init(int32_t myID, mesh_t *myMesh, double depth) {
         }
 
         // check and update topo-database if this is a toponolinear element
-        if ( isTopoElement ( myMesh, eindex, 1) ) {
+        if ( (get_topo_nonlin_flag == YES) && ( isTopoElement ( myMesh, eindex, 1) ) ) {
         	ecp->isTopoNonlin = 1; // Identify it as topononlinear
         	get_tetraProps( eindex, ecp->tetraVol, &ecp->topoPart ); // get tetrahedral volumes and cube partition
         }

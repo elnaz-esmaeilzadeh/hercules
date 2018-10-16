@@ -115,8 +115,7 @@ void topo_print_stats(int32_t *topoElementsCount,
                            int32_t *topoNonlinElementsCount,
                            int32_t  theGroupSize) ;
 
-double get_theDomain_Lew ();
-double get_theDomain_Lns ();
+int    get_topo_nonlin_flag();
 int    get_cube_partition(int32_t eindex);
 void   get_tetraProps(int32_t eindex, double tetrVols[5], int *topoPart ) ;
 
