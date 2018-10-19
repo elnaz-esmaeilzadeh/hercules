@@ -117,8 +117,12 @@ int isThisElementNonLinear(mesh_t *myMesh, int32_t eindex) {
 	edata = (edata_t *)elemp->data;
 
 	if ( ( edata->Vs <=  theVsLimits[thePropertiesCount-1] ) && ( edata->Vs >=  theVsLimits[0] ) ) {
-		if ( get_thebase_topo == 0 || get_topo_nonlin_flag == 1 || ( get_topo_nonlin_flag == 0 && isTopoElement ( myMesh, eindex, 1) == 0 ) )
-		return YES;
+		if ( ( get_thebase_topo()==0.0  ) || ( get_topo_nonlin_flag() )  ) {
+			return YES;
+		} else {
+			if ( !get_topo_nonlin_flag() && isTopoElement ( myMesh, eindex, 0 ) == 0  )
+				return YES;
+		}
 	}
 
 

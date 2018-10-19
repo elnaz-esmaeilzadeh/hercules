@@ -310,7 +310,7 @@ topometh_t get_topo_meth() {
     return theTopoMethod;
 }
 
-int get_topo_nonlin_flag() {
+noyesflag_t get_topo_nonlin_flag() {
     return theNonlinTopo_flag;
 }
 
