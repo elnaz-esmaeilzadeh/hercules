@@ -5,13 +5,21 @@
  *      Author: eafit
  */
 
-#ifndef DRM_HALFSPACE_H_
-#define DRM_HALFSPACE_H_
+#ifndef DRM_PLANEWAVES_H_
+#define DRM_PLANEWAVES_H_
 
-
+/*
 typedef enum {
   SV = 0,  P
-} planewavetype_t;
+} planewavetype_t; */
+
+typedef enum {
+	SV1 = 0, P1
+} pwtype_t;
+
+//typedef enum {
+//  SV = 0,  P
+//} planewavetype_t;
 
 void    drm_planewaves_init ( int32_t myID, const char *parametersin );
 int32_t drm_planewaves_initparameters ( const char *parametersin );
@@ -31,4 +39,4 @@ void   getRicker    ( fvector_t *myDisp, double zp, double t, double Vs );
 double Ricker_displ ( double zp, double Ts, double t, double fc, double Vs  );
 
 
-#endif /* DRM_HALFSPACE_H_ */
+#endif /* DRM_PLANEWAVES_H_ */

@@ -29,11 +29,12 @@
 #include "stiffness.h"
 #include "quake_util.h"
 #include "cvm.h"
-#include "drm_halfspace.h"
+#include "drm_planewaves.h"
 #include "topography.h"
 #include "geometrics.h"
 
-static planewavetype_t	thePlaneWaveType;
+
+static pwtype_t      	thePlaneWaveType;
 static int32_t	        theDRMBox_halfwidthElements = 0;
 static int32_t	        theDRMBox_DepthElements = 0;
 static double 	        thedrmbox_esize         = 0.0;
@@ -135,7 +136,7 @@ drm_planewaves_initparameters ( const char *parametersin ) {
     double              drmbox_halfwidth_elements, drmbox_depth_elements, Ts, fc, Uo, planewave_strike, L_ew, L_ns, drmbox_esize;
     char                type_of_wave[64];
 
-    planewavetype_t     planewave;
+    pwtype_t     planewave;
 
 
     /* Opens parametersin file */
@@ -167,9 +168,9 @@ drm_planewaves_initparameters ( const char *parametersin ) {
     }
 
     if ( strcasecmp(type_of_wave, "SV") == 0 ) {
-    	planewave = SV;
+    	planewave = SV1;
     } else if ( strcasecmp(type_of_wave, "P") == 0 ) {
-    	planewave = P;
+    	planewave = P1;
     } else {
         fprintf(stderr,
                 "Illegal type_of_wave for incident plane wave analysis"
@@ -671,7 +672,7 @@ void DRM_ForcesinElement ( mesh_t     *myMesh,
 	double  h, Vs;
 	h    = (double)edata->edgesize;
 
-	if ( thePlaneWaveType == SV  )
+	if ( thePlaneWaveType == SV1  )
 		Vs = edata->Vs;
 	else
 		Vs = edata->Vp;
@@ -754,7 +755,7 @@ void getRicker ( fvector_t *myDisp, double zp, double t, double Vs ) {
 	// f1 = fc*2;
 	// f2 = fc*0.9;
 
-	if ( thePlaneWaveType == SV ) {
+	if ( thePlaneWaveType == SV1 ) {
 		myDisp->f[0] = Rz * theUo * cos (theplanewave_strike);
 		myDisp->f[1] = Rz * theUo * sin (theplanewave_strike);
 		myDisp->f[2] = 0.0;
