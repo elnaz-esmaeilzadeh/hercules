@@ -43,6 +43,7 @@ static double 	        theTs = 0.0;
 static double 	        thefc = 0.0;
 static double           theUo = 0.0;
 static double 	        theplanewave_strike = 0.0;
+static double 	        theplanewave_Zangle = 0.0;
 static double 	        theXc  = 0.0;
 static double 	        theYc  = 0.0;
 
@@ -81,7 +82,7 @@ static int32_t            myDRM_Brd8 = 0;
 void drm_planewaves_init ( int32_t myID, const char *parametersin ) {
 
     int     int_message[3];
-    double  double_message[7];
+    double  double_message[8];
 
     /* Capturing data from file --- only done by PE0 */
     if (myID == 0) {
@@ -107,6 +108,7 @@ void drm_planewaves_init ( int32_t myID, const char *parametersin ) {
     double_message[4] = theXc;
     double_message[5] = theYc;
     double_message[6] = thedrmbox_esize;
+    double_message[7] = theplanewave_Zangle;
 
     MPI_Bcast(double_message, 7, MPI_DOUBLE, 0, comm_solver);
     MPI_Bcast(int_message,    3, MPI_INT,    0, comm_solver);
@@ -122,6 +124,7 @@ void drm_planewaves_init ( int32_t myID, const char *parametersin ) {
     theXc               = double_message[4];
     theYc               = double_message[5];
     thedrmbox_esize     = double_message[6];
+    theplanewave_Zangle = double_message[7];
 
     return;
 
@@ -133,7 +136,7 @@ int32_t
 drm_planewaves_initparameters ( const char *parametersin ) {
     FILE                *fp;
 
-    double              drmbox_halfwidth_elements, drmbox_depth_elements, Ts, fc, Uo, planewave_strike, L_ew, L_ns, drmbox_esize;
+    double              drmbox_halfwidth_elements, drmbox_depth_elements, Ts, fc, Uo, planewave_strike, planewave_zAngle, L_ew, L_ns, drmbox_esize;
     char                type_of_wave[64];
 
     pwtype_t     planewave;
@@ -159,7 +162,8 @@ drm_planewaves_initparameters ( const char *parametersin ) {
          ( parsetext(fp, "region_length_north_m",            'd', &L_ns                        ) != 0) ||
          ( parsetext(fp, "fc",                               'd', &fc                          ) != 0) ||
          ( parsetext(fp, "Uo",                               'd', &Uo                          ) != 0) ||
-         ( parsetext(fp, "planewave_strike",                 'd', &planewave_strike            ) != 0) )
+         ( parsetext(fp, "planewave_strike",                 'd', &planewave_strike            ) != 0) ||
+         ( parsetext(fp, "planewave_Z_angle",                'd', &planewave_zAngle            ) != 0) )
     {
         fprintf( stderr,
                  "Error parsing planewaves parameters from %s\n",
@@ -186,6 +190,7 @@ drm_planewaves_initparameters ( const char *parametersin ) {
 	thefc                            = fc;
     theUo                            = Uo;
 	theplanewave_strike              = planewave_strike * PI / 180.00;
+	theplanewave_Zangle              = planewave_zAngle * PI / 180.00;
 	theXc                            = L_ew / 2.0;
 	theYc                            = L_ns / 2.0;
 	thedrmbox_esize                  = drmbox_esize;
@@ -747,13 +752,7 @@ void DRM_ForcesinElement ( mesh_t     *myMesh,
 
 void getRicker ( fvector_t *myDisp, double zp, double t, double Vs ) {
 
-	//double Rz = 1.10 * Ricker_displ ( zp, theTs, t, thefc, Vs  ) + 0.80 * Ricker_displ ( zp, 1.18 * theTs, t, 2.0 * thefc, Vs  ) + 0.50 * Ricker_displ ( zp, 1.3 * theTs, t, 0.9 * thefc, Vs  );
-	double Rz = 2.1*Ricker_displ ( zp, theTs, t, thefc, Vs  ) + 0.75 * Ricker_displ ( zp, 1.08 * theTs, t, 2.0 * thefc, Vs  );
-
-	//RP = 1.10*RickerPulse(vt,Ts,fc)'+ 0.8*RickerPulse(vt,1.18*Ts,f1)' + 0.5*RickerPulse(vt,1.3*Ts,f2)' ;
-	// fc= 5/3;
-	// f1 = fc*2;
-	// f2 = fc*0.9;
+	double Rz = Ricker_displ ( zp, theTs, t, thefc, Vs  ) ;
 
 	if ( thePlaneWaveType == SV1 ) {
 		myDisp->f[0] = Rz * theUo * cos (theplanewave_strike);

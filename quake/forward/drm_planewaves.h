@@ -8,18 +8,9 @@
 #ifndef DRM_PLANEWAVES_H_
 #define DRM_PLANEWAVES_H_
 
-/*
-typedef enum {
-  SV = 0,  P
-} planewavetype_t; */
-
 typedef enum {
 	SV1 = 0, P1
 } pwtype_t;
-
-//typedef enum {
-//  SV = 0,  P
-//} planewavetype_t;
 
 void    drm_planewaves_init ( int32_t myID, const char *parametersin );
 int32_t drm_planewaves_initparameters ( const char *parametersin );
