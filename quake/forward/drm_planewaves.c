@@ -35,7 +35,8 @@
 
 
 static pwtype_t      	thePlaneWaveType;
-static int32_t	        theDRMBox_halfwidthElements = 0;
+static int32_t	        theDRMBox_halfwidthElements_ew = 0;
+static int32_t	        theDRMBox_halfwidthElements_ns = 0;
 static int32_t	        theDRMBox_DepthElements = 0;
 static double 	        thedrmbox_esize         = 0.0;
 
@@ -62,7 +63,7 @@ static int32_t            *myDRMBorder5ElementsMapping;
 static int32_t            *myDRMBorder6ElementsMapping;
 static int32_t            *myDRMBorder7ElementsMapping;
 static int32_t            *myDRMBorder8ElementsMapping;
-static double              theDRMdepth;
+//static double              theDRMdepth;
 
 static int32_t            myDRM_Face1Count  = 0;
 static int32_t            myDRM_Face2Count  = 0;
@@ -78,10 +79,9 @@ static int32_t            myDRM_Brd6 = 0;
 static int32_t            myDRM_Brd7 = 0;
 static int32_t            myDRM_Brd8 = 0;
 
-
 void drm_planewaves_init ( int32_t myID, const char *parametersin ) {
 
-    int     int_message[3];
+    int     int_message[4];
     double  double_message[8];
 
     /* Capturing data from file --- only done by PE0 */
@@ -98,8 +98,9 @@ void drm_planewaves_init ( int32_t myID, const char *parametersin ) {
     /* Broadcasting data */
 
     int_message   [0]    = (int)thePlaneWaveType;
-    int_message   [1]    = theDRMBox_halfwidthElements;
-    int_message   [2]    = theDRMBox_DepthElements;
+    int_message   [1]    = theDRMBox_halfwidthElements_ew;
+    int_message   [2]    = theDRMBox_halfwidthElements_ns;
+    int_message   [3]    = theDRMBox_DepthElements;
 
     double_message[0] = theTs;
     double_message[1] = thefc;
@@ -111,11 +112,12 @@ void drm_planewaves_init ( int32_t myID, const char *parametersin ) {
     double_message[7] = theplanewave_Zangle;
 
     MPI_Bcast(double_message, 7, MPI_DOUBLE, 0, comm_solver);
-    MPI_Bcast(int_message,    3, MPI_INT,    0, comm_solver);
+    MPI_Bcast(int_message,    4, MPI_INT,    0, comm_solver);
 
-    thePlaneWaveType             = int_message[0];
-    theDRMBox_halfwidthElements  = int_message[1];
-    theDRMBox_DepthElements      = int_message[2];
+    thePlaneWaveType                = int_message[0];
+    theDRMBox_halfwidthElements_ew  = int_message[1];
+    theDRMBox_halfwidthElements_ns  = int_message[2];
+    theDRMBox_DepthElements         = int_message[3];
 
     theTs               = double_message[0];
     thefc               = double_message[1];
@@ -136,7 +138,7 @@ int32_t
 drm_planewaves_initparameters ( const char *parametersin ) {
     FILE                *fp;
 
-    double              drmbox_halfwidth_elements, drmbox_depth_elements, Ts, fc, Uo, planewave_strike, planewave_zAngle, L_ew, L_ns, drmbox_esize;
+    double              drmbox_halfwidth_elements_ew, drmbox_halfwidth_elements_ns, drmbox_depth_elements, Ts, fc, Uo, planewave_strike, planewave_zAngle, L_ew, L_ns, drmbox_esize;
     char                type_of_wave[64];
 
     pwtype_t     planewave;
@@ -153,17 +155,18 @@ drm_planewaves_initparameters ( const char *parametersin ) {
 
 
      /* Parses parametersin to capture drm_planewaves single-value parameters */
-    if ( ( parsetext(fp, "type_of_wave",                     's', &type_of_wave                ) != 0) ||
-         ( parsetext(fp, "DRMBox_Noelements_in_halfwidth",   'd', &drmbox_halfwidth_elements   ) != 0) ||
-         ( parsetext(fp, "DRMBox_Noelements_in_depth",       'd', &drmbox_depth_elements       ) != 0) ||
-         ( parsetext(fp, "DRMBox_element_size_m",            'd', &drmbox_esize                ) != 0) ||
-         ( parsetext(fp, "Ts",                               'd', &Ts                          ) != 0) ||
-         ( parsetext(fp, "region_length_east_m",             'd', &L_ew                        ) != 0) ||
-         ( parsetext(fp, "region_length_north_m",            'd', &L_ns                        ) != 0) ||
-         ( parsetext(fp, "fc",                               'd', &fc                          ) != 0) ||
-         ( parsetext(fp, "Uo",                               'd', &Uo                          ) != 0) ||
-         ( parsetext(fp, "planewave_strike",                 'd', &planewave_strike            ) != 0) ||
-         ( parsetext(fp, "planewave_Z_angle",                'd', &planewave_zAngle            ) != 0) )
+    if ( ( parsetext(fp, "type_of_wave",                      's', &type_of_wave                  ) != 0) ||
+         ( parsetext(fp, "DRMBox_Noelem_Halfwidth_EW",        'd', &drmbox_halfwidth_elements_ew  ) != 0) ||
+         ( parsetext(fp, "DRMBox_Noelem_Halfwidth_NS",        'd', &drmbox_halfwidth_elements_ns  ) != 0) ||
+         ( parsetext(fp, "DRMBox_Noelem_depth",               'd', &drmbox_depth_elements         ) != 0) ||
+         ( parsetext(fp, "DRMBox_element_size",               'd', &drmbox_esize                  ) != 0) ||
+         ( parsetext(fp, "Ts",                                'd', &Ts                            ) != 0) ||
+         ( parsetext(fp, "region_length_east_m",              'd', &L_ew                          ) != 0) ||
+         ( parsetext(fp, "region_length_north_m",             'd', &L_ns                          ) != 0) ||
+         ( parsetext(fp, "fc",                                'd', &fc                            ) != 0) ||
+         ( parsetext(fp, "Uo",                                'd', &Uo                            ) != 0) ||
+         ( parsetext(fp, "planewave_strike",                  'd', &planewave_strike              ) != 0) ||
+         ( parsetext(fp, "planewave_Z_angle",                 'd', &planewave_zAngle              ) != 0) )
     {
         fprintf( stderr,
                  "Error parsing planewaves parameters from %s\n",
@@ -184,7 +187,8 @@ drm_planewaves_initparameters ( const char *parametersin ) {
 
     /*  Initialize the static global variables */
 	thePlaneWaveType                 = planewave;
-	theDRMBox_halfwidthElements      = drmbox_halfwidth_elements;
+	theDRMBox_halfwidthElements_ew   = drmbox_halfwidth_elements_ew;
+	theDRMBox_halfwidthElements_ns   = drmbox_halfwidth_elements_ns;
 	theDRMBox_DepthElements          = drmbox_depth_elements;
 	theTs                            = Ts;
 	thefc                            = fc;
@@ -195,13 +199,26 @@ drm_planewaves_initparameters ( const char *parametersin ) {
 	theYc                            = L_ns / 2.0;
 	thedrmbox_esize                  = drmbox_esize;
 
+/*	// propagation vectors in local coordinates
+    the_p_inc    = (double*)malloc( sizeof(double) * 3 );
+    the_p_p_refl = (double*)malloc( sizeof(double) * 3 );
+    the_p_s_refl = (double*)malloc( sizeof(double) * 3 );
+
+	if ( thePlaneWaveType == SV1 ) {
+		the_p_inc[0] = sin(theplanewave_Zangle);
+		the_p_inc[0] = 0.0;
+		the_p_inc[0] = -cos(theplanewave_Zangle);
+
+	}*/
+
     fclose(fp);
 
     return 0;
 }
 
 
-void PlaneWaves_solver_init( int32_t myID, mesh_t *myMesh, mysolver_t *mySolver) {
+/*
+void PlaneWaves_solver_init_old( int32_t myID, mesh_t *myMesh, mysolver_t *mySolver) {
 
 	int32_t theFaceElem, theBaseElem;
 
@@ -213,7 +230,10 @@ void PlaneWaves_solver_init( int32_t myID, mesh_t *myMesh, mysolver_t *mySolver)
 	theBaseElem = 4 * theDRMBox_halfwidthElements * theDRMBox_halfwidthElements;
 	theDRMdepth = DRM_D;
 
-	/*  mapping of face1 elements */
+	double DRM_EW = theDRMBox_halfwidthElements_ew * thedrmbox_esize;
+	double DRM_NS = theDRMBox_halfwidthElements_ns * thedrmbox_esize;
+
+	  mapping of face1 elements
 	int32_t eindex;
 	int32_t countf1 = 0, countf2 = 0, countf3 = 0, countf4 = 0, countbott=0;
 	int32_t countb1 = 0, countb2 = 0, countb3 = 0, countb4 = 0;
@@ -225,7 +245,7 @@ void PlaneWaves_solver_init( int32_t myID, mesh_t *myMesh, mysolver_t *mySolver)
 	XMALLOC_VAR_N(myDRMFace4ElementsMapping, int32_t, theFaceElem);
 	XMALLOC_VAR_N(myDRMBottomElementsMapping , int32_t, theBaseElem);
 
-	/* border elements*/
+	 border elements
 	XMALLOC_VAR_N(myDRMBorder1ElementsMapping, int32_t, theDRMBox_DepthElements + 1);
 	XMALLOC_VAR_N(myDRMBorder2ElementsMapping, int32_t, theDRMBox_DepthElements + 1);
 	XMALLOC_VAR_N(myDRMBorder3ElementsMapping, int32_t, theDRMBox_DepthElements + 1);
@@ -249,13 +269,13 @@ void PlaneWaves_solver_init( int32_t myID, mesh_t *myMesh, mysolver_t *mySolver)
 		node0dat = &myMesh->nodeTable[node0];
 		edata    = (edata_t *)elemp->data;
 
-		/* get coordinates of element zero node */
+		 get coordinates of element zero node
 		xo = (node0dat->x)*(myMesh->ticksize);
 		yo = (node0dat->y)*(myMesh->ticksize);
 		zo = (node0dat->z)*(myMesh->ticksize);
 
 
-		if ( ( ( yo - theYc ) == DRM_B ) &&                            /*face 1*/
+		if ( ( ( yo - theYc ) == DRM_B ) &&                            face 1
 				( xo >= ( theXc - DRM_B ) ) &&
 				( xo <  ( theXc + DRM_B ) ) &&
 				( zo <  DRM_D + thebase_zcoord ) &&
@@ -263,7 +283,7 @@ void PlaneWaves_solver_init( int32_t myID, mesh_t *myMesh, mysolver_t *mySolver)
 
 			myDRMFace1ElementsMapping[countf1] = eindex;
 			countf1++;
-		} else 	if ( ( ( theYc - ( yo + thedrmbox_esize ) ) == DRM_B ) &&        /* face 2*/
+		} else 	if ( ( ( theYc - ( yo + thedrmbox_esize ) ) == DRM_B ) &&         face 2
 				( xo >= ( theXc - DRM_B ) ) &&
 				( xo <  ( theXc + DRM_B ) ) &&
 				( zo <  DRM_D + thebase_zcoord ) &&
@@ -272,7 +292,7 @@ void PlaneWaves_solver_init( int32_t myID, mesh_t *myMesh, mysolver_t *mySolver)
 			myDRMFace2ElementsMapping[countf2] = eindex;
 			countf2++;
 
-		} else 	if ( ( ( theXc - ( xo + thedrmbox_esize ) ) == DRM_B ) &&      /*face 3*/
+		} else 	if ( ( ( theXc - ( xo + thedrmbox_esize ) ) == DRM_B ) &&      face 3
 				( yo >= ( theYc - DRM_B ) ) &&
 				( yo <  ( theYc + DRM_B ) ) &&
 				( zo <  DRM_D + thebase_zcoord ) &&
@@ -281,7 +301,7 @@ void PlaneWaves_solver_init( int32_t myID, mesh_t *myMesh, mysolver_t *mySolver)
 			myDRMFace3ElementsMapping[countf3] = eindex;
 			countf3++;
 
-		} else 	if ( ( ( xo - theXc ) == DRM_B ) &&             /* face 4*/
+		} else 	if ( ( ( xo - theXc ) == DRM_B ) &&              face 4
 				( yo >= ( theYc - DRM_B ) ) &&
 				( yo <  ( theYc + DRM_B ) ) &&
 				( zo <  DRM_D + thebase_zcoord ) &&
@@ -290,7 +310,7 @@ void PlaneWaves_solver_init( int32_t myID, mesh_t *myMesh, mysolver_t *mySolver)
 			myDRMFace4ElementsMapping[countf4] = eindex;
 			countf4++;
 
-		} else 	if ( ( yo >= ( theYc - DRM_B ) ) &&         /*bottom*/
+		} else 	if ( ( yo >= ( theYc - DRM_B ) ) &&         bottom
 				( yo <  ( theYc + DRM_B ) ) &&
 				( xo >= ( theXc - DRM_B ) ) &&
 				( xo <  ( theXc + DRM_B ) ) &&
@@ -299,7 +319,7 @@ void PlaneWaves_solver_init( int32_t myID, mesh_t *myMesh, mysolver_t *mySolver)
 			myDRMBottomElementsMapping[countbott] = eindex;
 			countbott++;
 
-		} else 	if ( ( ( yo - theYc ) == DRM_B ) &&      /*border 1*/
+		} else 	if ( ( ( yo - theYc ) == DRM_B ) &&      border 1
 				( ( xo + thedrmbox_esize ) == ( theXc - DRM_B ) ) &&
 				( zo <=  DRM_D + thebase_zcoord ) &&
 				( zo >=  thebase_zcoord ) ) {
@@ -307,7 +327,7 @@ void PlaneWaves_solver_init( int32_t myID, mesh_t *myMesh, mysolver_t *mySolver)
 			myDRMBorder1ElementsMapping[countb1] = eindex;
 			countb1++;
 
-		} else if ( ( ( yo - theYc ) == DRM_B  ) &&      /*border 2*/
+		} else if ( ( ( yo - theYc ) == DRM_B  ) &&      border 2
 				( xo  == ( theXc + DRM_B ) ) &&
 				( zo <=  DRM_D + thebase_zcoord ) &&
 				( zo >=  thebase_zcoord ) ) {
@@ -315,7 +335,7 @@ void PlaneWaves_solver_init( int32_t myID, mesh_t *myMesh, mysolver_t *mySolver)
 			myDRMBorder2ElementsMapping[countb2] = eindex;
 			countb2++;
 
-		} else if ( ( ( theYc - ( yo + thedrmbox_esize ) ) == DRM_B ) &&  /* border 3*/
+		} else if ( ( ( theYc - ( yo + thedrmbox_esize ) ) == DRM_B ) &&   border 3
 				( ( xo + thedrmbox_esize)  == ( theXc - DRM_B ) ) &&
 				( zo <=  DRM_D + thebase_zcoord ) &&
 				( zo >=  thebase_zcoord ) ) {
@@ -323,7 +343,7 @@ void PlaneWaves_solver_init( int32_t myID, mesh_t *myMesh, mysolver_t *mySolver)
 			myDRMBorder3ElementsMapping[countb3] = eindex;
 			countb3++;
 
-		} else if ( ( ( theYc - ( yo + thedrmbox_esize ) ) == DRM_B ) &&  /* border 4*/
+		} else if ( ( ( theYc - ( yo + thedrmbox_esize ) ) == DRM_B ) &&   border 4
 				(  xo  == ( theXc + DRM_B ) ) &&
 				( zo <=  DRM_D + thebase_zcoord ) &&
 				( zo >=  thebase_zcoord ) ) {
@@ -331,7 +351,7 @@ void PlaneWaves_solver_init( int32_t myID, mesh_t *myMesh, mysolver_t *mySolver)
 			myDRMBorder4ElementsMapping[countb4] = eindex;
 			countb4++;
 
-		} else 	if ( ( ( yo - theYc ) == DRM_B ) &&            /* border 5*/
+		} else 	if ( ( ( yo - theYc ) == DRM_B ) &&             border 5
 				( xo >= ( theXc - DRM_B ) ) &&
 				( xo <  ( theXc + DRM_B ) ) &&
 				( zo ==  DRM_D + thebase_zcoord )          ) {
@@ -339,7 +359,7 @@ void PlaneWaves_solver_init( int32_t myID, mesh_t *myMesh, mysolver_t *mySolver)
 			myDRMBorder5ElementsMapping[countb5] = eindex;
 			countb5++;
 
-		} else if ( ( ( theYc - ( yo + thedrmbox_esize ) ) == DRM_B ) &&          /* border 6*/
+		} else if ( ( ( theYc - ( yo + thedrmbox_esize ) ) == DRM_B ) &&           border 6
 				( xo >= ( theXc - DRM_B ) ) &&
 				( xo <  ( theXc + DRM_B ) ) &&
 				( zo ==  DRM_D + thebase_zcoord )          ) {
@@ -347,7 +367,7 @@ void PlaneWaves_solver_init( int32_t myID, mesh_t *myMesh, mysolver_t *mySolver)
 			myDRMBorder6ElementsMapping[countb6] = eindex;
 			countb6++;
 
-		} else if ( ( ( theXc - ( xo + thedrmbox_esize ) ) == DRM_B ) &&      /* border 7*/
+		} else if ( ( ( theXc - ( xo + thedrmbox_esize ) ) == DRM_B ) &&       border 7
 				( yo >= ( theYc - DRM_B ) ) &&
 				( yo <  ( theYc + DRM_B ) ) &&
 				( zo ==  DRM_D + thebase_zcoord )          ) {
@@ -355,7 +375,7 @@ void PlaneWaves_solver_init( int32_t myID, mesh_t *myMesh, mysolver_t *mySolver)
 			myDRMBorder7ElementsMapping[countb7] = eindex;
 			countb7++;
 
-		} else if ( ( ( xo - theXc ) == DRM_B ) &&             /* border 8*/
+		} else if ( ( ( xo - theXc ) == DRM_B ) &&              border 8
 				( yo >= ( theYc - DRM_B ) ) &&
 				( yo <  ( theYc + DRM_B ) ) &&
 				( zo ==  DRM_D + thebase_zcoord )          ) {
@@ -385,7 +405,194 @@ void PlaneWaves_solver_init( int32_t myID, mesh_t *myMesh, mysolver_t *mySolver)
 //			       myID, countf1, countf2, countf3, countf4,countbott,countb1,countb2,countb3,countb4,countb5,countb6,countb7,countb8);
 
 }
+*/
 
+
+void PlaneWaves_solver_init( int32_t myID, mesh_t *myMesh, mysolver_t *mySolver) {
+
+	int32_t theFaceElem_ew, theFaceElem_ns, theBaseElem;
+	double  theDRMdepth, DRM_D = theDRMBox_DepthElements * thedrmbox_esize;
+
+	//double DRM_B = theDRMBox_halfwidthElements * thedrmbox_esize;
+	double thebase_zcoord = get_thebase_topo();
+
+	theFaceElem_ew = 2 * theDRMBox_halfwidthElements_ew * theDRMBox_DepthElements;
+	theFaceElem_ns = 2 * theDRMBox_halfwidthElements_ns * theDRMBox_DepthElements;
+	theBaseElem    = 4 * theDRMBox_halfwidthElements_ew * theDRMBox_halfwidthElements_ns;
+	theDRMdepth    = DRM_D;
+
+	double DRM_EW = theDRMBox_halfwidthElements_ew * thedrmbox_esize;
+	double DRM_NS = theDRMBox_halfwidthElements_ns * thedrmbox_esize;
+
+	/*  mapping of face1 elements */
+	int32_t eindex;
+	int32_t countf1 = 0, countf2 = 0, countf3 = 0, countf4 = 0, countbott=0;
+	int32_t countb1 = 0, countb2 = 0, countb3 = 0, countb4 = 0;
+	int32_t countb5 = 0, countb6 = 0, countb7 = 0, countb8 = 0;
+
+	XMALLOC_VAR_N(myDRMFace1ElementsMapping, int32_t, theFaceElem_ns); // right (XY view)
+	XMALLOC_VAR_N(myDRMFace2ElementsMapping, int32_t, theFaceElem_ns); // left (XY view)
+	XMALLOC_VAR_N(myDRMFace3ElementsMapping, int32_t, theFaceElem_ew); // bottom (XY view)
+	XMALLOC_VAR_N(myDRMFace4ElementsMapping, int32_t, theFaceElem_ew); // top (XY view)
+	XMALLOC_VAR_N(myDRMBottomElementsMapping , int32_t, theBaseElem); // base (XY view)
+
+	/* border elements*/
+	XMALLOC_VAR_N(myDRMBorder1ElementsMapping, int32_t, theDRMBox_DepthElements + 1); //  bottom right-hand corner (XY view)
+	XMALLOC_VAR_N(myDRMBorder2ElementsMapping, int32_t, theDRMBox_DepthElements + 1); //  top right-hand corner (XY view)
+	XMALLOC_VAR_N(myDRMBorder3ElementsMapping, int32_t, theDRMBox_DepthElements + 1); //  bottom left-hand corner (XY view)
+	XMALLOC_VAR_N(myDRMBorder4ElementsMapping, int32_t, theDRMBox_DepthElements + 1); //  top left-hand corner (XY view)
+
+	XMALLOC_VAR_N(myDRMBorder5ElementsMapping, int32_t, theDRMBox_halfwidthElements_ns * 2); // right
+	XMALLOC_VAR_N(myDRMBorder6ElementsMapping, int32_t, theDRMBox_halfwidthElements_ew * 2); // left
+	XMALLOC_VAR_N(myDRMBorder7ElementsMapping, int32_t, theDRMBox_halfwidthElements_ns * 2); // bottom
+	XMALLOC_VAR_N(myDRMBorder8ElementsMapping, int32_t, theDRMBox_halfwidthElements_ew * 2); // top
+
+	for (eindex = 0; eindex < myMesh->lenum; eindex++) {
+
+		elem_t     *elemp;
+		node_t     *node0dat;
+		edata_t    *edata;
+		double      xo, yo, zo;
+		int32_t	    node0;
+
+		elemp    = &myMesh->elemTable[eindex]; //Takes the information of the "eindex" element
+		node0    = elemp->lnid[0];             //Takes the ID for the zero node in element eindex
+		node0dat = &myMesh->nodeTable[node0];
+		edata    = (edata_t *)elemp->data;
+
+		/* get coordinates of element zero node */
+		xo = (node0dat->x)*(myMesh->ticksize);
+		yo = (node0dat->y)*(myMesh->ticksize);
+		zo = (node0dat->z)*(myMesh->ticksize);
+
+
+		if ( (  ( yo - theYc ) == DRM_EW )   &&                             /* face 1: right */
+				( xo >= ( theXc - DRM_NS ) ) &&
+				( xo <  ( theXc + DRM_NS ) ) &&
+				( zo <  DRM_D + thebase_zcoord ) &&
+				( zo >=  thebase_zcoord ) ) {
+
+			myDRMFace1ElementsMapping[countf1] = eindex;
+			countf1++;
+		} else 	if ( ( ( theYc - ( yo + thedrmbox_esize ) ) == DRM_EW ) &&  /* face 2: left*/
+				       ( xo  >= ( theXc - DRM_NS ) ) &&
+				       ( xo  <  ( theXc + DRM_NS ) ) &&
+				       ( zo  <  DRM_D + thebase_zcoord ) &&
+				       ( zo  >=  thebase_zcoord ) ) {
+
+			myDRMFace2ElementsMapping[countf2] = eindex;
+			countf2++;
+		} else 	if ( ( ( theXc - ( xo + thedrmbox_esize ) ) == DRM_NS ) &&  /* face 3: bottom */
+				       ( yo >= ( theYc - DRM_EW ) ) &&
+				       ( yo <  ( theYc + DRM_EW ) ) &&
+				       ( zo <  DRM_D + thebase_zcoord ) &&
+				       ( zo >=  thebase_zcoord ) ) {
+
+			myDRMFace3ElementsMapping[countf3] = eindex;
+			countf3++;
+		} else 	if ( ( ( xo - theXc ) == DRM_NS ) &&                       /* face 4: top */
+				       ( yo >= ( theYc - DRM_EW ) ) &&
+				       ( yo <  ( theYc + DRM_EW ) ) &&
+				       ( zo <  DRM_D + thebase_zcoord ) &&
+				       ( zo >=  thebase_zcoord ) ) {
+
+			myDRMFace4ElementsMapping[countf4] = eindex;
+			countf4++;
+
+		} else 	if ( ( yo >= ( theYc - DRM_EW ) ) &&                       /* base */
+				     ( yo <  ( theYc + DRM_EW ) ) &&
+				     ( xo >= ( theXc - DRM_NS ) ) &&
+				     ( xo <  ( theXc + DRM_NS ) ) &&
+				     ( zo ==  DRM_D + thebase_zcoord ) ) {
+
+			myDRMBottomElementsMapping[countbott] = eindex;
+			countbott++;
+
+		} else 	if ( ( ( yo - theYc ) == DRM_EW ) &&                       /* border 1 */
+				     ( ( xo + thedrmbox_esize ) == ( theXc - DRM_NS ) ) &&
+				       ( zo <=  DRM_D + thebase_zcoord ) &&
+				       ( zo >=  thebase_zcoord ) ) {
+
+			myDRMBorder1ElementsMapping[countb1] = eindex;
+			countb1++;
+
+		} else if ( ( ( yo - theYc ) == DRM_EW  )   &&                      /*border 2*/
+				      ( xo  == ( theXc + DRM_NS ) ) &&
+				      ( zo <=  DRM_D + thebase_zcoord ) &&
+				      ( zo >=  thebase_zcoord ) ) {
+
+			myDRMBorder2ElementsMapping[countb2] = eindex;
+			countb2++;
+
+		} else if ( ( ( theYc - ( yo + thedrmbox_esize ) ) == DRM_EW ) &&  /* border 3*/
+				    ( ( xo + thedrmbox_esize) == ( theXc - DRM_NS ) ) &&
+				      ( zo <=  DRM_D + thebase_zcoord ) &&
+				      ( zo >=  thebase_zcoord ) ) {
+
+			myDRMBorder3ElementsMapping[countb3] = eindex;
+			countb3++;
+
+		} else if ( ( ( theYc - ( yo + thedrmbox_esize ) ) == DRM_EW ) &&  /* border 4*/
+				      (  xo  == ( theXc + DRM_NS ) ) &&
+				      ( zo <=  DRM_D + thebase_zcoord ) &&
+				      ( zo >=  thebase_zcoord ) ) {
+
+			myDRMBorder4ElementsMapping[countb4] = eindex;
+			countb4++;
+
+		} else 	if ( ( ( yo - theYc ) == DRM_EW ) &&       /* border 5 : right*/
+				       ( xo >= ( theXc - DRM_NS ) ) &&
+				       ( xo <  ( theXc + DRM_NS ) ) &&
+				       ( zo ==  DRM_D + thebase_zcoord ) ) {
+
+			myDRMBorder5ElementsMapping[countb5] = eindex;
+			countb5++;
+
+		} else if ( ( ( theYc - ( yo + thedrmbox_esize ) ) == DRM_EW ) &&          /* border 6: left*/
+				      ( xo >= ( theXc - DRM_NS ) ) &&
+				      ( xo <  ( theXc + DRM_NS ) ) &&
+				      ( zo ==  DRM_D + thebase_zcoord ) ) {
+
+			myDRMBorder6ElementsMapping[countb6] = eindex;
+			countb6++;
+
+		} else if ( ( ( theXc - ( xo + thedrmbox_esize ) ) == DRM_NS ) &&      /* border 7: bottom*/
+				      ( yo >= ( theYc - DRM_EW ) ) &&
+				      ( yo <  ( theYc + DRM_EW ) ) &&
+				      ( zo ==  DRM_D + thebase_zcoord ) ) {
+
+			myDRMBorder7ElementsMapping[countb7] = eindex;
+			countb7++;
+
+		} else if ( ( ( xo - theXc ) == DRM_NS ) &&             /* border 8: top*/
+				      ( yo >= ( theYc - DRM_EW ) ) &&
+				      ( yo <  ( theYc + DRM_EW ) ) &&
+				      ( zo ==  DRM_D + thebase_zcoord ) ) {
+
+			myDRMBorder8ElementsMapping[countb8] = eindex;
+			countb8++;
+		}
+	}
+
+	myDRM_Face1Count  = countf1;
+	myDRM_Face2Count  = countf2;
+	myDRM_Face3Count  = countf3;
+	myDRM_Face4Count  = countf4;
+	myDRM_BottomCount = countbott;
+	myDRM_Brd1        = countb1;
+	myDRM_Brd2        = countb2;
+	myDRM_Brd3        = countb3;
+	myDRM_Brd4        = countb4;
+	myDRM_Brd5        = countb5;
+	myDRM_Brd6        = countb6;
+	myDRM_Brd7        = countb7;
+	myDRM_Brd8        = countb8;
+
+	//	fprintf(stdout,"myID = %d, myDRM_Face1Count= %d, myDRM_Face2Count= %d, myDRM_Face3Count= %d, myDRM_Face4Count= %d, myDRM_BottomCount=%d \n"
+	//			       "myDRM_Brd1=%d, myDRM_Brd2=%d, myDRM_Brd3=%d, myDRM_Brd4=%d, myDRM_Brd5=%d, myDRM_Brd6=%d, myDRM_Brd7=%d, myDRM_Brd8=%d \n\n",
+	//			       myID, countf1, countf2, countf3, countf4,countbott,countb1,countb2,countb3,countb4,countb5,countb6,countb7,countb8);
+
+}
 
 void compute_addforce_PlaneWaves ( mesh_t     *myMesh,
                                 mysolver_t *mySolver,
@@ -396,6 +603,8 @@ void compute_addforce_PlaneWaves ( mesh_t     *myMesh,
 
     int32_t   eindex;
     int32_t   face_eindex;
+
+    double theDRMdepth	= theDRMBox_DepthElements * thedrmbox_esize;
 
     double thebase_zcoord = get_thebase_topo();
 
@@ -776,4 +985,91 @@ double Ricker_displ ( double zp, double Ts, double t, double fc, double Vs  ) {
 
 	return (uo1+uo2);
 }
+
+
+void get_reflection_coeff ( double *A1, double *B1, double Vs, double Vp  ) {
+
+	double fcr, f, e;
+
+	if ( thePlaneWaveType == SV1 ) {
+
+		 fcr = asin(Vs/Vp) * 180.0 / PI;        // critical angle
+		 f = theplanewave_Zangle;
+		 e = asin( Vp / Vs * sin( f ) );
+
+	    if ( theplanewave_Zangle > fcr ) {
+	        fprintf(stderr, "Vertical angle greater than critical %f \n", theplanewave_Zangle);
+	    	MPI_Abort(MPI_COMM_WORLD,ERROR);
+	    	exit(1);
+	    }
+
+		*A1 = ( Vp / Vs ) * sin (4.0 * f) / ( sin ( 2.0 * e ) * sin ( 2.0 * f ) + ( Vp / Vs ) * ( Vp / Vs ) * cos ( 2.0 * f ) * cos ( 2.0 * f ) );
+		*B1 = ( sin ( 2.0 * e ) * sin ( 2.0 * f ) - ( Vp / Vs ) * ( Vp / Vs ) * cos ( 2.0 * f ) * cos ( 2.0 * f ) ) / ( sin ( 2.0 * e ) * sin ( 2.0 * f ) + ( Vp / Vs ) * ( Vp / Vs ) * cos ( 2.0 * f ) * cos ( 2.0 * f ) );
+
+	} else {
+		 e = theplanewave_Zangle;
+		 f = asin( Vs / Vp * sin( e ) );
+
+		*A1 =  ( sin ( 2.0 * e ) * sin ( 2.0 * f ) - ( Vp / Vs ) * ( Vp / Vs ) * cos ( 2.0 * f ) * cos ( 2.0 * f ) ) / ( sin ( 2.0 * e ) * sin ( 2.0 * f ) + ( Vp / Vs ) * ( Vp / Vs ) * cos ( 2.0 * f ) * cos ( 2.0 * f ) );
+		*B1 = - 2.0 * ( Vp / Vs ) * sin (2.0 * e) * cos (2.0 * f) / ( sin ( 2.0 * e ) * sin ( 2.0 * f ) + ( Vp / Vs ) * ( Vp / Vs ) * cos ( 2.0 * f ) * cos ( 2.0 * f ) );
+
+	}
+
+}
+
+double time_shift ( double Vs, double Vp ) {
+
+
+	double p_inc[3]  = {0.0}; // propagation angle of the incident wave
+	double p_pref[3] = {0.0}; // propagation angle of the reflected p-wave
+	double p_sref[3] = {0.0}; // propagation angle of the reflected s-wave
+	double e, f;
+
+	//double DRM_D = theDRMBox_DepthElements * thedrmbox_esize;
+	//double DRM_B = theDRMBox_halfwidthElements * thedrmbox_esize;
+
+	if ( thePlaneWaveType == SV1 ) {
+
+		f = theplanewave_Zangle;
+		e = asin( Vp / Vs * sin( f ) );
+
+		p_inc[0] =  sin( f ) * cos (theplanewave_strike);
+		p_inc[1] =  sin( f ) * sin (theplanewave_strike);
+		p_inc[2] = -cos( f );
+
+		p_pref[0] = sin( e ) * cos (theplanewave_strike);
+		p_pref[1] = sin( e ) * sin (theplanewave_strike);
+		p_pref[2] = cos( e );
+
+		p_sref[0] = sin( f ) * cos (theplanewave_strike);
+		p_sref[0] = sin( f ) * sin (theplanewave_strike);
+		p_sref[2] = cos( f );
+
+	} else {
+		e = theplanewave_Zangle;
+		f = asin( Vs / Vp * sin( e ) );
+
+
+	}
+
+
+
+
+	return -1;
+
+}
+
+void compute_propagation_vectors() {
+
+
+
+}
+
+void compute_incident_motion ( double xp, double yp, double zp, fvector_t *myDisp ) {
+
+
+}
+
+
+
 
