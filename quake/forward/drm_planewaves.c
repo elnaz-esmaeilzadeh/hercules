@@ -938,8 +938,8 @@ void DRM_ForcesinElement ( mesh_t     *myMesh,
 
 			int  nodef = *(f_nodes + j);
 
-			double x_nf = xo + h * CoordArrX[ nodee ];   /* get xcoord */
-			double y_nf = yo + h * CoordArrY[ nodee ];   /* get ycoord */
+			double x_nf = xo + h * CoordArrX[ nodef ];   /* get xcoord */
+			double y_nf = yo + h * CoordArrY[ nodef ];   /* get ycoord */
 			double z_nf = zo + h * CoordArrZ[ nodef ];   /* get zcoord */
 			//getRicker ( &myDisp, z_nf, tt, Vs ); /* get Displ */
 			Ricker_inclinedPW (  &myDisp, x_nf,  y_nf, z_nf, tt, edata->Vs, edata->Vp  );
