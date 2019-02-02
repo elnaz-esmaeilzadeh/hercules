@@ -79,6 +79,9 @@ static int32_t            myDRM_Brd6 = 0;
 static int32_t            myDRM_Brd7 = 0;
 static int32_t            myDRM_Brd8 = 0;
 
+#define MAX(a, b) ((a)>(b)?(a):(b))
+#define MIN(a, b) ((a)<(b)?(a):(b))
+
 void drm_planewaves_init ( int32_t myID, const char *parametersin ) {
 
     int     int_message[4];
@@ -92,11 +95,9 @@ void drm_planewaves_init ( int32_t myID, const char *parametersin ) {
             MPI_Abort(MPI_COMM_WORLD, ERROR);
             exit(1);
         }
-
     }
 
     /* Broadcasting data */
-
     int_message   [0]    = (int)thePlaneWaveType;
     int_message   [1]    = theDRMBox_halfwidthElements_ew;
     int_message   [2]    = theDRMBox_halfwidthElements_ns;
@@ -199,6 +200,9 @@ drm_planewaves_initparameters ( const char *parametersin ) {
 	theYc                            = L_ns / 2.0;
 	thedrmbox_esize                  = drmbox_esize;
 
+
+	//double Vs = 100, Vp = 300;
+	//double popo = time_shift ( Vs, Vp );
 /*	// propagation vectors in local coordinates
     the_p_inc    = (double*)malloc( sizeof(double) * 3 );
     the_p_p_refl = (double*)malloc( sizeof(double) * 3 );
@@ -855,7 +859,9 @@ void DRM_ForcesinElement ( mesh_t     *myMesh,
 {
 
     int       i, j;
-    int  CoordArr[8]      = { 0, 0, 0, 0, 1, 1, 1, 1 };
+    int  CoordArrX[8]      = { 0, 1, 0, 1, 0, 1, 0, 1 };
+    int  CoordArrY[8]      = { 0, 0, 1, 1, 0, 0, 1, 1 };
+    int  CoordArrZ[8]      = { 0, 0, 0, 0, 1, 1, 1, 1 };
 
     double thebase_zcoord = get_thebase_topo();
 
@@ -910,8 +916,11 @@ void DRM_ForcesinElement ( mesh_t     *myMesh,
 
 			int  nodee = *(e_nodes + j);
 
-			double z_ne = zo + h * CoordArr[ nodee ];   /* get zcoord */
-			getRicker ( &myDisp, z_ne, tt, Vs ); /* get Displ */
+			double x_ne = xo + h * CoordArrX[ nodee ];   /* get xcoord */
+			double y_ne = yo + h * CoordArrY[ nodee ];   /* get ycoord */
+			double z_ne = zo + h * CoordArrZ[ nodee ];   /* get zcoord */
+			//getRicker ( &myDisp, z_ne, tt, Vs ); /* get Displ */
+			Ricker_inclinedPW (  &myDisp, x_ne,  y_ne, z_ne, tt, edata->Vs, edata->Vp  );
 
 			MultAddMatVec( &theK1[ nodef ][ nodee ], &myDisp, -ep->c1, toForce );
 			MultAddMatVec( &theK2[ nodef ][ nodee ], &myDisp, -ep->c2, toForce );
@@ -929,8 +938,11 @@ void DRM_ForcesinElement ( mesh_t     *myMesh,
 
 			int  nodef = *(f_nodes + j);
 
-			double z_nf = zo + h * CoordArr[ nodef ];   /* get zcoord */
-			getRicker ( &myDisp, z_nf, tt, Vs ); /* get Displ */
+			double x_nf = xo + h * CoordArrX[ nodee ];   /* get xcoord */
+			double y_nf = yo + h * CoordArrY[ nodee ];   /* get ycoord */
+			double z_nf = zo + h * CoordArrZ[ nodef ];   /* get zcoord */
+			//getRicker ( &myDisp, z_nf, tt, Vs ); /* get Displ */
+			Ricker_inclinedPW (  &myDisp, x_nf,  y_nf, z_nf, tt, edata->Vs, edata->Vp  );
 
 			MultAddMatVec( &theK1[ nodee ][ nodef ], &myDisp, ep->c1, toForce );
 			MultAddMatVec( &theK2[ nodee ][ nodef ], &myDisp, ep->c2, toForce );
@@ -987,13 +999,102 @@ double Ricker_displ ( double zp, double Ts, double t, double fc, double Vs  ) {
 }
 
 
+void Ricker_inclinedPW ( fvector_t *myDisp, double xp, double yp, double zp, double t, double Vs, double Vp  ) {
+
+	// propagation vectors
+	double c, f, e, A1, B1;
+	double p_inc[3]  = {0.0}; // propagation vector of the incident wave
+	double p_pref[3] = {0.0}; // propagation vector of the reflected p-wave
+	double p_sref[3] = {0.0}; // propagation vector of the reflected s-wave
+
+	double u_inc[3]  = {0.0}; // displ vector of the incident wave
+	double u_pref[3] = {0.0}; // displ vector of the reflected p-wave
+	double u_sref[3] = {0.0}; // displ vector of the reflected s-wave
+
+	if ( thePlaneWaveType == SV1 ) {
+		c = Vs;
+		f = theplanewave_Zangle;
+		e = asin( Vp / Vs * sin( f ) );
+
+		p_inc[0] =  sin( f ) * cos (theplanewave_strike);
+		p_inc[1] =  sin( f ) * sin (theplanewave_strike);
+		p_inc[2] = -cos( f );
+
+		p_pref[0] = sin( e ) * cos (theplanewave_strike);
+		p_pref[1] = sin( e ) * sin (theplanewave_strike);
+		p_pref[2] = cos( e );
+
+		p_sref[0] = sin( f ) * cos (theplanewave_strike);
+		p_sref[1] = sin( f ) * sin (theplanewave_strike);
+		p_sref[2] = cos( f );
+
+		u_inc[0] =  cos( f ) * cos (theplanewave_strike);
+		u_inc[1] =  cos( f ) * sin (theplanewave_strike);
+		u_inc[2] =  sin( f );
+
+		u_pref[0] = sin( e ) * cos (theplanewave_strike);
+		u_pref[1] = sin( e ) * sin (theplanewave_strike);
+		u_pref[2] = cos( e );
+
+		u_sref[0] = -cos( f ) * cos (theplanewave_strike);
+		u_sref[1] = -cos( f ) * sin (theplanewave_strike);
+		u_sref[2] =  sin( f );
+
+	} else {
+		c = Vp;
+		e = theplanewave_Zangle;
+	    f = asin( Vs / Vp * sin( e ) );
+
+		p_inc[0] =  sin( e ) * cos (theplanewave_strike);
+		p_inc[1] =  sin( e ) * sin (theplanewave_strike);
+		p_inc[2] = -cos( e );
+
+		p_pref[0] = sin( e ) * cos (theplanewave_strike);
+		p_pref[1] = sin( e ) * sin (theplanewave_strike);
+		p_pref[2] = cos( e );
+
+		p_sref[0] = sin( f ) * cos (theplanewave_strike);
+		p_sref[1] = sin( f ) * sin (theplanewave_strike);
+		p_sref[2] = cos( f );
+
+		u_inc[0] =   sin( e ) * cos (theplanewave_strike);
+		u_inc[1] =   sin( e ) * sin (theplanewave_strike);
+		u_inc[2] =  -cos( e );
+
+		u_pref[0] = sin( e ) * cos (theplanewave_strike);
+		u_pref[1] = sin( e ) * sin (theplanewave_strike);
+		u_pref[2] = cos( e );
+
+		u_sref[0] = -cos( f ) * cos (theplanewave_strike);
+		u_sref[1] = -cos( f ) * sin (theplanewave_strike);
+		u_sref[2] =  sin( f );
+	}
+
+	get_reflection_coeff ( &A1, &B1, Vs, Vp  );
+
+	double alfa_inc  = ( PI * thefc ) * ( PI * thefc ) * ( t - (xp*p_inc[0]  + yp*p_inc[1]  + zp*p_inc[2])/c  - theTs) *  ( t - (xp*p_inc[0]  + yp*p_inc[1]  + zp*p_inc[2])/c   - theTs) ; // incident
+	double alfa_pref = ( PI * thefc ) * ( PI * thefc ) * ( t - (xp*p_pref[0] + yp*p_pref[1] + zp*p_pref[2])/Vp - theTs) * ( t - (xp*p_pref[0] + yp*p_pref[1] + zp*p_pref[2])/Vp - theTs) ; // p_reflected
+	double alfa_sref = ( PI * thefc ) * ( PI * thefc ) * ( t - (xp*p_sref[0] + yp*p_sref[1] + zp*p_sref[2])/Vs - theTs) * ( t - (xp*p_sref[0] + yp*p_sref[1] + zp*p_sref[2])/Vs - theTs) ; // s_reflected
+
+	double Rick_inc  = ( 2.0 * alfa_inc  - 1.0 ) * exp(-alfa_inc);
+	double Rick_pref = ( 2.0 * alfa_pref - 1.0 ) * exp(-alfa_pref);
+	double Rick_sref = ( 2.0 * alfa_sref - 1.0 ) * exp(-alfa_sref);
+
+	myDisp->f[0] = ( Rick_inc * u_inc[0] + A1 * Rick_pref * u_pref[0] + B1 * Rick_sref * u_sref[0] ) * theUo ;
+	myDisp->f[1] = ( Rick_inc * u_inc[1] + A1 * Rick_pref * u_pref[1] + B1 * Rick_sref * u_sref[1] ) * theUo;
+	myDisp->f[2] = ( Rick_inc * u_inc[2] + A1 * Rick_pref * u_pref[2] + B1 * Rick_sref * u_sref[2] ) * theUo;
+
+	//return ( u_inc + u_pref + u_sref );
+}
+
+
 void get_reflection_coeff ( double *A1, double *B1, double Vs, double Vp  ) {
 
 	double fcr, f, e;
 
 	if ( thePlaneWaveType == SV1 ) {
 
-		 fcr = asin(Vs/Vp) * 180.0 / PI;        // critical angle
+		 fcr = asin(Vs/Vp);        // critical angle
 		 f = theplanewave_Zangle;
 		 e = asin( Vp / Vs * sin( f ) );
 
@@ -1019,43 +1120,71 @@ void get_reflection_coeff ( double *A1, double *B1, double Vs, double Vp  ) {
 
 double time_shift ( double Vs, double Vp ) {
 
-
+	int i, j;
 	double p_inc[3]  = {0.0}; // propagation angle of the incident wave
-	double p_pref[3] = {0.0}; // propagation angle of the reflected p-wave
-	double p_sref[3] = {0.0}; // propagation angle of the reflected s-wave
-	double e, f;
+	//double p_pref[3] = {0.0}; // propagation angle of the reflected p-wave
+	//double p_sref[3] = {0.0}; // propagation angle of the reflected s-wave
+	//double e, f, time_shft[8] = { 0.0 }, c;
+	double time_shft[8] = { 0.0 }, c;
 
-	//double DRM_D = theDRMBox_DepthElements * thedrmbox_esize;
-	//double DRM_B = theDRMBox_halfwidthElements * thedrmbox_esize;
+	double t_shft=0.0;
+
+	double DRM_EW = theDRMBox_halfwidthElements_ew * thedrmbox_esize;
+	double DRM_NS = theDRMBox_halfwidthElements_ns * thedrmbox_esize;
+	double DRM_D  = theDRMBox_DepthElements * thedrmbox_esize;
+
+	double drm_corners[3][8] = { { DRM_NS,  DRM_NS, -DRM_NS,  -DRM_NS,  DRM_NS,  DRM_NS, -DRM_NS,  -DRM_NS} , \
+                                 {-DRM_EW,  DRM_EW,  DRM_EW,  -DRM_EW, -DRM_EW,  DRM_EW,  DRM_EW,  -DRM_EW} , \
+                                 {    0.0,     0.0,     0.0,      0.0,   DRM_D,   DRM_D,   DRM_D,    DRM_D} };
+
+	p_inc[0] =  sin( theplanewave_Zangle ) * cos (theplanewave_strike);
+	p_inc[1] =  sin( theplanewave_Zangle ) * sin (theplanewave_strike);
+	p_inc[2] = -cos( theplanewave_Zangle );
+
 
 	if ( thePlaneWaveType == SV1 ) {
+		c = Vs;
+		//f = theplanewave_Zangle;
+		//e = asin( Vp / Vs * sin( f ) );
 
-		f = theplanewave_Zangle;
-		e = asin( Vp / Vs * sin( f ) );
-
-		p_inc[0] =  sin( f ) * cos (theplanewave_strike);
+		/* p_inc[0] =  sin( f ) * cos (theplanewave_strike);
 		p_inc[1] =  sin( f ) * sin (theplanewave_strike);
-		p_inc[2] = -cos( f );
+		p_inc[2] = -cos( f ); */
 
-		p_pref[0] = sin( e ) * cos (theplanewave_strike);
+		/* p_pref[0] = sin( e ) * cos (theplanewave_strike);
 		p_pref[1] = sin( e ) * sin (theplanewave_strike);
 		p_pref[2] = cos( e );
 
 		p_sref[0] = sin( f ) * cos (theplanewave_strike);
 		p_sref[0] = sin( f ) * sin (theplanewave_strike);
-		p_sref[2] = cos( f );
+		p_sref[2] = cos( f ); */
+
+		/* for (i = 0; i < 8; i++) {
+			for (j = 0; j < 3; j++) {
+				time_shft[i] += p_inc[j] * drm_corners[j][i] / Vs;
+			}
+		} */
 
 	} else {
-		e = theplanewave_Zangle;
-		f = asin( Vs / Vp * sin( e ) );
-
-
+		c = Vp;
+		/* e = theplanewave_Zangle;
+		//f = asin( Vs / Vp * sin( e ) );
+		p_inc[0] =  sin( e ) * cos (theplanewave_strike);
+		p_inc[1] =  sin( e ) * sin (theplanewave_strike);
+		p_inc[2] = -cos( e ); */
 	}
 
+	for (i = 0; i < 8; i++) {
+		for (j = 0; j < 3; j++) {
+			time_shft[i] += p_inc[j] * drm_corners[j][i] / c;
+		}
+	}
+
+	for (i = 0; i < 8; i++)
+		t_shft = MIN( t_shft, time_shft[i] );
 
 
-
-	return -1;
+	return t_shft;
 
 }
 

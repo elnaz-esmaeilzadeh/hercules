@@ -29,5 +29,9 @@ void DRM_ForcesinElement ( mesh_t     *myMesh,
 void   getRicker    ( fvector_t *myDisp, double zp, double t, double Vs );
 double Ricker_displ ( double zp, double Ts, double t, double fc, double Vs  );
 
+double time_shift ( double Vs, double Vp ) ;
+void   get_reflection_coeff ( double *A1, double *B1, double Vs, double Vp  );
+void   Ricker_inclinedPW ( fvector_t *myDisp, double xp, double yp, double zp, double t, double Vs, double Vp  );
+
 
 #endif /* DRM_PLANEWAVES_H_ */
