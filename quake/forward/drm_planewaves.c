@@ -112,7 +112,7 @@ void drm_planewaves_init ( int32_t myID, const char *parametersin ) {
     double_message[6] = thedrmbox_esize;
     double_message[7] = theplanewave_Zangle;
 
-    MPI_Bcast(double_message, 7, MPI_DOUBLE, 0, comm_solver);
+    MPI_Bcast(double_message, 8, MPI_DOUBLE, 0, comm_solver);
     MPI_Bcast(int_message,    4, MPI_INT,    0, comm_solver);
 
     thePlaneWaveType                = int_message[0];
@@ -592,9 +592,9 @@ void PlaneWaves_solver_init( int32_t myID, mesh_t *myMesh, mysolver_t *mySolver)
 	myDRM_Brd7        = countb7;
 	myDRM_Brd8        = countb8;
 
-	//	fprintf(stdout,"myID = %d, myDRM_Face1Count= %d, myDRM_Face2Count= %d, myDRM_Face3Count= %d, myDRM_Face4Count= %d, myDRM_BottomCount=%d \n"
-	//			       "myDRM_Brd1=%d, myDRM_Brd2=%d, myDRM_Brd3=%d, myDRM_Brd4=%d, myDRM_Brd5=%d, myDRM_Brd6=%d, myDRM_Brd7=%d, myDRM_Brd8=%d \n\n",
-	//			       myID, countf1, countf2, countf3, countf4,countbott,countb1,countb2,countb3,countb4,countb5,countb6,countb7,countb8);
+	/*	fprintf(stdout,"myID = %d, myDRM_Face1Count= %d, myDRM_Face2Count= %d, myDRM_Face3Count= %d, myDRM_Face4Count= %d, myDRM_BottomCount=%d \n"
+				       "myDRM_Brd1=%d, myDRM_Brd2=%d, myDRM_Brd3=%d, myDRM_Brd4=%d, myDRM_Brd5=%d, myDRM_Brd6=%d, myDRM_Brd7=%d, myDRM_Brd8=%d \n\n",
+				       myID, countf1, countf2, countf3, countf4,countbott,countb1,countb2,countb3,countb4,countb5,countb6,countb7,countb8); */
 
 }
 
@@ -889,13 +889,12 @@ void DRM_ForcesinElement ( mesh_t     *myMesh,
 
 
 	/* get material properties  */
-	double  h, Vs;
-	h    = (double)edata->edgesize;
+	double h    = (double)edata->edgesize;
 
-	if ( thePlaneWaveType == SV1  )
+	/* if ( thePlaneWaveType == SV1  )
 		Vs = edata->Vs;
 	else
-		Vs = edata->Vp;
+		Vs = edata->Vp; */
 
 
 	/* Force contribution from external nodes */
@@ -920,7 +919,7 @@ void DRM_ForcesinElement ( mesh_t     *myMesh,
 			double y_ne = yo + h * CoordArrY[ nodee ];   /* get ycoord */
 			double z_ne = zo + h * CoordArrZ[ nodee ];   /* get zcoord */
 			//getRicker ( &myDisp, z_ne, tt, Vs ); /* get Displ */
-			Ricker_inclinedPW (  &myDisp, x_ne,  y_ne, z_ne, tt, edata->Vs, edata->Vp  );
+			Ricker_inclinedPW (  &myDisp, x_ne - theXc ,  y_ne - theYc, z_ne, tt, edata->Vs, edata->Vp  );
 
 			MultAddMatVec( &theK1[ nodef ][ nodee ], &myDisp, -ep->c1, toForce );
 			MultAddMatVec( &theK2[ nodef ][ nodee ], &myDisp, -ep->c2, toForce );
@@ -942,7 +941,7 @@ void DRM_ForcesinElement ( mesh_t     *myMesh,
 			double y_nf = yo + h * CoordArrY[ nodef ];   /* get ycoord */
 			double z_nf = zo + h * CoordArrZ[ nodef ];   /* get zcoord */
 			//getRicker ( &myDisp, z_nf, tt, Vs ); /* get Displ */
-			Ricker_inclinedPW (  &myDisp, x_nf,  y_nf, z_nf, tt, edata->Vs, edata->Vp  );
+			Ricker_inclinedPW (  &myDisp, x_nf - theXc ,  y_nf - theYc, z_nf, tt, edata->Vs, edata->Vp  );
 
 			MultAddMatVec( &theK1[ nodee ][ nodef ], &myDisp, ep->c1, toForce );
 			MultAddMatVec( &theK2[ nodee ][ nodef ], &myDisp, ep->c2, toForce );
