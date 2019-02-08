@@ -12,6 +12,10 @@ typedef enum {
 	SV1 = 0, P1
 } pwtype_t;
 
+typedef enum {
+	RICK = 0, THST
+} fnctype_t;
+
 void    drm_planewaves_init ( int32_t myID, const char *parametersin );
 int32_t drm_planewaves_initparameters ( const char *parametersin );
 void    PlaneWaves_solver_init( int32_t myID, mesh_t *myMesh, mysolver_t *mySolver);

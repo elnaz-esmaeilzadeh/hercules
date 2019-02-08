@@ -35,6 +35,7 @@
 
 
 static pwtype_t      	thePlaneWaveType;
+static fnctype_t        theFncType;
 static int32_t	        theDRMBox_halfwidthElements_ew = 0;
 static int32_t	        theDRMBox_halfwidthElements_ns = 0;
 static int32_t	        theDRMBox_DepthElements = 0;
@@ -48,43 +49,43 @@ static double 	        theplanewave_Zangle = 0.0;
 static double 	        theXc  = 0.0;
 static double 	        theYc  = 0.0;
 
-static int32_t            *myDRMFace1ElementsMapping;
-static int32_t            *myDRMFace2ElementsMapping;
-static int32_t            *myDRMFace3ElementsMapping;
-static int32_t            *myDRMFace4ElementsMapping;
-static int32_t            *myDRMBottomElementsMapping;
+static int32_t          *myDRMFace1ElementsMapping;
+static int32_t          *myDRMFace2ElementsMapping;
+static int32_t          *myDRMFace3ElementsMapping;
+static int32_t          *myDRMFace4ElementsMapping;
+static int32_t          *myDRMBottomElementsMapping;
 
-static int32_t            *myDRMBorder1ElementsMapping;
-static int32_t            *myDRMBorder2ElementsMapping;
-static int32_t            *myDRMBorder3ElementsMapping;
-static int32_t            *myDRMBorder4ElementsMapping;
+static int32_t          *myDRMBorder1ElementsMapping;
+static int32_t          *myDRMBorder2ElementsMapping;
+static int32_t          *myDRMBorder3ElementsMapping;
+static int32_t          *myDRMBorder4ElementsMapping;
 
-static int32_t            *myDRMBorder5ElementsMapping;
-static int32_t            *myDRMBorder6ElementsMapping;
-static int32_t            *myDRMBorder7ElementsMapping;
-static int32_t            *myDRMBorder8ElementsMapping;
+static int32_t          *myDRMBorder5ElementsMapping;
+static int32_t          *myDRMBorder6ElementsMapping;
+static int32_t          *myDRMBorder7ElementsMapping;
+static int32_t          *myDRMBorder8ElementsMapping;
 //static double              theDRMdepth;
 
-static int32_t            myDRM_Face1Count  = 0;
-static int32_t            myDRM_Face2Count  = 0;
-static int32_t            myDRM_Face3Count  = 0;
-static int32_t            myDRM_Face4Count  = 0;
-static int32_t            myDRM_BottomCount = 0;
-static int32_t            myDRM_Brd1 = 0;
-static int32_t            myDRM_Brd2 = 0;
-static int32_t            myDRM_Brd3 = 0;
-static int32_t            myDRM_Brd4 = 0;
-static int32_t            myDRM_Brd5 = 0;
-static int32_t            myDRM_Brd6 = 0;
-static int32_t            myDRM_Brd7 = 0;
-static int32_t            myDRM_Brd8 = 0;
+static int32_t          myDRM_Face1Count  = 0;
+static int32_t          myDRM_Face2Count  = 0;
+static int32_t          myDRM_Face3Count  = 0;
+static int32_t          myDRM_Face4Count  = 0;
+static int32_t          myDRM_BottomCount = 0;
+static int32_t          myDRM_Brd1 = 0;
+static int32_t          myDRM_Brd2 = 0;
+static int32_t          myDRM_Brd3 = 0;
+static int32_t          myDRM_Brd4 = 0;
+static int32_t          myDRM_Brd5 = 0;
+static int32_t          myDRM_Brd6 = 0;
+static int32_t          myDRM_Brd7 = 0;
+static int32_t          myDRM_Brd8 = 0;
 
 #define MAX(a, b) ((a)>(b)?(a):(b))
 #define MIN(a, b) ((a)<(b)?(a):(b))
 
 void drm_planewaves_init ( int32_t myID, const char *parametersin ) {
 
-    int     int_message[4];
+    int     int_message[5];
     double  double_message[8];
 
     /* Capturing data from file --- only done by PE0 */
@@ -102,6 +103,7 @@ void drm_planewaves_init ( int32_t myID, const char *parametersin ) {
     int_message   [1]    = theDRMBox_halfwidthElements_ew;
     int_message   [2]    = theDRMBox_halfwidthElements_ns;
     int_message   [3]    = theDRMBox_DepthElements;
+    int_message   [4]    = theFncType;
 
     double_message[0] = theTs;
     double_message[1] = thefc;
@@ -113,12 +115,13 @@ void drm_planewaves_init ( int32_t myID, const char *parametersin ) {
     double_message[7] = theplanewave_Zangle;
 
     MPI_Bcast(double_message, 8, MPI_DOUBLE, 0, comm_solver);
-    MPI_Bcast(int_message,    4, MPI_INT,    0, comm_solver);
+    MPI_Bcast(int_message,    5, MPI_INT,    0, comm_solver);
 
     thePlaneWaveType                = int_message[0];
     theDRMBox_halfwidthElements_ew  = int_message[1];
     theDRMBox_halfwidthElements_ns  = int_message[2];
     theDRMBox_DepthElements         = int_message[3];
+    theFncType                      = int_message[4];
 
     theTs               = double_message[0];
     thefc               = double_message[1];
@@ -139,10 +142,11 @@ int32_t
 drm_planewaves_initparameters ( const char *parametersin ) {
     FILE                *fp;
 
-    double              drmbox_halfwidth_elements_ew, drmbox_halfwidth_elements_ns, drmbox_depth_elements, Ts, fc, Uo, planewave_strike, planewave_zAngle, L_ew, L_ns, drmbox_esize;
-    char                type_of_wave[64];
+    double      drmbox_halfwidth_elements_ew, drmbox_halfwidth_elements_ns, drmbox_depth_elements, Ts, fc, Uo, planewave_strike, planewave_zAngle, L_ew, L_ns, drmbox_esize;
+    char        type_of_wave[64], type_of_fnc[64];
 
-    pwtype_t     planewave;
+    pwtype_t    planewave;
+    fnctype_t   fnc_type;
 
 
     /* Opens parametersin file */
@@ -167,7 +171,9 @@ drm_planewaves_initparameters ( const char *parametersin ) {
          ( parsetext(fp, "fc",                                'd', &fc                            ) != 0) ||
          ( parsetext(fp, "Uo",                                'd', &Uo                            ) != 0) ||
          ( parsetext(fp, "planewave_strike",                  'd', &planewave_strike              ) != 0) ||
-         ( parsetext(fp, "planewave_Z_angle",                 'd', &planewave_zAngle              ) != 0) )
+         ( parsetext(fp, "planewave_Z_angle",                 'd', &planewave_zAngle              ) != 0) ||
+         ( parsetext(fp, "fnc_type",                          's', &type_of_fnc                   ) != 0)
+         )
     {
         fprintf( stderr,
                  "Error parsing planewaves parameters from %s\n",
@@ -186,6 +192,20 @@ drm_planewaves_initparameters ( const char *parametersin ) {
         return -1;
     }
 
+    if ( strcasecmp(type_of_fnc, "RICKER") == 0 ) {
+    	fnc_type = RICK;
+    } else if ( strcasecmp(type_of_fnc, "time_hist") == 0 ) {
+    	fnc_type = THST;
+    } else {
+        fprintf(stderr,
+                "Illegal fnc_type for incident plane wave analysis"
+                "RICKER, or TIME_HIST): %s\n", type_of_fnc);
+        return -1;
+    }
+
+    //theFncType
+
+
     /*  Initialize the static global variables */
 	thePlaneWaveType                 = planewave;
 	theDRMBox_halfwidthElements_ew   = drmbox_halfwidth_elements_ew;
@@ -199,6 +219,7 @@ drm_planewaves_initparameters ( const char *parametersin ) {
 	theXc                            = L_ew / 2.0;
 	theYc                            = L_ns / 2.0;
 	thedrmbox_esize                  = drmbox_esize;
+	theFncType                       = fnc_type;
 
     fclose(fp);
 
@@ -712,7 +733,15 @@ void DRM_ForcesinElement ( mesh_t     *myMesh,
 			double y_ne = yo + h * CoordArrY[ nodee ];   /* get ycoord */
 			double z_ne = zo + h * CoordArrZ[ nodee ];   /* get zcoord */
 			//getRicker ( &myDisp, z_ne, tt, Vs ); /* get Displ */
-			Ricker_inclinedPW (  &myDisp, x_ne - theXc ,  y_ne - theYc, z_ne, tt, edata->Vs, edata->Vp  );
+
+			if ( theFncType == RICK )
+				Ricker_inclinedPW (  &myDisp, x_ne - theXc ,  y_ne - theYc, z_ne, tt, edata->Vs, edata->Vp  );
+			else {
+	            fprintf(stderr,"Need to work on this \n");
+	            MPI_Abort(MPI_COMM_WORLD, ERROR);
+	            exit(1);
+	        }
+
 
 			MultAddMatVec( &theK1[ nodef ][ nodee ], &myDisp, -ep->c1, toForce );
 			MultAddMatVec( &theK2[ nodef ][ nodee ], &myDisp, -ep->c2, toForce );
