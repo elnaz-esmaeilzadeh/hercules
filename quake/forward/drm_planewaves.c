@@ -41,6 +41,11 @@ static int32_t	        theDRMBox_halfwidthElements_ns = 0;
 static int32_t	        theDRMBox_DepthElements = 0;
 static double 	        thedrmbox_esize         = 0.0;
 
+static double 	        theUg_Dt;
+static double           *theUg;
+static int32_t	        the_Ug_NoData = 0;
+
+
 static double 	        theTs = 0.0;
 static double 	        thefc = 0.0;
 static double           theUo = 0.0;
@@ -85,8 +90,8 @@ static int32_t          myDRM_Brd8 = 0;
 
 void drm_planewaves_init ( int32_t myID, const char *parametersin ) {
 
-    int     int_message[5];
-    double  double_message[8];
+    int     int_message[6];
+    double  double_message[9];
 
     /* Capturing data from file --- only done by PE0 */
     if (myID == 0) {
@@ -104,6 +109,7 @@ void drm_planewaves_init ( int32_t myID, const char *parametersin ) {
     int_message   [2]    = theDRMBox_halfwidthElements_ns;
     int_message   [3]    = theDRMBox_DepthElements;
     int_message   [4]    = theFncType;
+    int_message   [5]    = the_Ug_NoData;
 
     double_message[0] = theTs;
     double_message[1] = thefc;
@@ -113,8 +119,9 @@ void drm_planewaves_init ( int32_t myID, const char *parametersin ) {
     double_message[5] = theYc;
     double_message[6] = thedrmbox_esize;
     double_message[7] = theplanewave_Zangle;
+    double_message[8] = theUg_Dt;
 
-    MPI_Bcast(double_message, 8, MPI_DOUBLE, 0, comm_solver);
+    MPI_Bcast(double_message, 9, MPI_DOUBLE, 0, comm_solver);
     MPI_Bcast(int_message,    5, MPI_INT,    0, comm_solver);
 
     thePlaneWaveType                = int_message[0];
@@ -122,6 +129,7 @@ void drm_planewaves_init ( int32_t myID, const char *parametersin ) {
     theDRMBox_halfwidthElements_ns  = int_message[2];
     theDRMBox_DepthElements         = int_message[3];
     theFncType                      = int_message[4];
+    the_Ug_NoData                   = int_message[5];
 
     theTs               = double_message[0];
     thefc               = double_message[1];
@@ -131,6 +139,14 @@ void drm_planewaves_init ( int32_t myID, const char *parametersin ) {
     theYc               = double_message[5];
     thedrmbox_esize     = double_message[6];
     theplanewave_Zangle = double_message[7];
+    theUg_Dt            = double_message[8];
+
+	    /* allocate table of properties for all other PEs */
+	 if (myID != 0 && theFncType == THST ) {
+		theUg        = (double*)malloc( sizeof(double) * the_Ug_NoData );
+		MPI_Bcast(theUg,   the_Ug_NoData, MPI_DOUBLE, 0, comm_solver);
+	 }
+
 
     return;
 
@@ -142,8 +158,12 @@ int32_t
 drm_planewaves_initparameters ( const char *parametersin ) {
     FILE                *fp;
 
-    double      drmbox_halfwidth_elements_ew, drmbox_halfwidth_elements_ns, drmbox_depth_elements, Ts, fc, Uo, planewave_strike, planewave_zAngle, L_ew, L_ns, drmbox_esize;
-    char        type_of_wave[64], type_of_fnc[64];
+    double      drmbox_halfwidth_elements_ew, drmbox_halfwidth_elements_ns, drmbox_depth_elements, Ts, fc, Uo, planewave_strike, planewave_zAngle, L_ew, L_ns, drmbox_esize, ug_dt;
+    char        type_of_wave[64], type_of_fnc[64], ug_file[256];
+    
+    int                 no_data, i_ug=0;
+    
+    FILE                *fp_ug;
 
     pwtype_t    planewave;
     fnctype_t   fnc_type;
@@ -165,6 +185,8 @@ drm_planewaves_initparameters ( const char *parametersin ) {
          ( parsetext(fp, "DRMBox_Noelem_Halfwidth_NS",        'd', &drmbox_halfwidth_elements_ns  ) != 0) ||
          ( parsetext(fp, "DRMBox_Noelem_depth",               'd', &drmbox_depth_elements         ) != 0) ||
          ( parsetext(fp, "DRMBox_element_size",               'd', &drmbox_esize                  ) != 0) ||
+         ( parsetext(fp, "displ_hist_file",                   's', &ug_file                       ) != 0) ||
+         ( parsetext(fp, "ug_timestep",                       'd', &ug_dt                         ) != 0) ||
          ( parsetext(fp, "Ts",                                'd', &Ts                            ) != 0) ||
          ( parsetext(fp, "region_length_east_m",              'd', &L_ew                          ) != 0) ||
          ( parsetext(fp, "region_length_north_m",             'd', &L_ns                          ) != 0) ||
@@ -196,6 +218,32 @@ drm_planewaves_initparameters ( const char *parametersin ) {
     	fnc_type = RICK;
     } else if ( strcasecmp(type_of_fnc, "time_hist") == 0 ) {
     	fnc_type = THST;
+
+
+    	if ( ( fp_ug   = fopen ( ug_file, "r") ) == NULL ) {
+    		fprintf(stderr, "Error opening displ ground motion file\n" );
+    		return -1; }
+
+    	fscanf( fp_ug,   " %d ", &no_data );
+
+
+    	the_Ug_NoData = no_data;
+    	theUg_Dt      = ug_dt;
+
+
+    	theUg         = (double*)malloc( sizeof(double) * the_Ug_NoData );
+
+    	if (  theUg == NULL   ) {
+    		fprintf( stderr, "Error allocating transient array for the ug data"
+    				"in drm_planewaves_initparameters " );
+    		return -1; }
+
+    	for ( i_ug = 0; i_ug < the_Ug_NoData; ++i_ug )
+    		fscanf(fp_ug,   " %lf ", &(theUg[i_ug]));
+
+        fclose(fp_ug);
+
+
     } else {
         fprintf(stderr,
                 "Illegal fnc_type for incident plane wave analysis"
@@ -737,9 +785,10 @@ void DRM_ForcesinElement ( mesh_t     *myMesh,
 			if ( theFncType == RICK )
 				Ricker_inclinedPW (  &myDisp, x_ne - theXc ,  y_ne - theYc, z_ne, tt, edata->Vs, edata->Vp  );
 			else {
-	            fprintf(stderr,"Need to work on this \n");
+				Ricker_inclinedPW (  &myDisp, x_ne - theXc ,  y_ne - theYc, z_ne, tt, edata->Vs, edata->Vp  );
+	            /* fprintf(stderr,"Need to work on this \n");
 	            MPI_Abort(MPI_COMM_WORLD, ERROR);
-	            exit(1);
+	            exit(1); */
 	        }
 
 
