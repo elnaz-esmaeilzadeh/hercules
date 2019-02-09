@@ -122,7 +122,7 @@ void drm_planewaves_init ( int32_t myID, const char *parametersin ) {
     double_message[8] = theUg_Dt;
 
     MPI_Bcast(double_message, 9, MPI_DOUBLE, 0, comm_solver);
-    MPI_Bcast(int_message,    5, MPI_INT,    0, comm_solver);
+    MPI_Bcast(int_message,    6, MPI_INT,    0, comm_solver);
 
     thePlaneWaveType                = int_message[0];
     theDRMBox_halfwidthElements_ew  = int_message[1];
@@ -144,9 +144,9 @@ void drm_planewaves_init ( int32_t myID, const char *parametersin ) {
 	    /* allocate table of properties for all other PEs */
 	 if (myID != 0 && theFncType == THST ) {
 		theUg        = (double*)malloc( sizeof(double) * the_Ug_NoData );
-		MPI_Bcast(theUg,   the_Ug_NoData, MPI_DOUBLE, 0, comm_solver);
 	 }
 
+	MPI_Bcast(theUg,   the_Ug_NoData, MPI_DOUBLE, 0, comm_solver);
 
     return;
 
