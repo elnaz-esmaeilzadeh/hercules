@@ -736,6 +736,9 @@ void DRM_ForcesinElement ( mesh_t     *myMesh,
 	int32_t	      node0;
 	e_t*          ep;
 
+	int        aux;
+	double 	   remainder;
+
 	/* Capture the table of elements from the mesh and the size
 	 * This is what gives me the connectivity to nodes */
 	elemp        = &myMesh->elemTable[eindex];
@@ -749,15 +752,13 @@ void DRM_ForcesinElement ( mesh_t     *myMesh,
 	yo = (node0dat->y)*(myMesh->ticksize);
 	zo = (node0dat->z)*(myMesh->ticksize) - thebase_zcoord;
 
+	/*
+	myDisp.f[0] = theUg_NS[aux] + ( theUg_NS[aux + 1] - theUg_NS[aux] ) * remainder / theUg_Dt;
+	myDisp.f[1] = theUg_EW[aux] + ( theUg_EW[aux + 1] - theUg_EW[aux] ) * remainder / theUg_Dt;
+	myDisp.f[2] = 0.0; */
 
 	/* get material properties  */
 	double h    = (double)edata->edgesize;
-
-	/* if ( thePlaneWaveType == SV1  )
-		Vs = edata->Vs;
-	else
-		Vs = edata->Vp; */
-
 
 	/* Force contribution from external nodes */
 	/* -------------------------------
@@ -766,6 +767,7 @@ void DRM_ForcesinElement ( mesh_t     *myMesh,
 	memset( localForce, 0, 8 * sizeof(fvector_t) );
 
 	fvector_t myDisp;
+
 	/* forces over f nodes */
 	for (i = 0; i < Nnodes_f; i++) {
 
@@ -780,17 +782,15 @@ void DRM_ForcesinElement ( mesh_t     *myMesh,
 			double x_ne = xo + h * CoordArrX[ nodee ];   /* get xcoord */
 			double y_ne = yo + h * CoordArrY[ nodee ];   /* get ycoord */
 			double z_ne = zo + h * CoordArrZ[ nodee ];   /* get zcoord */
-			//getRicker ( &myDisp, z_ne, tt, Vs ); /* get Displ */
 
-			if ( theFncType == RICK )
-				Ricker_inclinedPW (  &myDisp, x_ne - theXc ,  y_ne - theYc, z_ne, tt, edata->Vs, edata->Vp  );
-			else {
-				Ricker_inclinedPW (  &myDisp, x_ne - theXc ,  y_ne - theYc, z_ne, tt, edata->Vs, edata->Vp  );
+			//if ( theFncType == RICK )
+			Incoming_inclinedPW (  &myDisp, x_ne - theXc ,  y_ne - theYc, z_ne, tt, edata->Vs, edata->Vp  );
+			//else {
+				//Ricker_inclinedPW (  &myDisp, x_ne - theXc ,  y_ne - theYc, z_ne, tt, edata->Vs, edata->Vp  );
 	            /* fprintf(stderr,"Need to work on this \n");
 	            MPI_Abort(MPI_COMM_WORLD, ERROR);
 	            exit(1); */
-	        }
-
+	       // }
 
 			MultAddMatVec( &theK1[ nodef ][ nodee ], &myDisp, -ep->c1, toForce );
 			MultAddMatVec( &theK2[ nodef ][ nodee ], &myDisp, -ep->c2, toForce );
@@ -811,8 +811,8 @@ void DRM_ForcesinElement ( mesh_t     *myMesh,
 			double x_nf = xo + h * CoordArrX[ nodef ];   /* get xcoord */
 			double y_nf = yo + h * CoordArrY[ nodef ];   /* get ycoord */
 			double z_nf = zo + h * CoordArrZ[ nodef ];   /* get zcoord */
-			//getRicker ( &myDisp, z_nf, tt, Vs ); /* get Displ */
-			Ricker_inclinedPW (  &myDisp, x_nf - theXc ,  y_nf - theYc, z_nf, tt, edata->Vs, edata->Vp  );
+
+			Incoming_inclinedPW (  &myDisp, x_nf - theXc ,  y_nf - theYc, z_nf, tt, edata->Vs, edata->Vp  );
 
 			MultAddMatVec( &theK1[ nodee ][ nodef ], &myDisp, ep->c1, toForce );
 			MultAddMatVec( &theK2[ nodee ][ nodef ], &myDisp, ep->c2, toForce );
@@ -869,10 +869,12 @@ double Ricker_displ ( double zp, double Ts, double t, double fc, double Vs  ) {
 }
 
 
-void Ricker_inclinedPW ( fvector_t *myDisp, double xp, double yp, double zp, double t, double Vs, double Vp  ) {
+void Incoming_inclinedPW ( fvector_t *myDisp, double xp, double yp, double zp, double t, double Vs, double Vp  ) {
 
 	// propagation vectors
-	double c, f, e, A1, B1;
+	double c, f, e, A1, B1, t_inc, t_pref, t_sref, outcrop_fact;
+	double Ug_inc, Ug_pref, Ug_sref;
+
 	double p_inc[3]  = {0.0}; // propagation vector of the incident wave
 	double p_pref[3] = {0.0}; // propagation vector of the reflected p-wave
 	double p_sref[3] = {0.0}; // propagation vector of the reflected s-wave
@@ -880,6 +882,8 @@ void Ricker_inclinedPW ( fvector_t *myDisp, double xp, double yp, double zp, dou
 	double u_inc[3]  = {0.0}; // displ vector of the incident wave
 	double u_pref[3] = {0.0}; // displ vector of the reflected p-wave
 	double u_sref[3] = {0.0}; // displ vector of the reflected s-wave
+
+	get_reflection_coeff ( &A1, &B1, Vs, Vp  );
 
 	if ( thePlaneWaveType == SV1 ) {
 		c = Vs;
@@ -910,6 +914,8 @@ void Ricker_inclinedPW ( fvector_t *myDisp, double xp, double yp, double zp, dou
 		u_sref[1] = -cos( f ) * sin (theplanewave_strike);
 		u_sref[2] =  sin( f );
 
+		outcrop_fact = cos(f) + A1 * sin (e) - B1 * cos (f);
+
 	} else {
 		c = Vp;
 		e = theplanewave_Zangle;
@@ -938,23 +944,57 @@ void Ricker_inclinedPW ( fvector_t *myDisp, double xp, double yp, double zp, dou
 		u_sref[0] = -cos( f ) * cos (theplanewave_strike);
 		u_sref[1] = -cos( f ) * sin (theplanewave_strike);
 		u_sref[2] =  sin( f );
+
+		outcrop_fact = sin(e) + A1 * sin (e) - B1 * cos (f);
 	}
 
-	get_reflection_coeff ( &A1, &B1, Vs, Vp  );
+	if ( theFncType == RICK ) {
+		double alfa_inc  = ( PI * thefc ) * ( PI * thefc ) * ( t - ( xp*p_inc[0]  + yp*p_inc[1]  + zp*p_inc[2])/c   - theTs ) * ( t - ( xp*p_inc[0]  + yp*p_inc[1]  + zp*p_inc[2] )/c   - theTs ) ; // incident
+		double alfa_pref = ( PI * thefc ) * ( PI * thefc ) * ( t - ( xp*p_pref[0] + yp*p_pref[1] + zp*p_pref[2])/Vp - theTs ) * ( t - ( xp*p_pref[0] + yp*p_pref[1] + zp*p_pref[2] )/Vp - theTs ) ; // p_reflected
+		double alfa_sref = ( PI * thefc ) * ( PI * thefc ) * ( t - ( xp*p_sref[0] + yp*p_sref[1] + zp*p_sref[2])/Vs - theTs ) * ( t - ( xp*p_sref[0] + yp*p_sref[1] + zp*p_sref[2] )/Vs - theTs ) ; // s_reflected
 
-	double alfa_inc  = ( PI * thefc ) * ( PI * thefc ) * ( t - (xp*p_inc[0]  + yp*p_inc[1]  + zp*p_inc[2])/c  - theTs) *  ( t - (xp*p_inc[0]  + yp*p_inc[1]  + zp*p_inc[2])/c   - theTs) ; // incident
-	double alfa_pref = ( PI * thefc ) * ( PI * thefc ) * ( t - (xp*p_pref[0] + yp*p_pref[1] + zp*p_pref[2])/Vp - theTs) * ( t - (xp*p_pref[0] + yp*p_pref[1] + zp*p_pref[2])/Vp - theTs) ; // p_reflected
-	double alfa_sref = ( PI * thefc ) * ( PI * thefc ) * ( t - (xp*p_sref[0] + yp*p_sref[1] + zp*p_sref[2])/Vs - theTs) * ( t - (xp*p_sref[0] + yp*p_sref[1] + zp*p_sref[2])/Vs - theTs) ; // s_reflected
+		double Rick_inc  = ( 2.0 * alfa_inc  - 1.0 ) * exp(-alfa_inc);
+		double Rick_pref = ( 2.0 * alfa_pref - 1.0 ) * exp(-alfa_pref);
+		double Rick_sref = ( 2.0 * alfa_sref - 1.0 ) * exp(-alfa_sref);
 
-	double Rick_inc  = ( 2.0 * alfa_inc  - 1.0 ) * exp(-alfa_inc);
-	double Rick_pref = ( 2.0 * alfa_pref - 1.0 ) * exp(-alfa_pref);
-	double Rick_sref = ( 2.0 * alfa_sref - 1.0 ) * exp(-alfa_sref);
+		myDisp->f[0] = ( Rick_inc * u_inc[0] + A1 * Rick_pref * u_pref[0] + B1 * Rick_sref * u_sref[0] ) * theUo;
+		myDisp->f[1] = ( Rick_inc * u_inc[1] + A1 * Rick_pref * u_pref[1] + B1 * Rick_sref * u_sref[1] ) * theUo;
+		myDisp->f[2] = ( Rick_inc * u_inc[2] + A1 * Rick_pref * u_pref[2] + B1 * Rick_sref * u_sref[2] ) * theUo;
+	} else {
 
-	myDisp->f[0] = ( Rick_inc * u_inc[0] + A1 * Rick_pref * u_pref[0] + B1 * Rick_sref * u_sref[0] ) * theUo ;
-	myDisp->f[1] = ( Rick_inc * u_inc[1] + A1 * Rick_pref * u_pref[1] + B1 * Rick_sref * u_sref[1] ) * theUo;
-	myDisp->f[2] = ( Rick_inc * u_inc[2] + A1 * Rick_pref * u_pref[2] + B1 * Rick_sref * u_sref[2] ) * theUo;
+		t_inc  = t - ( xp*p_inc[0]  + yp*p_inc[1]  + zp*p_inc[2]  ) / c  - theTs;
+		t_pref = t - ( xp*p_pref[0] + yp*p_pref[1] + zp*p_pref[2] ) / Vp - theTs;
+		t_sref = t - ( xp*p_sref[0] + yp*p_sref[1] + zp*p_sref[2] ) / Vs - theTs;
 
-	//return ( u_inc + u_pref + u_sref );
+		int aux_tinc    = (int)( t_inc / theUg_Dt);
+		double rem_tinc = t - aux_tinc * theUg_Dt;
+
+		if ( aux_tinc < 0 || t_inc < 0.0 )
+			Ug_inc = 0.0;
+		else
+			Ug_inc  = theUg[aux_tinc]  + ( theUg[aux_tinc  + 1 ] - theUg[aux_tinc]  ) * rem_tinc / theUg_Dt;
+
+		int aux_tpref    = (int)( t_pref / theUg_Dt);
+		double rem_tpref = t - aux_tpref * theUg_Dt;
+
+		if ( aux_tpref < 0 || t_pref < 0.0 )
+			Ug_pref = 0.0;
+		else
+			Ug_pref = theUg[aux_tpref] + ( theUg[aux_tpref + 1 ] - theUg[aux_tpref] ) * rem_tpref / theUg_Dt;
+
+		int aux_tsref    = (int)( t_sref / theUg_Dt);
+		double rem_tsref = t - aux_tsref * theUg_Dt;
+
+		if ( aux_tpref < 0 || t_sref < 0.0 )
+			Ug_sref = 0.0;
+		else
+			Ug_sref = theUg[aux_tsref] + ( theUg[aux_tsref + 1 ] - theUg[aux_tsref] ) * rem_tsref / theUg_Dt;
+
+		myDisp->f[0] = ( Ug_inc * u_inc[0] + A1 * Ug_pref * u_pref[0] + B1 * Ug_sref * u_sref[0] ) / outcrop_fact;
+		myDisp->f[1] = ( Ug_inc * u_inc[1] + A1 * Ug_pref * u_pref[1] + B1 * Ug_sref * u_sref[1] ) / outcrop_fact;
+		myDisp->f[2] = ( Ug_inc * u_inc[2] + A1 * Ug_pref * u_pref[2] + B1 * Ug_sref * u_sref[2] ) / outcrop_fact;
+	}
+
 }
 
 
