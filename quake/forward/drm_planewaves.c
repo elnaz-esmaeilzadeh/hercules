@@ -42,8 +42,10 @@ static int32_t	        theDRMBox_DepthElements = 0;
 static double 	        thedrmbox_esize         = 0.0;
 
 static double 	        theUg_Dt;
-static double           *theUg;
+static double           *theUg_str;
+static double           *theUg_nrm;
 static int32_t	        the_Ug_NoData = 0;
+static int32_t	        the_NoComp = 1;
 
 
 static double 	        theTs = 0.0;
@@ -90,7 +92,7 @@ static int32_t          myDRM_Brd8 = 0;
 
 void drm_planewaves_init ( int32_t myID, const char *parametersin ) {
 
-    int     int_message[6];
+    int     int_message[7];
     double  double_message[9];
 
     /* Capturing data from file --- only done by PE0 */
@@ -110,6 +112,7 @@ void drm_planewaves_init ( int32_t myID, const char *parametersin ) {
     int_message   [3]    = theDRMBox_DepthElements;
     int_message   [4]    = theFncType;
     int_message   [5]    = the_Ug_NoData;
+    int_message   [6]    = the_NoComp;
 
     double_message[0] = theTs;
     double_message[1] = thefc;
@@ -122,7 +125,7 @@ void drm_planewaves_init ( int32_t myID, const char *parametersin ) {
     double_message[8] = theUg_Dt;
 
     MPI_Bcast(double_message, 9, MPI_DOUBLE, 0, comm_solver);
-    MPI_Bcast(int_message,    6, MPI_INT,    0, comm_solver);
+    MPI_Bcast(int_message,    7, MPI_INT,    0, comm_solver);
 
     thePlaneWaveType                = int_message[0];
     theDRMBox_halfwidthElements_ew  = int_message[1];
@@ -130,6 +133,7 @@ void drm_planewaves_init ( int32_t myID, const char *parametersin ) {
     theDRMBox_DepthElements         = int_message[3];
     theFncType                      = int_message[4];
     the_Ug_NoData                   = int_message[5];
+    the_NoComp                      = int_message[6];
 
     theTs               = double_message[0];
     thefc               = double_message[1];
@@ -143,10 +147,14 @@ void drm_planewaves_init ( int32_t myID, const char *parametersin ) {
 
 	    /* allocate table of properties for all other PEs */
 	 if (myID != 0 && theFncType == THST ) {
-		theUg        = (double*)malloc( sizeof(double) * the_Ug_NoData );
+		theUg_str        = (double*)malloc( sizeof(double) * the_Ug_NoData );
+		if ( the_NoComp == 2 )
+			theUg_nrm        = (double*)malloc( sizeof(double) * the_Ug_NoData );
 	 }
 
-	MPI_Bcast(theUg,   the_Ug_NoData, MPI_DOUBLE, 0, comm_solver);
+	MPI_Bcast(theUg_str,   the_Ug_NoData, MPI_DOUBLE, 0, comm_solver);
+	if ( the_NoComp == 2 )
+		MPI_Bcast(theUg_nrm,   the_Ug_NoData, MPI_DOUBLE, 0, comm_solver);
 
     return;
 
@@ -156,122 +164,156 @@ void drm_planewaves_init ( int32_t myID, const char *parametersin ) {
 
 int32_t
 drm_planewaves_initparameters ( const char *parametersin ) {
-    FILE                *fp;
+	FILE                *fp;
 
-    double      drmbox_halfwidth_elements_ew, drmbox_halfwidth_elements_ns, drmbox_depth_elements, Ts, fc, Uo, planewave_strike, planewave_zAngle, L_ew, L_ns, drmbox_esize, ug_dt;
-    char        type_of_wave[64], type_of_fnc[64], ug_file[256];
-    
-    int                 no_data, i_ug=0;
-    
-    FILE                *fp_ug;
+	double      drmbox_halfwidth_elements_ew, drmbox_halfwidth_elements_ns, drmbox_depth_elements, Ts, fc, Uo,
+	            planewave_strike, planewave_zAngle, L_ew, L_ns, drmbox_esize, ug_dt;
+	char        type_of_wave[64], type_of_fnc[64], ugstr_file[256], ugnrm_file[256];
 
-    pwtype_t    planewave;
-    fnctype_t   fnc_type;
+	int         no_datastr, no_datanrm, i_ug=0, no_comp;
 
+	FILE        *fp_ugstr, *fp_ugnrm;
 
-    /* Opens parametersin file */
-
-   if ( ( fp = fopen(parametersin, "r" ) ) == NULL ) {
-        fprintf( stderr,
-                 "Error opening %s\n at drm_planewaves_initparameters",
-                 parametersin );
-        return -1;
-    }
+	pwtype_t    planewave;
+	fnctype_t   fnc_type;
 
 
-     /* Parses parametersin to capture drm_planewaves single-value parameters */
-    if ( ( parsetext(fp, "type_of_wave",                      's', &type_of_wave                  ) != 0) ||
-         ( parsetext(fp, "DRMBox_Noelem_Halfwidth_EW",        'd', &drmbox_halfwidth_elements_ew  ) != 0) ||
-         ( parsetext(fp, "DRMBox_Noelem_Halfwidth_NS",        'd', &drmbox_halfwidth_elements_ns  ) != 0) ||
-         ( parsetext(fp, "DRMBox_Noelem_depth",               'd', &drmbox_depth_elements         ) != 0) ||
-         ( parsetext(fp, "DRMBox_element_size",               'd', &drmbox_esize                  ) != 0) ||
-         ( parsetext(fp, "displ_hist_file",                   's', &ug_file                       ) != 0) ||
-         ( parsetext(fp, "ug_timestep",                       'd', &ug_dt                         ) != 0) ||
-         ( parsetext(fp, "Ts",                                'd', &Ts                            ) != 0) ||
-         ( parsetext(fp, "region_length_east_m",              'd', &L_ew                          ) != 0) ||
-         ( parsetext(fp, "region_length_north_m",             'd', &L_ns                          ) != 0) ||
-         ( parsetext(fp, "fc",                                'd', &fc                            ) != 0) ||
-         ( parsetext(fp, "Uo",                                'd', &Uo                            ) != 0) ||
-         ( parsetext(fp, "planewave_strike",                  'd', &planewave_strike              ) != 0) ||
-         ( parsetext(fp, "planewave_Z_angle",                 'd', &planewave_zAngle              ) != 0) ||
-         ( parsetext(fp, "fnc_type",                          's', &type_of_fnc                   ) != 0)
-         )
-    {
-        fprintf( stderr,
-                 "Error parsing planewaves parameters from %s\n",
-                 parametersin );
-        return -1;
-    }
+	/* Opens parametersin file */
 
-    if ( strcasecmp(type_of_wave, "SV") == 0 ) {
-    	planewave = SV1;
-    } else if ( strcasecmp(type_of_wave, "P") == 0 ) {
-    	planewave = P1;
-    } else {
-        fprintf(stderr,
-                "Illegal type_of_wave for incident plane wave analysis"
-                "(SV, P): %s\n", type_of_wave);
-        return -1;
-    }
-
-    if ( strcasecmp(type_of_fnc, "RICKER") == 0 ) {
-    	fnc_type = RICK;
-    } else if ( strcasecmp(type_of_fnc, "time_hist") == 0 ) {
-    	fnc_type = THST;
+	if ( ( fp = fopen(parametersin, "r" ) ) == NULL ) {
+		fprintf( stderr,
+				"Error opening %s\n at drm_planewaves_initparameters",
+				parametersin );
+		return -1;
+	}
 
 
-    	if ( ( fp_ug   = fopen ( ug_file, "r") ) == NULL ) {
-    		fprintf(stderr, "Error opening displ ground motion file\n" );
-    		return -1; }
+	/* Parses parametersin to capture drm_planewaves single-value parameters */
+	if ( ( parsetext(fp, "type_of_wave",                      's', &type_of_wave                  ) != 0) ||
+			( parsetext(fp, "DRMBox_Noelem_Halfwidth_EW",        'd', &drmbox_halfwidth_elements_ew  ) != 0) ||
+			( parsetext(fp, "DRMBox_Noelem_Halfwidth_NS",        'd', &drmbox_halfwidth_elements_ns  ) != 0) ||
+			( parsetext(fp, "DRMBox_Noelem_depth",               'd', &drmbox_depth_elements         ) != 0) ||
+			( parsetext(fp, "DRMBox_element_size",               'd', &drmbox_esize                  ) != 0) ||
+			( parsetext(fp, "ug_alongstrike",                    's', &ugstr_file                    ) != 0) ||
+			( parsetext(fp, "ug_alongnormal",                    's', &ugnrm_file                    ) != 0) ||
+			( parsetext(fp, "ug_timestep",                       'd', &ug_dt                         ) != 0) ||
+			( parsetext(fp, "no_components",                     'i', &no_comp                       ) != 0) ||
+			( parsetext(fp, "Ts",                                'd', &Ts                            ) != 0) ||
+			( parsetext(fp, "region_length_east_m",              'd', &L_ew                          ) != 0) ||
+			( parsetext(fp, "region_length_north_m",             'd', &L_ns                          ) != 0) ||
+			( parsetext(fp, "fc",                                'd', &fc                            ) != 0) ||
+			( parsetext(fp, "Uo",                                'd', &Uo                            ) != 0) ||
+			( parsetext(fp, "planewave_strike",                  'd', &planewave_strike              ) != 0) ||
+			( parsetext(fp, "planewave_Z_angle",                 'd', &planewave_zAngle              ) != 0) ||
+			( parsetext(fp, "fnc_type",                          's', &type_of_fnc                   ) != 0)
+	)
+	{
+		fprintf( stderr,
+				"Error parsing planewaves parameters from %s\n",
+				parametersin );
+		return -1;
+	}
 
-    	fscanf( fp_ug,   " %d ", &no_data );
+	if ( strcasecmp(type_of_wave, "SV") == 0 ) {
+		planewave = SV1;
+	} else if ( strcasecmp(type_of_wave, "P") == 0 ) {
+		planewave = P1;
+	} else {
+		fprintf(stderr,
+				"Illegal type_of_wave for incident plane wave analysis"
+				"(SV, P): %s\n", type_of_wave);
+		return -1;
+	}
+
+	if ( strcasecmp(type_of_fnc, "RICKER") == 0 ) {
+		fnc_type = RICK;
+	} else if ( strcasecmp(type_of_fnc, "time_hist") == 0 ) {
+		fnc_type = THST;
+
+		if ( ( fp_ugstr   = fopen ( ugstr_file, "r") ) == NULL ) {
+			fprintf(stderr, "Error opening file of displ ground motion along strike \n" );
+			return -1;
+		}
+
+		fscanf( fp_ugstr,   " %i ", &no_datastr );
+
+		if ( no_comp == 2 ) {
+			if ( ( fp_ugnrm   = fopen ( ugnrm_file, "r") ) == NULL ) {
+				fprintf(stderr, "Error opening file of displ ground motion along normal to strike \n" );
+				return -1;
+			}
+			fscanf( fp_ugnrm,   " %i ", &no_datanrm );
+		}
+
+		if ( no_comp == 2 ) {
+			if ( no_datastr == no_datanrm ) {
+				the_Ug_NoData = no_datastr;
+			} else {
+				fprintf(stderr, "Ground motion files of different size  \n" );
+				return -1;
+			}
+		} else {
+			the_Ug_NoData = no_datastr;
+		}
+
+		theUg_Dt      = ug_dt;
+		theUg_str     = (double*)malloc( sizeof(double) * the_Ug_NoData );
+
+		if ( no_comp == 2 ) {
+			theUg_nrm     = (double*)malloc( sizeof(double) * the_Ug_NoData );
+
+			if ( theUg_nrm == NULL   ) {
+				fprintf( stderr, "Error allocating array for ug data along normal"
+						"in drm_planewaves_initparameters " );
+				return -1; }
+
+			for ( i_ug = 0; i_ug < the_Ug_NoData; ++i_ug ) {
+				fscanf(fp_ugnrm,   " %lf ", &(theUg_nrm[i_ug]));
+			}
+
+			fclose(fp_ugnrm);
+		}
+
+		if (  theUg_str == NULL  ) {
+			fprintf( stderr, "Error allocating array for ug data along strike"
+					"in drm_planewaves_initparameters " );
+			return -1; }
+
+		for ( i_ug = 0; i_ug < the_Ug_NoData; ++i_ug ) {
+			fscanf(fp_ugstr,   " %lf ", &(theUg_str[i_ug]));
+		}
+
+		fclose(fp_ugstr);
+
+	} else {
+		fprintf(stderr,
+				"Illegal fnc_type for incident plane wave analysis"
+				"RICKER, or TIME_HIST): %s\n", type_of_fnc);
+		return -1;
+	}
+
+	//theFncType
 
 
-    	the_Ug_NoData = no_data;
-    	theUg_Dt      = ug_dt;
-
-
-    	theUg         = (double*)malloc( sizeof(double) * the_Ug_NoData );
-
-    	if (  theUg == NULL   ) {
-    		fprintf( stderr, "Error allocating transient array for the ug data"
-    				"in drm_planewaves_initparameters " );
-    		return -1; }
-
-    	for ( i_ug = 0; i_ug < the_Ug_NoData; ++i_ug )
-    		fscanf(fp_ug,   " %lf ", &(theUg[i_ug]));
-
-        fclose(fp_ug);
-
-
-    } else {
-        fprintf(stderr,
-                "Illegal fnc_type for incident plane wave analysis"
-                "RICKER, or TIME_HIST): %s\n", type_of_fnc);
-        return -1;
-    }
-
-    //theFncType
-
-
-    /*  Initialize the static global variables */
+	/*  Initialize the static global variables */
 	thePlaneWaveType                 = planewave;
 	theDRMBox_halfwidthElements_ew   = drmbox_halfwidth_elements_ew;
 	theDRMBox_halfwidthElements_ns   = drmbox_halfwidth_elements_ns;
 	theDRMBox_DepthElements          = drmbox_depth_elements;
 	theTs                            = Ts;
 	thefc                            = fc;
-    theUo                            = Uo;
+	theUo                            = Uo;
 	theplanewave_strike              = planewave_strike * PI / 180.00;
 	theplanewave_Zangle              = planewave_zAngle * PI / 180.00;
 	theXc                            = L_ew / 2.0;
 	theYc                            = L_ns / 2.0;
 	thedrmbox_esize                  = drmbox_esize;
 	theFncType                       = fnc_type;
+	the_NoComp                       = no_comp;
 
-    fclose(fp);
+	fclose(fp);
 
-    return 0;
+	return 0;
 }
 
 void PlaneWaves_solver_init( int32_t myID, mesh_t *myMesh, mysolver_t *mySolver) {
@@ -873,7 +915,9 @@ void Incoming_inclinedPW ( fvector_t *myDisp, double xp, double yp, double zp, d
 
 	// propagation vectors
 	double c, f, e, A1, B1, t_inc, t_pref, t_sref, outcrop_fact;
-	double Ug_inc, Ug_pref, Ug_sref;
+	double Ug_inc, Ug_pref, Ug_sref, rem_tinc, rem_tpref, rem_tsref;
+
+	int aux_tinc, aux_tpref, aux_tsref;
 
 	double p_inc[3]  = {0.0}; // propagation vector of the incident wave
 	double p_pref[3] = {0.0}; // propagation vector of the reflected p-wave
@@ -966,13 +1010,13 @@ void Incoming_inclinedPW ( fvector_t *myDisp, double xp, double yp, double zp, d
 		t_pref = t - ( xp*p_pref[0] + yp*p_pref[1] + zp*p_pref[2] ) / Vp - theTs;
 		t_sref = t - ( xp*p_sref[0] + yp*p_sref[1] + zp*p_sref[2] ) / Vs - theTs;
 
-		int aux_tinc    = (int)( t_inc / theUg_Dt);
-		double rem_tinc = t - aux_tinc * theUg_Dt;
+		aux_tinc    = (int)( t_inc / theUg_Dt);
+		rem_tinc = t - aux_tinc * theUg_Dt;
 
 		if ( aux_tinc < 0 || t_inc < 0.0 )
 			Ug_inc = 0.0;
 		else
-			Ug_inc  = theUg[aux_tinc]  + ( theUg[aux_tinc  + 1 ] - theUg[aux_tinc]  ) * rem_tinc / theUg_Dt;
+			Ug_inc  = theUg_str[aux_tinc]  + ( theUg_str[aux_tinc  + 1 ] - theUg_str[aux_tinc]  ) * rem_tinc / theUg_Dt;
 
 		int aux_tpref    = (int)( t_pref / theUg_Dt);
 		double rem_tpref = t - aux_tpref * theUg_Dt;
@@ -980,7 +1024,7 @@ void Incoming_inclinedPW ( fvector_t *myDisp, double xp, double yp, double zp, d
 		if ( aux_tpref < 0 || t_pref < 0.0 )
 			Ug_pref = 0.0;
 		else
-			Ug_pref = theUg[aux_tpref] + ( theUg[aux_tpref + 1 ] - theUg[aux_tpref] ) * rem_tpref / theUg_Dt;
+			Ug_pref = theUg_str[aux_tpref] + ( theUg_str[aux_tpref + 1 ] - theUg_str[aux_tpref] ) * rem_tpref / theUg_Dt;
 
 		int aux_tsref    = (int)( t_sref / theUg_Dt);
 		double rem_tsref = t - aux_tsref * theUg_Dt;
@@ -988,13 +1032,111 @@ void Incoming_inclinedPW ( fvector_t *myDisp, double xp, double yp, double zp, d
 		if ( aux_tpref < 0 || t_sref < 0.0 )
 			Ug_sref = 0.0;
 		else
-			Ug_sref = theUg[aux_tsref] + ( theUg[aux_tsref + 1 ] - theUg[aux_tsref] ) * rem_tsref / theUg_Dt;
+			Ug_sref = theUg_str[aux_tsref] + ( theUg_str[aux_tsref + 1 ] - theUg_str[aux_tsref] ) * rem_tsref / theUg_Dt;
 
 		myDisp->f[0] = ( Ug_inc * u_inc[0] + A1 * Ug_pref * u_pref[0] + B1 * Ug_sref * u_sref[0] ) / outcrop_fact;
 		myDisp->f[1] = ( Ug_inc * u_inc[1] + A1 * Ug_pref * u_pref[1] + B1 * Ug_sref * u_sref[1] ) / outcrop_fact;
 		myDisp->f[2] = ( Ug_inc * u_inc[2] + A1 * Ug_pref * u_pref[2] + B1 * Ug_sref * u_sref[2] ) / outcrop_fact;
-	}
 
+
+		// compute the contribution of the normal component of ground motion
+		if ( the_NoComp == 2 ) {
+			if ( thePlaneWaveType == SV1 ) {
+				c = Vs;
+				f = theplanewave_Zangle;
+				e = asin( Vp / Vs * sin( f ) );
+
+				p_inc[0] =  sin( f ) * cos (theplanewave_strike + PI/2.0 );
+				p_inc[1] =  sin( f ) * sin (theplanewave_strike + PI/2.0);
+				p_inc[2] = -cos( f );
+
+				p_pref[0] = sin( e ) * cos (theplanewave_strike + PI/2.0);
+				p_pref[1] = sin( e ) * sin (theplanewave_strike + PI/2.0);
+				p_pref[2] = cos( e );
+
+				p_sref[0] = sin( f ) * cos (theplanewave_strike + PI/2.0);
+				p_sref[1] = sin( f ) * sin (theplanewave_strike + PI/2.0);
+				p_sref[2] = cos( f );
+
+				u_inc[0] =  cos( f ) * cos (theplanewave_strike + PI/2.0);
+				u_inc[1] =  cos( f ) * sin (theplanewave_strike + PI/2.0);
+				u_inc[2] =  sin( f );
+
+				u_pref[0] = sin( e ) * cos (theplanewave_strike + PI/2.0);
+				u_pref[1] = sin( e ) * sin (theplanewave_strike + PI/2.0);
+				u_pref[2] = cos( e );
+
+				u_sref[0] = -cos( f ) * cos (theplanewave_strike + PI/2.0);
+				u_sref[1] = -cos( f ) * sin (theplanewave_strike + PI/2.0);
+				u_sref[2] =  sin( f );
+
+				outcrop_fact = cos(f) + A1 * sin (e) - B1 * cos (f);
+
+			} else {
+				c = Vp;
+				e = theplanewave_Zangle;
+				f = asin( Vs / Vp * sin( e ) );
+
+				p_inc[0] =  sin( e ) * cos (theplanewave_strike + PI/2.0);
+				p_inc[1] =  sin( e ) * sin (theplanewave_strike + PI/2.0);
+				p_inc[2] = -cos( e );
+
+				p_pref[0] = sin( e ) * cos (theplanewave_strike + PI/2.0);
+				p_pref[1] = sin( e ) * sin (theplanewave_strike + PI/2.0);
+				p_pref[2] = cos( e );
+
+				p_sref[0] = sin( f ) * cos (theplanewave_strike + PI/2.0);
+				p_sref[1] = sin( f ) * sin (theplanewave_strike + PI/2.0);
+				p_sref[2] = cos( f );
+
+				u_inc[0] =   sin( e ) * cos (theplanewave_strike + PI/2.0);
+				u_inc[1] =   sin( e ) * sin (theplanewave_strike + PI/2.0);
+				u_inc[2] =  -cos( e );
+
+				u_pref[0] = sin( e ) * cos (theplanewave_strike + PI/2.0);
+				u_pref[1] = sin( e ) * sin (theplanewave_strike + PI/2.0);
+				u_pref[2] = cos( e );
+
+				u_sref[0] = -cos( f ) * cos (theplanewave_strike + PI/2.0);
+				u_sref[1] = -cos( f ) * sin (theplanewave_strike + PI/2.0);
+				u_sref[2] =  sin( f );
+
+				outcrop_fact = sin(e) + A1 * sin (e) - B1 * cos (f);
+			}
+
+			t_inc  = t - ( xp*p_inc[0]  + yp*p_inc[1]  + zp*p_inc[2]  ) / c  - theTs;
+			t_pref = t - ( xp*p_pref[0] + yp*p_pref[1] + zp*p_pref[2] ) / Vp - theTs;
+			t_sref = t - ( xp*p_sref[0] + yp*p_sref[1] + zp*p_sref[2] ) / Vs - theTs;
+
+			aux_tinc    = (int)( t_inc / theUg_Dt);
+			rem_tinc = t - aux_tinc * theUg_Dt;
+
+			if ( aux_tinc < 0 || t_inc < 0.0 )
+				Ug_inc = 0.0;
+			else
+				Ug_inc  = theUg_nrm[aux_tinc]  + ( theUg_nrm[aux_tinc  + 1 ] - theUg_nrm[aux_tinc]  ) * rem_tinc / theUg_Dt;
+
+			aux_tpref    = (int)( t_pref / theUg_Dt);
+			rem_tpref = t - aux_tpref * theUg_Dt;
+
+			if ( aux_tpref < 0 || t_pref < 0.0 )
+				Ug_pref = 0.0;
+			else
+				Ug_pref = theUg_nrm[aux_tpref] + ( theUg_nrm[aux_tpref + 1 ] - theUg_nrm[aux_tpref] ) * rem_tpref / theUg_Dt;
+
+			aux_tsref    = (int)( t_sref / theUg_Dt);
+			rem_tsref = t - aux_tsref * theUg_Dt;
+
+			if ( aux_tpref < 0 || t_sref < 0.0 )
+				Ug_sref = 0.0;
+			else
+				Ug_sref = theUg_nrm[aux_tsref] + ( theUg_nrm[aux_tsref + 1 ] - theUg_nrm[aux_tsref] ) * rem_tsref / theUg_Dt;
+
+			myDisp->f[0] += ( Ug_inc * u_inc[0] + A1 * Ug_pref * u_pref[0] + B1 * Ug_sref * u_sref[0] ) / outcrop_fact;
+			myDisp->f[1] += ( Ug_inc * u_inc[1] + A1 * Ug_pref * u_pref[1] + B1 * Ug_sref * u_sref[1] ) / outcrop_fact;
+			myDisp->f[2] += ( Ug_inc * u_inc[2] + A1 * Ug_pref * u_pref[2] + B1 * Ug_sref * u_sref[2] ) / outcrop_fact;
+		}
+	}
 }
 
 
@@ -1028,7 +1170,7 @@ void get_reflection_coeff ( double *A1, double *B1, double Vs, double Vp  ) {
 
 }
 
-double time_shift ( double Vs, double Vp ) {
+/*double time_shift ( double Vs, double Vp ) {
 
 	int i, j;
 	double p_inc[3]  = {0.0}; // propagation angle of the incident wave
@@ -1057,31 +1199,31 @@ double time_shift ( double Vs, double Vp ) {
 		//f = theplanewave_Zangle;
 		//e = asin( Vp / Vs * sin( f ) );
 
-		/* p_inc[0] =  sin( f ) * cos (theplanewave_strike);
+		 p_inc[0] =  sin( f ) * cos (theplanewave_strike);
 		p_inc[1] =  sin( f ) * sin (theplanewave_strike);
-		p_inc[2] = -cos( f ); */
+		p_inc[2] = -cos( f );
 
-		/* p_pref[0] = sin( e ) * cos (theplanewave_strike);
+		 p_pref[0] = sin( e ) * cos (theplanewave_strike);
 		p_pref[1] = sin( e ) * sin (theplanewave_strike);
 		p_pref[2] = cos( e );
 
 		p_sref[0] = sin( f ) * cos (theplanewave_strike);
 		p_sref[0] = sin( f ) * sin (theplanewave_strike);
-		p_sref[2] = cos( f ); */
+		p_sref[2] = cos( f );
 
-		/* for (i = 0; i < 8; i++) {
+		 for (i = 0; i < 8; i++) {
 			for (j = 0; j < 3; j++) {
 				time_shft[i] += p_inc[j] * drm_corners[j][i] / Vs;
 			}
-		} */
+		}
 
 	} else {
 		c = Vp;
-		/* e = theplanewave_Zangle;
+		 e = theplanewave_Zangle;
 		//f = asin( Vs / Vp * sin( e ) );
 		p_inc[0] =  sin( e ) * cos (theplanewave_strike);
 		p_inc[1] =  sin( e ) * sin (theplanewave_strike);
-		p_inc[2] = -cos( e ); */
+		p_inc[2] = -cos( e );
 	}
 
 	for (i = 0; i < 8; i++) {
@@ -1096,18 +1238,9 @@ double time_shift ( double Vs, double Vp ) {
 
 	return t_shft;
 
-}
-
-void compute_propagation_vectors() {
+}*/
 
 
-
-}
-
-void compute_incident_motion ( double xp, double yp, double zp, fvector_t *myDisp ) {
-
-
-}
 
 
 
