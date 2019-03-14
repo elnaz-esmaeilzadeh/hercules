@@ -40,6 +40,8 @@ static int32_t	        theDRMBox_halfwidthElements_ew = 0;
 static int32_t	        theDRMBox_halfwidthElements_ns = 0;
 static int32_t	        theDRMBox_DepthElements = 0;
 static double 	        thedrmbox_esize         = 0.0;
+static double 	        thedrmbox_xo            = 0.0;
+static double 	        thedrmbox_yo            = 0.0;
 
 static double 	        theUg_Dt;
 static double           *theUg_str;
@@ -114,18 +116,20 @@ void drm_planewaves_init ( int32_t myID, const char *parametersin ) {
     int_message   [5]    = the_Ug_NoData;
     int_message   [6]    = the_NoComp;
 
-    double_message[0] = theTs;
-    double_message[1] = thefc;
-    double_message[2] = theUo;
-    double_message[3] = theplanewave_strike;
-    double_message[4] = theXc;
-    double_message[5] = theYc;
-    double_message[6] = thedrmbox_esize;
-    double_message[7] = theplanewave_Zangle;
-    double_message[8] = theUg_Dt;
+    double_message[0]  = theTs;
+    double_message[1]  = thefc;
+    double_message[2]  = theUo;
+    double_message[3]  = theplanewave_strike;
+    double_message[4]  = theXc;
+    double_message[5]  = theYc;
+    double_message[6]  = thedrmbox_esize;
+    double_message[7]  = theplanewave_Zangle;
+    double_message[8]  = theUg_Dt;
+    double_message[9]  = thedrmbox_xo;
+    double_message[10] = thedrmbox_yo;
 
-    MPI_Bcast(double_message, 9, MPI_DOUBLE, 0, comm_solver);
-    MPI_Bcast(int_message,    7, MPI_INT,    0, comm_solver);
+    MPI_Bcast(double_message, 11, MPI_DOUBLE, 0, comm_solver);
+    MPI_Bcast(int_message,     7, MPI_INT,    0, comm_solver);
 
     thePlaneWaveType                = int_message[0];
     theDRMBox_halfwidthElements_ew  = int_message[1];
@@ -144,6 +148,8 @@ void drm_planewaves_init ( int32_t myID, const char *parametersin ) {
     thedrmbox_esize     = double_message[6];
     theplanewave_Zangle = double_message[7];
     theUg_Dt            = double_message[8];
+    thedrmbox_xo        = double_message[9];
+    thedrmbox_yo        = double_message[10];
 
 	    /* allocate table of properties for all other PEs */
 	 if (myID != 0 && theFncType == THST ) {
@@ -167,7 +173,7 @@ drm_planewaves_initparameters ( const char *parametersin ) {
 	FILE                *fp;
 
 	double      drmbox_halfwidth_elements_ew, drmbox_halfwidth_elements_ns, drmbox_depth_elements, Ts, fc, Uo,
-	            planewave_strike, planewave_zAngle, L_ew, L_ns, drmbox_esize, ug_dt;
+	            planewave_strike, planewave_zAngle, L_ew, L_ns, drmbox_esize, ug_dt, drmbox_xo, drmbox_yo;
 	char        type_of_wave[64], type_of_fnc[64], ugstr_file[256], ugnrm_file[256];
 
 	int         no_datastr, no_datanrm, i_ug=0, no_comp;
@@ -194,6 +200,8 @@ drm_planewaves_initparameters ( const char *parametersin ) {
 			( parsetext(fp, "DRMBox_Noelem_Halfwidth_NS",        'd', &drmbox_halfwidth_elements_ns  ) != 0) ||
 			( parsetext(fp, "DRMBox_Noelem_depth",               'd', &drmbox_depth_elements         ) != 0) ||
 			( parsetext(fp, "DRMBox_element_size",               'd', &drmbox_esize                  ) != 0) ||
+			( parsetext(fp, "DRM_xo",                            'd', &drmbox_xo                     ) != 0) ||
+			( parsetext(fp, "DRM_yo",                            'd', &drmbox_yo                     ) != 0) ||
 			( parsetext(fp, "ug_alongstrike",                    's', &ugstr_file                    ) != 0) ||
 			( parsetext(fp, "ug_alongnormal",                    's', &ugnrm_file                    ) != 0) ||
 			( parsetext(fp, "ug_timestep",                       'd', &ug_dt                         ) != 0) ||
@@ -308,6 +316,8 @@ drm_planewaves_initparameters ( const char *parametersin ) {
 	theXc                            = L_ew / 2.0;
 	theYc                            = L_ns / 2.0;
 	thedrmbox_esize                  = drmbox_esize;
+	thedrmbox_xo                     = drmbox_xo;
+	thedrmbox_yo                     = drmbox_yo;
 	theFncType                       = fnc_type;
 	the_NoComp                       = no_comp;
 
