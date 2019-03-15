@@ -95,7 +95,7 @@ static int32_t          myDRM_Brd8 = 0;
 void drm_planewaves_init ( int32_t myID, const char *parametersin ) {
 
     int     int_message[7];
-    double  double_message[9];
+    double  double_message[11];
 
     /* Capturing data from file --- only done by PE0 */
     if (myID == 0) {
@@ -384,108 +384,108 @@ void PlaneWaves_solver_init( int32_t myID, mesh_t *myMesh, mysolver_t *mySolver)
 		zo = (node0dat->z)*(myMesh->ticksize);
 
 
-		if ( (  ( yo - theYc ) == DRM_EW )   &&                             /* face 1: right */
-				( xo >= ( theXc - DRM_NS ) ) &&
-				( xo <  ( theXc + DRM_NS ) ) &&
+		if (    ( yo ==  thedrmbox_yo +  2.0 * DRM_EW )   &&                             /* face 1: right */
+				( xo >= thedrmbox_xo ) &&
+				( xo <  ( thedrmbox_xo + 2.0 * DRM_NS ) ) &&
 				( zo <  DRM_D + thebase_zcoord ) &&
 				( zo >=  thebase_zcoord ) ) {
 
 			myDRMFace1ElementsMapping[countf1] = eindex;
 			countf1++;
-		} else 	if ( ( ( theYc - ( yo + thedrmbox_esize ) ) == DRM_EW ) &&  /* face 2: left*/
-				       ( xo  >= ( theXc - DRM_NS ) ) &&
-				       ( xo  <  ( theXc + DRM_NS ) ) &&
-				       ( zo  <  DRM_D + thebase_zcoord ) &&
-				       ( zo  >=  thebase_zcoord ) ) {
+		} else 	if ( ( ( yo + thedrmbox_esize )   == thedrmbox_yo  ) &&                  /* face 2: left*/
+				     ( xo >= thedrmbox_xo ) &&
+				     ( xo <  ( thedrmbox_xo + 2.0 * DRM_NS ) ) &&
+				     ( zo  <  DRM_D + thebase_zcoord ) &&
+				     ( zo  >=  thebase_zcoord ) ) {
 
 			myDRMFace2ElementsMapping[countf2] = eindex;
 			countf2++;
-		} else 	if ( ( ( theXc - ( xo + thedrmbox_esize ) ) == DRM_NS ) &&  /* face 3: bottom */
-				       ( yo >= ( theYc - DRM_EW ) ) &&
-				       ( yo <  ( theYc + DRM_EW ) ) &&
+		} else 	if ( ( ( xo + thedrmbox_esize ) == thedrmbox_xo ) &&                     /* face 3: bottom */
+				       ( yo >= thedrmbox_yo ) &&
+				       ( yo <  ( thedrmbox_yo + 2.0 * DRM_EW ) ) &&
 				       ( zo <  DRM_D + thebase_zcoord ) &&
 				       ( zo >=  thebase_zcoord ) ) {
 
 			myDRMFace3ElementsMapping[countf3] = eindex;
 			countf3++;
-		} else 	if ( ( ( xo - theXc ) == DRM_NS ) &&                       /* face 4: top */
-				       ( yo >= ( theYc - DRM_EW ) ) &&
-				       ( yo <  ( theYc + DRM_EW ) ) &&
+		} else 	if ( (   xo == thedrmbox_xo + 2.0 * DRM_NS ) &&                          /* face 4: top */
+				       ( yo >= thedrmbox_yo ) &&
+				       ( yo <  ( thedrmbox_yo + 2.0 * DRM_EW ) ) &&
 				       ( zo <  DRM_D + thebase_zcoord ) &&
 				       ( zo >=  thebase_zcoord ) ) {
 
 			myDRMFace4ElementsMapping[countf4] = eindex;
 			countf4++;
 
-		} else 	if ( ( yo >= ( theYc - DRM_EW ) ) &&                       /* base */
-				     ( yo <  ( theYc + DRM_EW ) ) &&
-				     ( xo >= ( theXc - DRM_NS ) ) &&
-				     ( xo <  ( theXc + DRM_NS ) ) &&
+		} else 	if ( ( yo >= thedrmbox_yo ) &&                                           /* base */
+				     ( yo <  ( thedrmbox_yo + 2.0 * DRM_EW ) ) &&
+				     ( xo >= thedrmbox_xo ) &&
+				     ( xo <  ( thedrmbox_xo + 2.0 * DRM_NS ) ) &&
 				     ( zo ==  DRM_D + thebase_zcoord ) ) {
 
 			myDRMBottomElementsMapping[countbott] = eindex;
 			countbott++;
 
-		} else 	if ( ( ( yo - theYc ) == DRM_EW ) &&                       /* border 1 */
-				     ( ( xo + thedrmbox_esize ) == ( theXc - DRM_NS ) ) &&
+		} else 	if ( (   yo == ( thedrmbox_yo + 2.0 * DRM_EW ) ) &&                     /* border 1 */
+				     ( ( xo + thedrmbox_esize ) == thedrmbox_xo ) &&
 				       ( zo <=  DRM_D + thebase_zcoord ) &&
 				       ( zo >=  thebase_zcoord ) ) {
 
 			myDRMBorder1ElementsMapping[countb1] = eindex;
 			countb1++;
 
-		} else if ( ( ( yo - theYc ) == DRM_EW  )   &&                      /*border 2*/
-				      ( xo  == ( theXc + DRM_NS ) ) &&
+		} else if ( (   yo == ( thedrmbox_yo + 2.0 * DRM_EW )  )   &&                  /*border 2*/
+				      ( xo  == ( thedrmbox_xo + 2.0 * DRM_NS ) ) &&
 				      ( zo <=  DRM_D + thebase_zcoord ) &&
 				      ( zo >=  thebase_zcoord ) ) {
 
 			myDRMBorder2ElementsMapping[countb2] = eindex;
 			countb2++;
 
-		} else if ( ( ( theYc - ( yo + thedrmbox_esize ) ) == DRM_EW ) &&  /* border 3*/
-				    ( ( xo + thedrmbox_esize) == ( theXc - DRM_NS ) ) &&
+		} else if ( ( ( yo + thedrmbox_esize ) == thedrmbox_yo ) &&                   /* border 3*/
+				    ( ( xo + thedrmbox_esize)  == thedrmbox_xo ) &&
 				      ( zo <=  DRM_D + thebase_zcoord ) &&
 				      ( zo >=  thebase_zcoord ) ) {
 
 			myDRMBorder3ElementsMapping[countb3] = eindex;
 			countb3++;
 
-		} else if ( ( ( theYc - ( yo + thedrmbox_esize ) ) == DRM_EW ) &&  /* border 4*/
-				      (  xo  == ( theXc + DRM_NS ) ) &&
+		} else if ( ( (  yo + thedrmbox_esize  ) == thedrmbox_yo ) &&                /* border 4*/
+				      (  xo  == ( thedrmbox_xo + 2.0 * DRM_NS ) ) &&
 				      ( zo <=  DRM_D + thebase_zcoord ) &&
 				      ( zo >=  thebase_zcoord ) ) {
 
 			myDRMBorder4ElementsMapping[countb4] = eindex;
 			countb4++;
 
-		} else 	if ( ( ( yo - theYc ) == DRM_EW ) &&       /* border 5 : right*/
-				       ( xo >= ( theXc - DRM_NS ) ) &&
-				       ( xo <  ( theXc + DRM_NS ) ) &&
+		} else 	if ( (  yo == thedrmbox_yo + 2.0 * DRM_EW ) &&                      /* border 5 : right*/
+				       ( xo >= thedrmbox_xo ) &&
+				       ( xo <  ( thedrmbox_xo + 2.0 * DRM_NS ) ) &&
 				       ( zo ==  DRM_D + thebase_zcoord ) ) {
 
 			myDRMBorder5ElementsMapping[countb5] = eindex;
 			countb5++;
 
-		} else if ( ( ( theYc - ( yo + thedrmbox_esize ) ) == DRM_EW ) &&          /* border 6: left*/
-				      ( xo >= ( theXc - DRM_NS ) ) &&
-				      ( xo <  ( theXc + DRM_NS ) ) &&
-				      ( zo ==  DRM_D + thebase_zcoord ) ) {
+		} else if ( ( ( yo + thedrmbox_esize ) == thedrmbox_yo ) &&                /* border 6: left*/
+			        ( xo >= thedrmbox_xo ) &&
+			        ( xo <  ( thedrmbox_xo + 2.0 * DRM_NS ) ) &&
+				    ( zo ==  DRM_D + thebase_zcoord ) ) {
 
 			myDRMBorder6ElementsMapping[countb6] = eindex;
 			countb6++;
 
-		} else if ( ( ( theXc - ( xo + thedrmbox_esize ) ) == DRM_NS ) &&      /* border 7: bottom*/
-				      ( yo >= ( theYc - DRM_EW ) ) &&
-				      ( yo <  ( theYc + DRM_EW ) ) &&
+		} else if ( ( ( xo + thedrmbox_esize )  == thedrmbox_xo ) &&               /* border 7: bottom*/
+				      ( yo >=  thedrmbox_yo  ) &&
+				      ( yo <  ( thedrmbox_yo + 2.0 * DRM_EW ) ) &&
 				      ( zo ==  DRM_D + thebase_zcoord ) ) {
 
 			myDRMBorder7ElementsMapping[countb7] = eindex;
 			countb7++;
 
-		} else if ( ( ( xo - theXc ) == DRM_NS ) &&             /* border 8: top*/
-				      ( yo >= ( theYc - DRM_EW ) ) &&
-				      ( yo <  ( theYc + DRM_EW ) ) &&
-				      ( zo ==  DRM_D + thebase_zcoord ) ) {
+		} else if ( (   xo   == thedrmbox_xo + 2.0 * DRM_NS ) &&                    /* border 8: top*/
+			        ( yo >=  thedrmbox_yo  ) &&
+			        ( yo <  ( thedrmbox_yo + 2.0 * DRM_EW ) ) &&
+				    ( zo ==  DRM_D + thebase_zcoord ) ) {
 
 			myDRMBorder8ElementsMapping[countb8] = eindex;
 			countb8++;
