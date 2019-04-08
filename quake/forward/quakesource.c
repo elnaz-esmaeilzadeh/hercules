@@ -1210,9 +1210,10 @@ load_myForces_with_point_source(
 	j = pointSource -> lnid [ iNode ];
 
 	if ( myForces [ j ] == NULL  && myForcesCycle[j] == cycle){
-	    myForces [ j ] =
+	    /*myForces [ j ] =
 		( vector3D_t * ) malloc ( sizeof ( vector3D_t ) *
-					  theNumberOfTimeSteps);
+					  theNumberOfTimeSteps);  */
+	    myForces [ j ] = ( vector3D_t * ) calloc ( theNumberOfTimeSteps, sizeof ( vector3D_t ) ); // Dorian says: changed to calloc to avoid initialization
 	    myNumberOfNodesLoaded +=1;
 	    myMemoryAllocated +=  sizeof ( vector3D_t ) * theNumberOfTimeSteps;
 
@@ -1223,11 +1224,11 @@ load_myForces_with_point_source(
 		exit(1);
 	    }
 
-	    for (iCoord = 0; iCoord < 3; iCoord++) {
+	    /*for (iCoord = 0; iCoord < 3; iCoord++) {
 		for (iTime = 0; iTime < theNumberOfTimeSteps; iTime++) {
 		    myForces [j][iTime].x[iCoord]=0;
 		}
-	    }
+	    } */ // Dorian says: not necessary if changed to calloc
 	    isinprocessor+=1;
 	}
     }
@@ -1356,10 +1357,10 @@ compute_point_source_strike_srfh (ptsrc_t* ps, int32_t iSrc)
  *
  */
 static void update_point_source_srfh (ptsrc_t *pointSource, int32_t isource){
-  int iTime;
+   /* int iTime;
 
-  for(iTime=0; iTime < theNumberOfTimeSteps; iTime++)
-    pointSource->displacement[iTime]=0.;
+    for(iTime=0; iTime < theNumberOfTimeSteps; iTime++)
+    pointSource->displacement[iTime]=0.; */ // Dorian says: This is no longer necessary
 
   pointSource->strike =  theSourceStrikeArray[isource];
 
@@ -3318,7 +3319,7 @@ static int  compute_myForces_srfh(const char *physicsin){
   theIOInitTime          = -MPI_Wtime();
 
 
-  pntSrc.displacement = (double*)malloc(sizeof(double)*theNumberOfTimeSteps );
+  pntSrc.displacement = (double*)calloc(theNumberOfTimeSteps, sizeof(double) ); // Dorian says: changed to calloc for array initialization
   if(pntSrc.displacement == NULL){
     fprintf(stdout, "Err alloc displacments");
     return -1;
