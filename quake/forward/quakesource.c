@@ -2400,7 +2400,13 @@ read_srfh_source ( FILE *fp, FILE *fpcoords, FILE *fparea, FILE *fpstrike,
       fscanf(fpslipfun," %lf ", &(theSourceSlipFunArray[iSrc][iTime]));
   }
 
-
+  for ( iSrc = 0; iSrc < theNumberOfPointSources - 1; iSrc++ ){
+	  if ( theSourceDtArray[iSrc] != theSourceDtArray[iSrc+1] ) {
+		  fprintf(stderr, "Thread %d: source_init: source:%d with different time-step\n", myID, iSrc+1);
+		  MPI_Abort(MPI_COMM_WORLD, ERROR);
+		  exit(1);
+	  }
+  }
 
   return 1;
 
