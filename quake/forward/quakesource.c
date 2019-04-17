@@ -765,6 +765,7 @@ print_filter(
 
 /**
  * Print the slip function for the "average" source function.
+ * Todo: Dorian says: This function is not used. Revise to delete
  */
 static int
 print_slip_function (const char* filename)
@@ -2412,6 +2413,8 @@ read_srfh_source ( FILE *fp, FILE *fpcoords, FILE *fparea, FILE *fpstrike,
   theSRFHdt                      = theSourceDtArray[0];
   theNumberOfSRFHSourceTimeSteps =  (int)(((theEndT - theStartT) / theSRFHdt));
 
+  theNumberOfTimeSteps = theNumberOfSRFHSourceTimeSteps; // rewrite the number of timesteps
+
   return 1;
 
 }
@@ -3335,7 +3338,8 @@ static int  compute_myForces_srfh(const char *physicsin){
     return -1;
   }
 
-  pntSrc.dt = theDeltaT;
+  //pntSrc.dt = theDeltaT;
+  pntSrc.dt = theSRFHdt;
   pntSrc.numberOfTimeSteps = theNumberOfTimeSteps;
 
   WAIT;
