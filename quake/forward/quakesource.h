@@ -49,7 +49,7 @@ typedef struct numerics_info_t{
 
   int32_t numberoftimesteps;
 
-  double deltat,validfrequency;
+  double deltat,validfrequency, endT, startT;
 
   double minimumh;
 

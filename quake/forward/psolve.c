@@ -6497,8 +6497,11 @@ source_init( const char* physicsin )
 
 		/* Load to theNumericsInforamation */
 		Global.theNumericsInformation.numberoftimesteps = Param.theTotalSteps;
-		Global.theNumericsInformation.deltat	     = Param.theDeltaT;
+		Global.theNumericsInformation.deltat	        = Param.theDeltaT;
 		Global.theNumericsInformation.validfrequency    = Param.theFreq;
+		Global.theNumericsInformation.endT              = Param.theEndT;
+		Global.theNumericsInformation.startT            = Param.theStartT;
+
 
 		Global.theNumericsInformation.xlength = Param.theDomainX;
 		Global.theNumericsInformation.ylength = Param.theDomainY;
