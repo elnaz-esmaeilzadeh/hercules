@@ -2413,7 +2413,7 @@ read_srfh_source ( FILE *fp, FILE *fpcoords, FILE *fparea, FILE *fpstrike,
   }
 
   theSRFHdt                      = theSourceDtArray[0];
-  theNumberOfSRFHSourceTimeSteps =  (int)(((theEndT - theStartT) / theSRFHdt));
+  theNumberOfSRFHSourceTimeSteps =  (int)(((theEndT - theStartT) / theSRFHdt)) + 10; // added ten aditional steps to avoid interpolation issues at theEndT
 
   theNumberOfTimeSteps = theNumberOfSRFHSourceTimeSteps; // rewrite the number of timesteps
 

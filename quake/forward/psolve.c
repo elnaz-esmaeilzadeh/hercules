@@ -3825,11 +3825,11 @@ read_myForces( int32_t timestep, double dt )
     read_count = hu_fread( aux1, sizeof(double), to_read, Global.fpsource );
 
 	/* read second interval */
-    whereToRead = ((off_t)sizeof(int32_t))
+    /*whereToRead = ((off_t)sizeof(int32_t))
 		+ Global.theNodesLoaded * sizeof(int32_t)
 		+ Global.theNodesLoaded * ( interval + 1 ) * sizeof(double) * 3;
 
-    hu_fseeko( Global.fpsource, whereToRead, SEEK_SET );
+    hu_fseeko( Global.fpsource, whereToRead, SEEK_SET ); */
 
     read_count = hu_fread( aux2, sizeof(double), to_read, Global.fpsource );
 
@@ -4513,7 +4513,7 @@ static void solver_run()
     MPI_Barrier( comm_solver );
 
     /* march forward in time */
-    for (step = startingStep; step < Param.theTotalSteps - 1; step++) {
+    for (step = startingStep; step < Param.theTotalSteps; step++) {
 
         fvector_t* tmpvector;
 
