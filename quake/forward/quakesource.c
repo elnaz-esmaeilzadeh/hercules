@@ -258,7 +258,9 @@ source_get_local_loaded_nodes_count()
     return myNumberOfNodesLoaded;
 }
 
-
+double get_srfhdt() {
+    return theSRFHdt;
+}
 
 /**
  * Interpolate linearly a function if the time is larger than the one
