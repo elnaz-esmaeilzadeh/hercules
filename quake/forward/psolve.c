@@ -4513,7 +4513,7 @@ static void solver_run()
     MPI_Barrier( comm_solver );
 
     /* march forward in time */
-    for (step = startingStep; step < Param.theTotalSteps; step++) {
+    for (step = startingStep; step < Param.theTotalSteps - 1; step++) {
 
         fvector_t* tmpvector;
 
