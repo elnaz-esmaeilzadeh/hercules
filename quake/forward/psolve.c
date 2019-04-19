@@ -3801,56 +3801,49 @@ read_myForces( int32_t timestep, double dt )
     size_t  to_read, read_count;
     int interval, i;
 
-    double source_dt = get_srfhdt();
-    double T         = dt * timestep;
+    if ( get_sourceType() == SRFH ) {
+    	double source_dt = get_srfhdt();
+    	double T         = dt * timestep;
 
-    vector3D_t* aux1 = calloc( Global.theNodesLoaded, sizeof(vector3D_t) );
-    vector3D_t* aux2 = calloc( Global.theNodesLoaded, sizeof(vector3D_t) );
+    	vector3D_t* aux1 = calloc( Global.theNodesLoaded, sizeof(vector3D_t) );
+    	vector3D_t* aux2 = calloc( Global.theNodesLoaded, sizeof(vector3D_t) );
 
-	if ( aux1 == NULL || aux2 == NULL) {
-		solver_abort( "read_myforces", "memory allocation failed",
-				"Cannot allocate memory for Global.myForces interpolation \n" );
-	}
+    	if ( aux1 == NULL || aux2 == NULL) {
+    		solver_abort( "read_myforces", "memory allocation failed",
+    				"Cannot allocate memory for Global.myForces interpolation \n" );
+    	}
 
-	interval = floor(T/source_dt);
+    	interval = floor(T/source_dt);
 
-	/* read first interval */
-    whereToRead = ((off_t)sizeof(int32_t))
-		+ Global.theNodesLoaded * sizeof(int32_t)
-		+ Global.theNodesLoaded * interval * sizeof(double) * 3;
+    	/* read first interval */
+    	whereToRead = ((off_t)sizeof(int32_t))
+				+ Global.theNodesLoaded * sizeof(int32_t)
+    	+ Global.theNodesLoaded * interval * sizeof(double) * 3;
 
-    hu_fseeko( Global.fpsource, whereToRead, SEEK_SET );
+    	hu_fseeko( Global.fpsource, whereToRead, SEEK_SET );
 
-    to_read    = Global.theNodesLoaded * 3;
-    read_count = hu_fread( aux1, sizeof(double), to_read, Global.fpsource );
+    	to_read    = Global.theNodesLoaded * 3;
+    	read_count = hu_fread( aux1, sizeof(double), to_read, Global.fpsource );
+    	read_count = hu_fread( aux2, sizeof(double), to_read, Global.fpsource );
 
-	/* read second interval */
-    /*whereToRead = ((off_t)sizeof(int32_t))
-		+ Global.theNodesLoaded * sizeof(int32_t)
-		+ Global.theNodesLoaded * ( interval + 1 ) * sizeof(double) * 3;
+    	for (i = 0; i <  Global.theNodesLoaded; i++) {
+    		Global.myForces [ i ].x [0] = aux1[ i ].x [0] + ( aux2[ i ].x [0] - aux1[ i ].x [0] )/source_dt*( T - interval * source_dt);
+    		Global.myForces [ i ].x [1] = aux1[ i ].x [1] + ( aux2[ i ].x [1] - aux1[ i ].x [1] )/source_dt*( T - interval * source_dt);
+    		Global.myForces [ i ].x [2] = aux1[ i ].x [2] + ( aux2[ i ].x [2] - aux1[ i ].x [2] )/source_dt*( T - interval * source_dt);
+    	}
+    	free(aux1);
+    	free(aux2);
 
-    hu_fseeko( Global.fpsource, whereToRead, SEEK_SET ); */
+    } else { // Todo: Doriam says: Optimize other source types (POINT, PLANE, PLANEWITHKINKS) as we did for SRFH if we plan to keep them
+    	whereToRead = ((off_t)sizeof(int32_t))
+	    + Global.theNodesLoaded * sizeof(int32_t)
+    	+ Global.theNodesLoaded * timestep * sizeof(double) * 3;
 
-    read_count = hu_fread( aux2, sizeof(double), to_read, Global.fpsource );
+    	hu_fseeko( Global.fpsource, whereToRead, SEEK_SET );
 
-    for (i = 0; i <  Global.theNodesLoaded; i++) {
-    	Global.myForces [ i ].x [0] = aux1[ i ].x [0] + ( aux2[ i ].x [0] - aux1[ i ].x [0] )/source_dt*( T - interval * source_dt);
-    	Global.myForces [ i ].x [1] = aux1[ i ].x [1] + ( aux2[ i ].x [1] - aux1[ i ].x [1] )/source_dt*( T - interval * source_dt);
-    	Global.myForces [ i ].x [2] = aux1[ i ].x [2] + ( aux2[ i ].x [2] - aux1[ i ].x [2] )/source_dt*( T - interval * source_dt);
+    	to_read    = Global.theNodesLoaded * 3;
+    	read_count = hu_fread( Global.myForces, sizeof(double), to_read, Global.fpsource );
     }
-
-    free(aux1);
-    free(aux2);
-
-	/*
-    whereToRead = ((off_t)sizeof(int32_t))
-		+ Global.theNodesLoaded * sizeof(int32_t)
-		+ Global.theNodesLoaded * timestep * sizeof(double) * 3;
-
-    hu_fseeko( Global.fpsource, whereToRead, SEEK_SET );
-
-    to_read    = Global.theNodesLoaded * 3;
-    read_count = hu_fread( Global.myForces, sizeof(double), to_read, Global.fpsource ); */
 
     return 0;	/* if we got here everything went OK */
 }
@@ -7554,6 +7547,7 @@ mesh_correct_properties( etree_t* cvm )
         			rho += g_props.rho;
         			++cnt;
 
+        			/*
         			// get geostatic stress as 1d column
         			double nlayers=10, depth_o = depth_m/nlayers, depth_k;
         			if (iNorth == 1 && iEast == 1 && iDepth ==1 ) {
@@ -7567,7 +7561,7 @@ mesh_correct_properties( etree_t* cvm )
         				}
 
         				edata->sigma_0 = s_0;
-        			}
+        			} */
                 }
             }
         }

@@ -262,6 +262,10 @@ double get_srfhdt() {
     return theSRFHdt;
 }
 
+source_function_t get_sourceType() {
+	return theTypeOfSource;
+}
+
 /**
  * Interpolate linearly a function if the time is larger than the one
  * supported by the function the last value will be assigned
