@@ -385,7 +385,7 @@ compute_source_function (ptsrc_t* pointSource)
       decay =0;
     }
 
-    pointSource->displacement[ iTime ] += decay * pointSource->maxSlip;
+    pointSource->displacement[ iTime ] = decay * pointSource->maxSlip; // Dorian says: changed += by =
 
   }
 
@@ -1365,10 +1365,10 @@ compute_point_source_strike_srfh (ptsrc_t* ps, int32_t iSrc)
  *
  */
 static void update_point_source_srfh (ptsrc_t *pointSource, int32_t isource){
-   /* int iTime;
+  int iTime;
 
-    for(iTime=0; iTime < theNumberOfTimeSteps; iTime++)
-    pointSource->displacement[iTime]=0.; */ // Dorian says: This is no longer necessary
+  for(iTime=0; iTime < theNumberOfTimeSteps; iTime++)
+    pointSource->displacement[iTime]=0.;
 
   pointSource->strike =  theSourceStrikeArray[isource];
 
