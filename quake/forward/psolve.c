@@ -232,6 +232,7 @@ static struct Param_t {
     noyesflag_t  includeNonlinearAnalysis;
     noyesflag_t  useInfQk;
     noyesflag_t  includeIncidentPlaneWaves;
+    noyesflag_t  includeHomogeneousHalfSpace;
     int  theTimingBarriersFlag;
     stiffness_type_t   theStiffness;
     int      theStationsPrintRate;
@@ -264,7 +265,6 @@ static struct Param_t {
     double  theDomainZ;
     noyesflag_t  drmImplement;
     drm_part_t   theDrmPart;
-
 } Param = {
     .FourDOutFp = NULL,
     .theMonitorFileFp = NULL,
@@ -370,7 +370,7 @@ monitor_print( const char* format, ... )
 static void read_parameters( int argc, char** argv ){
 
 #define LOCAL_INIT_DOUBLE_MESSAGE_LENGTH 18  /* Must adjust this if adding double params */
-#define LOCAL_INIT_INT_MESSAGE_LENGTH 22     /* Must adjust this if adding int params */
+#define LOCAL_INIT_INT_MESSAGE_LENGTH 23     /* Must adjust this if adding int params */
 
     double  double_message[LOCAL_INIT_DOUBLE_MESSAGE_LENGTH];
     int     int_message[LOCAL_INIT_INT_MESSAGE_LENGTH];
@@ -451,6 +451,7 @@ static void read_parameters( int argc, char** argv ){
     int_message[19] = Param.theStepMeshingFactor;
     int_message[20] = (int)Param.includeTopography;
     int_message[21] = (int)Param.includeIncidentPlaneWaves;
+    int_message[22] = (int)Param.includeHomogeneousHalfSpace;
 
     MPI_Bcast(int_message, LOCAL_INIT_INT_MESSAGE_LENGTH, MPI_INT, 0, comm_solver);
 
@@ -476,6 +477,7 @@ static void read_parameters( int argc, char** argv ){
     Param.theStepMeshingFactor           = int_message[19];
     Param.includeTopography              = int_message[20];
     Param.includeIncidentPlaneWaves      = int_message[21];
+    Param.includeHomogeneousHalfSpace    = int_message[22];
 
     /*Broadcast all string params*/
     MPI_Bcast (Param.parameters_input_file,  256, MPI_CHAR, 0, comm_solver);
@@ -664,7 +666,8 @@ static int32_t parse_parameters( const char* numericalin )
               region_depth_shallow_m, region_length_east_m,
               region_length_north_m, region_depth_deep_m,
               startT, endT, deltaT, softening_factor,
-              threshold_damping, threshold_VpVs, freq_vel;
+              threshold_damping, threshold_VpVs, freq_vel,
+              theHsVs, theHsVp, theHSrho;
     char      type_of_damping[64],
 	      	  checkpoint_path[256],
               include_buildings[64],
@@ -677,7 +680,8 @@ static int32_t parse_parameters( const char* numericalin )
     		  implement_drm[64],
     		  use_infinite_qk[64],
     		  include_topography[64],
-    		  include_incident_planewaves[64];
+    		  include_incident_planewaves[64],
+    		  include_hmgHalfSpace[64];
 
     damping_type_t   typeOfDamping     = -1;
     stiffness_type_t stiffness_method  = -1;
@@ -692,6 +696,7 @@ static int32_t parse_parameters( const char* numericalin )
     noyesflag_t      implementdrm              = -1;
     noyesflag_t		 haveTopography            = -1;
     noyesflag_t		 includePlaneWaves         = -1;
+    noyesflag_t		 includeHmgHalfSpace       = -1;
 
     /* Obtain the specification of the simulation */
     if ((fp = fopen(physicsin, "r")) == NULL)
@@ -785,6 +790,7 @@ static int32_t parse_parameters( const char* numericalin )
         (parsetext(fp, "implement_drm",    				 's', &implement_drm               ) != 0) ||
         (parsetext(fp, "include_topography",    		 's', &include_topography          ) != 0) ||       
         (parsetext(fp, "include_incident_planewaves",    's', &include_incident_planewaves ) != 0) ||
+        (parsetext(fp, "include_hmg_halfspace",          's', &include_hmgHalfSpace        ) != 0) ||
         (parsetext(fp, "simulation_velocity_profile_freq_hz",'d', &freq_vel                ) != 0) ||
         (parsetext(fp, "use_infinite_qk",                's', &use_infinite_qk             ) != 0) )
     {
@@ -1015,6 +1021,16 @@ static int32_t parse_parameters( const char* numericalin )
                 include_incident_planewaves );
     }
 
+    if ( strcasecmp(include_hmgHalfSpace, "yes") == 0 ) {
+        includeHmgHalfSpace = YES;
+    } else if ( strcasecmp(include_hmgHalfSpace, "no") == 0 ) {
+    	includeHmgHalfSpace = NO;
+    } else {
+        solver_abort( __FUNCTION_NAME, NULL,
+                "Unknown response for include_hmg_halfspace (yes or no): %s\n",
+                include_hmgHalfSpace );
+    }
+
     /* Init the static global variables */
 
     Param.theRegionLat      = region_origin_latitude_deg;
@@ -1070,6 +1086,8 @@ static int32_t parse_parameters( const char* numericalin )
 
     Param.includeIncidentPlaneWaves = includePlaneWaves;
 
+    Param.includeHomogeneousHalfSpace = includeHmgHalfSpace;
+
     strcpy( Param.theCheckPointingDirOut, checkpoint_path );
 
     monitor_print("\n\n---------------- Some Input Data ----------------\n\n");
@@ -1084,9 +1102,10 @@ static int32_t parse_parameters( const char* numericalin )
     monitor_print("Printing accelerations on stations: %s\n", print_station_accelerations);
     monitor_print("Mesh Coordinates For Matlab:        %s\n", mesh_coordinates_for_matlab);
     monitor_print("cvmdb_input_file:                   %s\n", Param.cvmdb_input_file);
-    monitor_print("Implement drm:      	               %s\n", implement_drm);
+    monitor_print("Implement DRM:      	               %s\n", implement_drm);
     monitor_print("Include Topography:                 %s\n", include_topography);
     monitor_print("Include Incident Plane Waves:       %s\n", include_incident_planewaves);
+    monitor_print("Include Homogeneous Halfspace:      %s\n", include_hmgHalfSpace);
     monitor_print("\n-------------------------------------------------\n\n");
 
     fflush(Param.theMonitorFileFp);
