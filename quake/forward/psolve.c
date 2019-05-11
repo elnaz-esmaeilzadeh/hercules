@@ -7792,6 +7792,10 @@ int main( int argc, char** argv )
 
     }
 
+    if ( Param.includeHomogeneousHalfSpace == YES ){
+    	/* compute half-space Vs */
+    	hmgHalfspace_init( Global.myID, Param.parameters_input_file );
+    }
 
     // INTRODUCE BKT MODEL
     /* Init Quality Factor Table */

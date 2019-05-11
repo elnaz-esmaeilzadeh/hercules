@@ -37,5 +37,8 @@ double time_shift ( double Vs, double Vp ) ;
 void   get_reflection_coeff ( double *A1, double *B1, double Vs, double Vp  );
 void   Incoming_inclinedPW ( fvector_t *myDisp, double xp, double yp, double zp, double t, double Vs, double Vp  );
 
+void hmgHalfspace_init ( int32_t myID, const char *parametersin );
+int32_t hmgHalfspace_initparameters ( const char *parametersin ) ;
+
 
 #endif /* DRM_PLANEWAVES_H_ */

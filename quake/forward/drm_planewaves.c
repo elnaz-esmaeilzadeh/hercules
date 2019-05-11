@@ -43,6 +43,15 @@ static double 	        thedrmbox_esize         = 0.0;
 static double 	        thedrmbox_xo            = 0.0;
 static double 	        thedrmbox_yo            = 0.0;
 
+static double 	        theetreebox_xo            = 0.0;
+static double 	        theetreebox_yo            = 0.0;
+static double 	        theetreeBoxlengthEW       = 0.0;
+static double 	        theetreeBoxlengthNS       = 0.0;
+static double 	        theetreeBoxdepth          = 0.0;
+static double 	        thehmgHsVs                = 0.0;
+static double 	        thehmgHsVp                = 0.0;
+static double 	        thehmgHsRho               = 0.0;
+
 static double 	        theUg_Dt;
 static double           *theUg_str;
 static double           *theUg_nrm;
@@ -1180,78 +1189,93 @@ void get_reflection_coeff ( double *A1, double *B1, double Vs, double Vp  ) {
 
 }
 
-/*double time_shift ( double Vs, double Vp ) {
+// =*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+// =*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+// Dorian says: I'm going to initialize the homogeneous halfspace option here to avoid creating additional files for such a small change
+void hmgHalfspace_init ( int32_t myID, const char *parametersin ) {
 
-	int i, j;
-	double p_inc[3]  = {0.0}; // propagation angle of the incident wave
-	//double p_pref[3] = {0.0}; // propagation angle of the reflected p-wave
-	//double p_sref[3] = {0.0}; // propagation angle of the reflected s-wave
-	//double e, f, time_shft[8] = { 0.0 }, c;
-	double time_shft[8] = { 0.0 }, c;
+    double  double_message[8];
 
-	double t_shft=0.0;
+    /* Capturing data from file --- only done by PE0 */
+    if (myID == 0) {
+        if ( hmgHalfspace_initparameters( parametersin ) != 0 ) {
+            fprintf(stderr,"Thread %d: drm_planewaves_init: "
+                    "incidentPlaneWaves_initparameters error\n",myID);
+            MPI_Abort(MPI_COMM_WORLD, ERROR);
+            exit(1);
+        }
+    }
 
-	double DRM_EW = theDRMBox_halfwidthElements_ew * thedrmbox_esize;
-	double DRM_NS = theDRMBox_halfwidthElements_ns * thedrmbox_esize;
-	double DRM_D  = theDRMBox_DepthElements * thedrmbox_esize;
+    /* Broadcasting data */
+    double_message[0]  = theetreebox_xo;
+    double_message[1]  = theetreebox_yo;
+    double_message[2]  = theetreeBoxlengthEW;
+    double_message[3]  = theetreeBoxlengthNS;
+    double_message[4]  = theetreeBoxdepth;
+    double_message[5]  = thehmgHsVs;
+    double_message[6]  = thehmgHsVp;
+    double_message[7]  = thehmgHsRho;
 
-	double drm_corners[3][8] = { { DRM_NS,  DRM_NS, -DRM_NS,  -DRM_NS,  DRM_NS,  DRM_NS, -DRM_NS,  -DRM_NS} , \
-                                 {-DRM_EW,  DRM_EW,  DRM_EW,  -DRM_EW, -DRM_EW,  DRM_EW,  DRM_EW,  -DRM_EW} , \
-                                 {    0.0,     0.0,     0.0,      0.0,   DRM_D,   DRM_D,   DRM_D,    DRM_D} };
+    MPI_Bcast(double_message, 8, MPI_DOUBLE, 0, comm_solver);
 
-	p_inc[0] =  sin( theplanewave_Zangle ) * cos (theplanewave_strike);
-	p_inc[1] =  sin( theplanewave_Zangle ) * sin (theplanewave_strike);
-	p_inc[2] = -cos( theplanewave_Zangle );
+    theetreebox_xo          = double_message[0];
+    theetreebox_yo          = double_message[1];
+    theetreeBoxlengthEW     = double_message[2];
+    theetreeBoxlengthNS     = double_message[3];
+    theetreeBoxdepth        = double_message[4];
+    thehmgHsVs              = double_message[5];
+    thehmgHsVp              = double_message[6];
+    thehmgHsRho             = double_message[7];
 
+    return;
 
-	if ( thePlaneWaveType == SV1 ) {
-		c = Vs;
-		//f = theplanewave_Zangle;
-		//e = asin( Vp / Vs * sin( f ) );
+}
 
-		 p_inc[0] =  sin( f ) * cos (theplanewave_strike);
-		p_inc[1] =  sin( f ) * sin (theplanewave_strike);
-		p_inc[2] = -cos( f );
+int32_t hmgHalfspace_initparameters ( const char *parametersin ) {
+	FILE                *fp;
 
-		 p_pref[0] = sin( e ) * cos (theplanewave_strike);
-		p_pref[1] = sin( e ) * sin (theplanewave_strike);
-		p_pref[2] = cos( e );
+	double      etreebox_xo, etreebox_yo, etreeBoxlengthEW, etreeBoxlengthNS, etreeBoxdepth, hmgVs, hmgVp, hmgrho;
 
-		p_sref[0] = sin( f ) * cos (theplanewave_strike);
-		p_sref[0] = sin( f ) * sin (theplanewave_strike);
-		p_sref[2] = cos( f );
+	/* Opens parametersin file */
 
-		 for (i = 0; i < 8; i++) {
-			for (j = 0; j < 3; j++) {
-				time_shft[i] += p_inc[j] * drm_corners[j][i] / Vs;
-			}
-		}
-
-	} else {
-		c = Vp;
-		 e = theplanewave_Zangle;
-		//f = asin( Vs / Vp * sin( e ) );
-		p_inc[0] =  sin( e ) * cos (theplanewave_strike);
-		p_inc[1] =  sin( e ) * sin (theplanewave_strike);
-		p_inc[2] = -cos( e );
+	if ( ( fp = fopen(parametersin, "r" ) ) == NULL ) {
+		fprintf( stderr,
+				"Error opening %s\n at drm_planewaves_initparameters",
+				parametersin );
+		return -1;
 	}
 
-	for (i = 0; i < 8; i++) {
-		for (j = 0; j < 3; j++) {
-			time_shft[i] += p_inc[j] * drm_corners[j][i] / c;
-		}
+
+	/* Parses parametersin to capture drm_planewaves single-value parameters */
+	if (    ( parsetext(fp, "etreeBox_xo",        'd', &etreebox_xo       ) != 0) ||
+			( parsetext(fp, "etreeBox_yo",        'd', &etreebox_yo       ) != 0) ||
+			( parsetext(fp, "etreeBox_lengthEW",  'd', &etreeBoxlengthEW  ) != 0) ||
+			( parsetext(fp, "etreeBox_lengthNS",  'd', &etreeBoxlengthNS  ) != 0) ||
+			( parsetext(fp, "etreeBox_depth",     'd', &etreeBoxdepth     ) != 0) ||
+			( parsetext(fp, "hmgHS_Vs",           'd', &hmgVs             ) != 0) ||
+			( parsetext(fp, "hmgHS_Vp",           'd', &hmgVp             ) != 0) ||
+			( parsetext(fp, "hmgHS_rho",          'd', &hmgrho            ) != 0) )
+	{
+		fprintf( stderr,
+				"Error parsing homogeneous halfspace parameters from %s\n",
+				parametersin );
+		return -1;
 	}
 
-	for (i = 0; i < 8; i++)
-		t_shft = MIN( t_shft, time_shft[i] );
 
+	/*  Initialize the static global variables */
+	theetreebox_xo                  = etreebox_xo;
+	theetreebox_yo                  = etreebox_yo;
+	theetreeBoxlengthEW             = etreeBoxlengthEW;
+	theetreeBoxlengthNS             = etreeBoxlengthNS;
+	theetreeBoxdepth                = etreeBoxdepth;
+	thehmgHsVs                      = hmgVs;
+	thehmgHsVp                      = hmgVp;
+	thehmgHsRho                     = hmgrho;
 
-	return t_shft;
+	fclose(fp);
 
-}*/
-
-
-
-
+	return 0;
+}
 
 
