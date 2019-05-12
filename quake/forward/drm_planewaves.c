@@ -1278,4 +1278,26 @@ int32_t hmgHalfspace_initparameters ( const char *parametersin ) {
 	return 0;
 }
 
+/*
+ * Return YES if an element is to be considered nonlinear, NO otherwise.
+ */
+int belongs2hmgHalfspace( double xp, double yp, double zp) {
+
+	if ( zp >= ( theetreeBoxdepth + get_thebase_topo() )  )
+		return YES;
+	else if ( xp >= ( theetreeBoxlengthNS + theetreebox_xo ) ||
+			  xp <=  theetreebox_xo                          ||
+			  yp >= ( theetreeBoxlengthEW + theetreebox_yo ) ||
+			  yp <=  theetreebox_yo                          )
+		return YES;
+	else
+		return NO;
+}
+
+void get_halfspaceproperties( cvmpayload_t* payload ) {
+	payload->Vp  = thehmgHsVp;
+	payload->Vs  = thehmgHsVs;
+	payload->rho = thehmgHsRho;
+}
+
 
