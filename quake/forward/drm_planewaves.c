@@ -1281,7 +1281,7 @@ int32_t hmgHalfspace_initparameters ( const char *parametersin ) {
 /*
  * Return YES if an element is to be considered nonlinear, NO otherwise.
  */
-int belongs2hmgHalfspace( double xp, double yp, double zp) {
+int belongs2hmgHalfspace( double yp, double xp, double zp) {
 
 	if ( zp >= ( theetreeBoxdepth + get_thebase_topo() )  )
 		return YES;
@@ -1294,10 +1294,12 @@ int belongs2hmgHalfspace( double xp, double yp, double zp) {
 		return NO;
 }
 
-void get_halfspaceproperties( cvmpayload_t* payload ) {
+int get_halfspaceproperties( cvmpayload_t* payload ) {
 	payload->Vp  = thehmgHsVp;
 	payload->Vs  = thehmgHsVs;
 	payload->rho = thehmgHsRho;
+
+	return 0;
 }
 
 

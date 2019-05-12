@@ -40,5 +40,8 @@ void   Incoming_inclinedPW ( fvector_t *myDisp, double xp, double yp, double zp,
 void hmgHalfspace_init ( int32_t myID, const char *parametersin );
 int32_t hmgHalfspace_initparameters ( const char *parametersin ) ;
 
+int get_halfspaceproperties( cvmpayload_t* payload );
+int belongs2hmgHalfspace( double yp, double xp, double zp);
+
 
 #endif /* DRM_PLANEWAVES_H_ */

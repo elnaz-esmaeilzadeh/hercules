@@ -25,11 +25,13 @@
 
 #include "cvm.h"
 #include "psolve.h"
+#include "drm_planewaves.h"
 #include "octor.h"
 #include "buildings.h"
 #include "util.h"
 #include "quake_util.h"
 #include "commutil.h"
+
 
 #define  FENCELIMIT  0.9999
 
@@ -256,7 +258,10 @@ void get_airprops( octant_t *leaf, double ticksize, edata_t *edata,
 
 
 	/* Get the Vs at that location on the surface (z = 0) */
-	res = cvm_query( cvm, y, x, 0, &props );
+	if ( belongs2hmgHalfspace( y, x, 0 ) )
+		res = get_halfspaceproperties( &props );
+	else
+		res = cvm_query( cvm, y, x, 0, &props );
 
 	if ( res != 0 ) {
 		return;

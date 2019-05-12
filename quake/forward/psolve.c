@@ -1439,7 +1439,10 @@ setrec( octant_t* leaf, double ticksize, void* data )
                     z_m -= get_surface_shift();
 		}
 
-		res = cvm_query( Global.theCVMEp, y_m, x_m, z_m, &g_props );
+		if ( belongs2hmgHalfspace( y_m, x_m, z_m ) )
+			res = get_halfspaceproperties( &g_props );
+		else
+			res = cvm_query( Global.theCVMEp, y_m, x_m, z_m, &g_props );
 
 		if (res != 0) {
 		    continue;
@@ -7513,8 +7516,10 @@ mesh_correct_properties( etree_t* cvm )
 
             		}
 
-                    res = cvm_query( Global.theCVMEp, east_m, north_m,
-                                     depth_m, &g_props );
+            		if ( belongs2hmgHalfspace( east_m, north_m, depth_m ) )
+            			res = get_halfspaceproperties( &g_props );
+            		else
+            			res = cvm_query( Global.theCVMEp, east_m, north_m, depth_m, &g_props );
 
                     if (res != 0) {
                         fprintf(stderr, "Cannot find the query point: east = %lf, north = %lf, depth = %lf \n",
@@ -7528,7 +7533,7 @@ mesh_correct_properties( etree_t* cvm )
         			++cnt;
 
         			// get geostatic stress as 1d column
-        			double nlayers=10, depth_o = depth_m/nlayers, depth_k;
+        			/* double nlayers=10, depth_o = depth_m/nlayers, depth_k;
         			if (iNorth == 1 && iEast == 1 && iDepth ==1 ) {
 
         				for (k = 0; k < nlayers; k++) {
@@ -7540,7 +7545,7 @@ mesh_correct_properties( etree_t* cvm )
         				}
 
         				edata->sigma_0 = s_0;
-        			}
+        			} */
                 }
             }
         }
