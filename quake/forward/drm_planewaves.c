@@ -1283,15 +1283,19 @@ int32_t hmgHalfspace_initparameters ( const char *parametersin ) {
  */
 int belongs2hmgHalfspace( double yp, double xp, double zp) {
 
-	if ( zp >= ( theetreeBoxdepth + get_thebase_topo() )  )
-		return YES;
-	else if ( xp >= ( theetreeBoxlengthNS + theetreebox_xo ) ||
-			  xp <=  theetreebox_xo                          ||
-			  yp >= ( theetreeBoxlengthEW + theetreebox_yo ) ||
-			  yp <=  theetreebox_yo                          )
-		return YES;
-	else
+	if ( theetreeBoxdepth == 0.0 )
 		return NO;
+	else {
+		if ( zp >= ( theetreeBoxdepth + get_thebase_topo() )  )
+			return YES;
+		else if ( xp >= ( theetreeBoxlengthNS + theetreebox_xo ) ||
+				xp <=  theetreebox_xo                          ||
+				yp >= ( theetreeBoxlengthEW + theetreebox_yo ) ||
+				yp <=  theetreebox_yo                          )
+			return YES;
+		else
+			return NO;
+	}
 }
 
 int get_halfspaceproperties( cvmpayload_t* payload ) {
