@@ -44,6 +44,16 @@
 
 static int superflag = 0;
 
+#define ERROR1		-1
+#define ERROR2		-2
+#define ERROR3		-3
+#define ERROR4		-4
+#define ERROR5		-5
+#define ERROR6		-6
+#define ERROR7		-7
+#define ERROR8		-8
+#define ERROR9		-9
+
 /* -------------------------------------------------------------------------- */
 /*                             Global Variables                               */
 /* -------------------------------------------------------------------------- */
@@ -1791,23 +1801,24 @@ void MatUpd_vMGeneral ( nlconstants_t el_cnt, double *kappa,
 	if ( load_unload > 0 ) {
 
 		*kappa = get_kappaUnLoading_II(  el_cnt, Sdev_n1,  De_dev, ErrMax, &xi1 );
-	    *sigma_ref = copy_tensor( Sdev_n1 );
 
+		//if ( *kappa != 0.0 ) {
+			*sigma_ref = copy_tensor( Sdev_n1 );
 
-		/* get sigma_n deviatoric */
-		//double H_n      = getHardening( el_cnt, *kappa);
-		//double xi1      = 2.0 * G / ( 1.0 + 3.0 * G / H_n );
-		tensor_t DSdev  = scaled_tensor( De_dev, xi1 );
+			/* get sigma_n deviatoric */
+			//double H_n      = getHardening( el_cnt, *kappa);
+			//double xi1      = 2.0 * G / ( 1.0 + 3.0 * G / H_n );
+			tensor_t DSdev  = scaled_tensor( De_dev, xi1 );
 
-		if ( isnan( tensor_J2(DSdev) ) || isinf( tensor_J2(DSdev) ) ) {
-			fprintf(stdout," NAN at unloading: %f.  \n",tensor_J2(DSdev));
-	        MPI_Abort(MPI_COMM_WORLD, ERROR);
-	        exit(1);
-		}
+			if ( isnan( tensor_J2(DSdev) ) || isinf( tensor_J2(DSdev) ) ) {
+				fprintf(stdout," NAN at unloading: %f.  \n",tensor_J2(DSdev));
+				//MPI_Abort(MPI_COMM_WORLD, ERROR1);
+				//exit(1);
+			}
 
-		*sigma          = add_tensors (  add_tensors( sigma_n, isotropic_tensor(K * De_vol) ),  DSdev  );
-		return;
-
+			*sigma          = add_tensors (  add_tensors( sigma_n, isotropic_tensor(K * De_vol) ),  DSdev  );
+			return;
+		//}
 	}
 
 	EvalSubStep ( el_cnt,  sigma_n,  De,  De_dev,  De_vol, Dt,  sigma_ref,  &sigma_up,  kappa_n, &kappa_up,  &ErrB,  &ErrS);
@@ -1859,8 +1870,8 @@ void MatUpd_vMGeneral ( nlconstants_t el_cnt, double *kappa,
 
     			fprintf(stdout," Increase error tolerance, increase number of substeps or reduce time-step. \n"
     					       " BoundSurf error=%f, PsiFnc error=%f, Tol=%f  \n", ErrB, ErrS, theErrorTol);
-    	        MPI_Abort(MPI_COMM_WORLD, ERROR);
-    	        exit(1);
+    	        //MPI_Abort(MPI_COMM_WORLD, ERROR2);
+    	        //exit(1);
 
 	          /*  if (ErrB > *ErrMax) {
 	            	*ErrMax = ErrB;
@@ -1883,8 +1894,8 @@ void MatUpd_vMGeneral ( nlconstants_t el_cnt, double *kappa,
 
 	    		if ( isnan( tensor_J2(Sdev) ) || isinf( tensor_J2(Sdev) ) ) {
 	    			fprintf(stdout," NAN or INF at T=1. J2= %f.  \n",tensor_J2(Sdev));
-	    	        MPI_Abort(MPI_COMM_WORLD, ERROR);
-	    	        exit(1);
+	    	        //MPI_Abort(MPI_COMM_WORLD, ERROR3);
+	    	        //exit(1);
 	    		}
 	    		*ErrMax = ErrB;
 	        	return;
@@ -1898,8 +1909,8 @@ void MatUpd_vMGeneral ( nlconstants_t el_cnt, double *kappa,
 
 	    		if ( isnan( tensor_J2(Sdev) ) || isinf( tensor_J2(Sdev) ) ) {
 	    			fprintf(stdout," NAN or INF when reaching Maxsubsteps. J2=%f.  \n",tensor_J2(Sdev));
-	    	        MPI_Abort(MPI_COMM_WORLD, ERROR);
-	    	        exit(1);
+	    	        //MPI_Abort(MPI_COMM_WORLD, ERROR4);
+	    	        //exit(1);
 	    		}
 	    		*ErrMax = ErrB;
 	    		return;
@@ -1912,8 +1923,8 @@ void MatUpd_vMGeneral ( nlconstants_t el_cnt, double *kappa,
 		if ( isnan(tensor_J2(*sigma)) || isinf(tensor_J2(*sigma)) ) {
 			fprintf(stdout," NAN without substepping. J2=%f, kappa=%f,  Sxx=%f, Syy=%f, Szz=%f."
 					"\n",tensor_J2(*sigma), kappa_up,sigma->xx,sigma->yy, sigma->zz);
-	        MPI_Abort(MPI_COMM_WORLD, ERROR);
-	        exit(1);
+	        //MPI_Abort(MPI_COMM_WORLD, ERROR5);
+	        //exit(1);
 		}
 	}
 
@@ -2078,8 +2089,8 @@ double getHard_Pegassus (nlconstants_t el_cnt, double kappa) {
 
 	if (cnt1 == cntMax) {
 		fprintf(stdout,"Cannot obtain gamma_bar initial in getHard_Pegassus function: gamma_bar0=%f, gamma_bar1=%f. \n", k0, k1 );
-		MPI_Abort(MPI_COMM_WORLD, ERROR);
-		exit(1);
+		//MPI_Abort(MPI_COMM_WORLD, ERROR6);
+		//exit(1);
 	}
 
 	cnt1=1;
@@ -2305,8 +2316,8 @@ double get_kappa( nlconstants_t el_cnt, tensor_t Sdev, tensor_t Sref, double kn 
 double Pegasus(double beta, nlconstants_t el_cnt) {
 	// (1973) King, R. An Improved Pegasus method for root finding
 
-	double k0 = 0.05, k1 = 0.10, k2,  f0, f1, f2,  G=el_cnt.mu, tmp;
-	int cnt1=1, cnt2=1, cntMax = 500;
+	double k0 = 1E-10, k1 = 0.005, k2,  f0, f1, f2,  G=el_cnt.mu, tmp;
+	int cnt1=1, cnt2=1, cntMax = 1000;
 
 	f0 = ( 1.0 + k0 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k0);
 	f1 = ( 1.0 + k1 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k1);
@@ -2322,9 +2333,9 @@ double Pegasus(double beta, nlconstants_t el_cnt) {
 	}
 
 	if (cnt1 == cntMax) {
-		fprintf(stdout,"Cannot obtain initial range for kappa at unloading: k0=%f, k1=%f. \n", k0, k1 );
-		MPI_Abort(MPI_COMM_WORLD, ERROR);
-		exit(1);
+		fprintf(stdout,"Cannot obtain initial range for kappa at unloading: k0=%f, k1=%f, beta=%f, psi=%f, m=%f. \n", k0, k1, beta, el_cnt.psi0, el_cnt.m );
+		//MPI_Abort(MPI_COMM_WORLD, ERROR7);
+		//exit(1);
 	}
 
 	cnt1=1;
@@ -2405,24 +2416,32 @@ double get_kappaUnLoading_II( nlconstants_t el_cnt, tensor_t Sn, tensor_t De, do
 		if ( phi < 0.0 ) {
 			fprintf(stderr,"Material update error: "
 					"negative phi at unloading:%f \n",phi);
-			MPI_Abort(MPI_COMM_WORLD, ERROR);
-			exit(1);
+			//MPI_Abort(MPI_COMM_WORLD, ERROR8);
+			//exit(1);
 		}
 
 		beta  = phi * 0.50 / G;
-		kn    = Pegasus( beta,  el_cnt);  // this is a check
-		*Err  = ( 1.0 + kn - beta ) - 3.0 * beta * G / getHardening(el_cnt, kn);
-		*Psi  = phi / ( 1.0 + kn );
 
-		if ( fabs(*Err) > theErrorTol  ) {
-			fprintf(stdout," Warning --- UnloadingError/ErrorTolerance= %f/%f \n", fabs(*Err), theErrorTol );
-		}
+		if ( beta < 1E-05 ) {
+			kn=0.0;
+			*Err  = 0.0;
+			*Psi  = phi;
+		} else {
 
-		if ( kn < 0  ) {
-			fprintf(stdout," =*=*=*=* CHECK FOR UNSTABLE BEHAVIOR =*=*=*=* \n"
-					"Found negative kappa at unloading.  k=%f  \n", kn );
-			MPI_Abort(MPI_COMM_WORLD, ERROR);
-			exit(1);
+			kn    = Pegasus( beta,  el_cnt);  // this is a check
+			*Err  = ( 1.0 + kn - beta ) - 3.0 * beta * G / getHardening(el_cnt, kn);
+			*Psi  = phi / ( 1.0 + kn );
+
+			if ( fabs(*Err) > theErrorTol  ) {
+				fprintf(stdout," Warning --- UnloadingError/ErrorTolerance= %f/%f \n", fabs(*Err), theErrorTol );
+			}
+
+			if ( kn < 0  ) {
+				fprintf(stdout," =*=*=*=* CHECK FOR UNSTABLE BEHAVIOR =*=*=*=* \n"
+						"Found negative kappa at unloading.  k=%f  \n", kn );
+				//MPI_Abort(MPI_COMM_WORLD, ERROR9);
+				//exit(1);
+			}
 		}
 
 	} else {
