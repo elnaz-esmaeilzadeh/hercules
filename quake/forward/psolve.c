@@ -2977,7 +2977,7 @@ static void solver_set_critical_T()
 		z_m -= get_surface_shift();
 	}
 
-	zeta	    = 10 / edata->Vs;
+	zeta	    = 25.0 / edata->Vs; //ees: updated from 10/Vs (Q = 50Vs) to 25/Vs (Q = 20Vs) based on Ricardo recommendation
 
 	/*If element is in the building, use 5% damping.*/
 	if (z_m < 0) {
@@ -3538,7 +3538,7 @@ static void solver_init()
         }
 
         /* New formula for damping according to Graves */
-        zeta = 10 / edata->Vs;
+        zeta = 25.0 / edata->Vs;//ees: changed it based on Ricardo recommendation from 10/Vs to 25/Vs
 
         /* If element is in a building, use 5% damping */
         if ( (z_m < 0) && ( Param.includeBuildings == YES  ) ) { /* Dorian says: This is only valid for buildings  */
