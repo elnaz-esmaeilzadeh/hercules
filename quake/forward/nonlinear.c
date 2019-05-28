@@ -4034,7 +4034,7 @@ void compute_addforce_nl (mesh_t     *myMesh,
          * This is what gives me the connectivity to nodes */
         elemp = &myMesh->elemTable[eindex];
         edata = (edata_t *)elemp->data;
-        ep    = &mySolver->eTable[nl_eindex] ;
+        ep    = &mySolver->eTable[eindex] ;//ees: changed to eindex
 
         h    = (double)edata->edgesize;
         h3   = h * h * h;
