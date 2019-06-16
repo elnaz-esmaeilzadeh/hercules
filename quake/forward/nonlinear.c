@@ -1802,7 +1802,7 @@ void MatUpd_vMGeneral ( nlconstants_t el_cnt, double *kappa,
 
 		*kappa = get_kappaUnLoading_II(  el_cnt, Sdev_n1,  De_dev, ErrMax, &xi1 );
 
-		//if ( *kappa != 0.0 ) {
+		if ( *kappa != 0.0 ) {
 			*sigma_ref = copy_tensor( Sdev_n1 );
 
 			/* get sigma_n deviatoric */
@@ -1818,7 +1818,7 @@ void MatUpd_vMGeneral ( nlconstants_t el_cnt, double *kappa,
 
 			*sigma          = add_tensors (  add_tensors( sigma_n, isotropic_tensor(K * De_vol) ),  DSdev  );
 			return;
-		//}
+		}
 	}
 
 	EvalSubStep ( el_cnt,  sigma_n,  De,  De_dev,  De_vol, Dt,  sigma_ref,  &sigma_up,  kappa_n, &kappa_up,  &ErrB,  &ErrS);
@@ -1866,9 +1866,9 @@ void MatUpd_vMGeneral ( nlconstants_t el_cnt, double *kappa,
 	    			break;
 	    	}
 
-	        if ( (Dt == Dtmin) && (ErrB > theErrorTol) ) {
+	       // if ( (Dt == Dtmin) && (ErrB > theErrorTol) ) {
 
-    			fprintf(stdout," Increase error tolerance, increase number of substeps or reduce time-step. \n"
+    	//		fprintf(stdout," Increase error tolerance, increase number of substeps or reduce time-step. \n"
     					       " BoundSurf error=%f, PsiFnc error=%f, Tol=%f  \n", ErrB, ErrS, theErrorTol);
     	        //MPI_Abort(MPI_COMM_WORLD, ERROR2);
     	        //exit(1);
@@ -1877,7 +1877,7 @@ void MatUpd_vMGeneral ( nlconstants_t el_cnt, double *kappa,
 	            	*ErrMax = ErrB;
 	                step_Emax = i;
 	            }  */
-	        }
+	      //  }
 
 	        /* Update initial values  */
 	        sigma_n = copy_tensor(sigma_up);
@@ -2432,21 +2432,29 @@ double get_kappaUnLoading_II( nlconstants_t el_cnt, tensor_t Sn, tensor_t De, do
 			*Err  = ( 1.0 + kn - beta ) - 3.0 * beta * G / getHardening(el_cnt, kn);
 			*Psi  = phi / ( 1.0 + kn );
 
-			if ( fabs(*Err) > theErrorTol  ) {
-				fprintf(stdout," Warning --- UnloadingError/ErrorTolerance= %f/%f \n", fabs(*Err), theErrorTol );
-			}
+			//if ( fabs(*Err) > theErrorTol  ) {
+			//	fprintf(stdout," Warning --- UnloadingError/ErrorTolerance= %f/%f \n", fabs(*Err), theErrorTol );
+			//}
 
 			if ( kn < 0  ) {
-				fprintf(stdout," =*=*=*=* CHECK FOR UNSTABLE BEHAVIOR =*=*=*=* \n"
-						"Found negative kappa at unloading.  k=%f  \n", kn );
+				kn=0.0;
+				*Err  = 0.0;
+		        *Psi  = phi;
+				//fprintf(stdout," =*=*=*=* CHECK FOR UNSTABLE BEHAVIOR =*=*=*=* \n"
+				//		"Found negative kappa at unloading.  k=%f  \n", kn );
 				//MPI_Abort(MPI_COMM_WORLD, ERROR9);
 				//exit(1);
 			}
 		}
 
 	} else {
-		fprintf(stdout," =*=*=*=* CHECK FOR UNSTABLE BEHAVIOR =*=*=*=* \n"
-				"Cannot compute kappa at unloading. \n" );
+
+        kn=0.0;
+        *Err  = 0.0;
+        *Psi  = phi;
+
+	//	fprintf(stdout," =*=*=*=* CHECK FOR UNSTABLE BEHAVIOR =*=*=*=* \n"
+	//			"Cannot compute kappa at unloading. \n" );
 		//MPI_Abort(MPI_COMM_WORLD, ERROR);
 		//exit(1);
 	}
@@ -4053,7 +4061,7 @@ void compute_addforce_nl (mesh_t     *myMesh,
          * This is what gives me the connectivity to nodes */
         elemp = &myMesh->elemTable[eindex];
         edata = (edata_t *)elemp->data;
-        ep    = &mySolver->eTable[nl_eindex] ;
+        ep    = &mySolver->eTable[eindex] ;
 
         h    = (double)edata->edgesize;
         h3   = h * h * h;
