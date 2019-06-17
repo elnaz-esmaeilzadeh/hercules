@@ -1823,6 +1823,10 @@ void MatUpd_vMGeneral ( nlconstants_t el_cnt, double *kappa,
 
 	EvalSubStep ( el_cnt,  sigma_n,  De,  De_dev,  De_vol, Dt,  sigma_ref,  &sigma_up,  kappa_n, &kappa_up,  &ErrB,  &ErrS);
 
+	double euler_error;
+
+	Euler2steps ( el_cnt,  sigma_n,  De,  De_dev,  De_vol, Dt,  sigma_ref,  &sigma_up,  kappa_n, &kappa_up,  &ErrB,  &ErrS, &euler_error);
+
 
    /* ImplicitExponential ( el_cnt,   sigma_n,  De,
 			           sigma_ref,  &sigma_up_oo,  *kappa_impl ,  *xi_impl,
@@ -1869,7 +1873,7 @@ void MatUpd_vMGeneral ( nlconstants_t el_cnt, double *kappa,
 	       // if ( (Dt == Dtmin) && (ErrB > theErrorTol) ) {
 
     	//		fprintf(stdout," Increase error tolerance, increase number of substeps or reduce time-step. \n"
-    					       " BoundSurf error=%f, PsiFnc error=%f, Tol=%f  \n", ErrB, ErrS, theErrorTol);
+    			//		       " BoundSurf error=%f, PsiFnc error=%f, Tol=%f  \n", ErrB, ErrS, theErrorTol);
     	        //MPI_Abort(MPI_COMM_WORLD, ERROR2);
     	        //exit(1);
 
@@ -1980,6 +1984,92 @@ void EvalSubStep (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t
 	tensor_t S1   = add_tensors    ( add_tensors( scaled_tensor(Sdev1,0.5), scaled_tensor(Sdev2,0.5) ), scaled_tensor(SmSo,*kappa_up) );
 
 	*ErrB         = fabs( sqrt( ddot_tensors(S1,S1) ) - R ) / R;
+
+}
+
+void Euler2steps (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t De_dev, double De_vol,
+		          double Dt, tensor_t *sigma_ref, tensor_t *sigma_up, double kappa_n,
+		          double *kappa_up, double *ErrB, double *ErrS, double *euler_error) {
+
+	tensor_t Sdev_0, DSdev1, DSdev2, Sdev1, Sdev2, S_up, r_up, DSdev_diff, r2, r1, r_diff;
+	double   H_n, xi_n, H1, H2, xi1, xi2, K, kappa1, kappa2, Su=el_cnt.c, Lambda=el_cnt.lambda, G=el_cnt.mu, xi_up, err_tmp;
+
+	K       = Lambda + 2.0 * G / 3.0;
+	De 		= scaled_tensor(De,Dt);
+	De_dev 	= scaled_tensor(De_dev,Dt);
+	De_vol 	= De_vol * Dt;
+
+	/* get variables at the beginning of the increment */
+	Sdev_0   = tensor_deviator( sigma_n, tensor_octahedral ( tensor_I1 ( sigma_n ) ) );
+	H_n      = getHardening( el_cnt, kappa_n );
+	xi_n     = 2.0 * G / ( 1.0 + 3.0 * G / H_n );
+
+	/* get first order estimates */
+	DSdev1   = scaled_tensor( De_dev,xi_n );
+	Sdev1    = add_tensors( Sdev_0, DSdev1 );
+	kappa1   = get_kappa( el_cnt, Sdev1, *sigma_ref, kappa_n );
+	H1       = getHardening( el_cnt, kappa1 );
+	xi1      = 2.0 * G / ( 1.0 + 3.0 * G / H1 );
+	r1       = add_tensors ( Sdev1, scaled_tensor( subtrac_tensors( Sdev1, *sigma_ref ), kappa1 ) );
+
+	/* get second order estimates */
+	DSdev2   = scaled_tensor( De_dev,xi1 );
+	Sdev2    = add_tensors( Sdev_0, DSdev2 );
+	kappa2   = get_kappa( el_cnt, Sdev2, *sigma_ref, kappa_n );
+	H2     = getHardening( el_cnt, kappa2 );
+	xi2      = 2.0 * G / ( 1.0 + 3.0 * G / H2 );
+	r2       = add_tensors ( Sdev2, scaled_tensor( subtrac_tensors( Sdev2, *sigma_ref ), kappa2 ) );
+
+	/* updated state */
+	//xi_up      = xi_n + (xi1+xi2)/2;
+	xi_up      =  (xi1+xi2)/2;
+	//*kappa_up  = kappa_n + (kappa1+kappa2)/2;
+	*kappa_up  =  (kappa1+kappa2)/2;
+	S_up       = add_tensors (  scaled_tensor(Sdev1,0.5), scaled_tensor(Sdev2,0.5) ) ;
+	r_up       = add_tensors ( S_up, scaled_tensor( subtrac_tensors( S_up, *sigma_ref ), *kappa_up ) );
+
+	*sigma_up = add_tensors (  add_tensors( sigma_n, isotropic_tensor(K*De_vol) ),
+			                   add_tensors( scaled_tensor(DSdev1,0.5), scaled_tensor(DSdev2,0.5) ) );
+
+	// compute errors
+	DSdev_diff = subtrac_tensors ( DSdev2, DSdev1 );
+	r_diff     = subtrac_tensors ( r2, r1 );
+	double Sdev_error = 0.50 * sqrt( ddot_tensors(DSdev_diff,DSdev_diff) / ddot_tensors(*sigma_up,*sigma_up) );
+	double r_error    = 0.50 * sqrt( ddot_tensors(r_diff,r_diff) / ddot_tensors(r_up,r_up) );
+	double kappa_err  = 0.5 * ( fabs(kappa1 - kappa2)/ (*kappa_up) );
+	double xi_err     = 0.5 * ( fabs(xi1 - xi2)/ xi_up );
+
+	err_tmp       = MAX(Sdev_error,r_error);
+	err_tmp       = MAX(err_tmp,kappa_err);
+	*euler_error  = MAX(err_tmp,xi_err);
+
+	*ErrS  = xi_up * ( 1.0 + 3.0*G/getHardening( el_cnt, *kappa_up ) ) / G - 2.0 ;
+
+	double R  = Su * sqrt(8.0/3.0);
+
+	*ErrB     = fabs( sqrt( ddot_tensors(r_up,r_up) ) - R );
+
+
+	//Dsigma2  = add_tensors( isotropic_tensor(K * De_vol), Sdev2 );
+
+	//*sigma_up = add_tensors (  add_tensors( sigma_n, isotropic_tensor(K*De_vol) ),
+	//		                   add_tensors( scaled_tensor(DSdev1,0.5), scaled_tensor(DSdev2,0.5) ) );
+	//*kappa_up = (kappa1+kappa2)/2;
+
+	/* compute errors */
+	//Dss       =  subtrac_tensors(Dsigma2,Dsigma1);
+	//*ErrS     =  sqrt(2.0 *  tensor_J2 ( Dss ) ) / sqrt(2.0 *  tensor_J2 ( *sigma_up ) );
+
+
+
+
+
+
+
+//	tensor_t SmSo = subtrac_tensors( add_tensors( scaled_tensor(Sdev1,0.5), scaled_tensor(Sdev2,0.5) ), *sigma_ref );
+//	tensor_t S1   = add_tensors    ( add_tensors( scaled_tensor(Sdev1,0.5), scaled_tensor(Sdev2,0.5) ), scaled_tensor(SmSo,*kappa_up) );
+
+//	*ErrB         = fabs( sqrt( ddot_tensors(S1,S1) ) - R ) / R;
 
 }
 
@@ -4305,10 +4395,11 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
 				int flagTolSubSteps=0, flagNoSubSteps=0;
 				double ErrBA=0;
 
-/*				double po=90;
-				if (i==1 && eindex == 14428 && ( step == 208 ) ) {
+				double po=90;
+				//if (i==1 && eindex == 14428 && ( step == 208 ) ) {
+				if ( step == 418 ) {
 					po=89;
-				}*/
+				}
 
 				material_update ( *enlcons,           tstrains->qp[i],      tstrains1->qp[i],   pstrains1->qp[i],  alphastress1->qp[i], epstr1->qv[i],   sigma0,        theDeltaT,
 						          &pstrains2->qp[i],  &alphastress2->qp[i], &stresses->qp[i],   &epstr2->qv[i],    &enlcons->fs[i],     &psi_n->qv[i],

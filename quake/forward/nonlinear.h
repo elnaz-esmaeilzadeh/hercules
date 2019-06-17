@@ -295,6 +295,10 @@ double evalBackboneFn        (nlconstants_t el_cnt, double gamma_bar, double tao
 double evalHardFnc           (nlconstants_t el_cnt, double gamma_bar);
 double getHard_Pegassus      (nlconstants_t el_cnt, double kappa);
 
+void Euler2steps (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t De_dev, double De_vol,
+		          double Dt, tensor_t *sigma_ref, tensor_t *sigma_up, double kappa_n,
+		          double *kappa_up, double *ErrB, double *ErrS, double *euler_error);
+
 
 tensor_t ApproxGravity_tensor(double Szz, double phi, double h, double lz, double rho);
 
