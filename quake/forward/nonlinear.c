@@ -2067,9 +2067,8 @@ void substepping (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t
 		          double *kappa_up, double *ErrB, double *ErrS, double *euler_error ) {
 
 
-	double   xi_sup=0.0, T=0.0, Dt_sup, xi, Dtmin = 1.0/theNoSubsteps, maxErrB=0, maxErrS=0;
+	double   xi_sup=0.0, T=0.0, Dt_sup, xi, Dtmin = 1.0/theNoSubsteps, maxErrB=0;
 	int      i;
-	tensor_t Sdev;
 
 	while ( *euler_error > theErrorTol ) {
 
@@ -2103,20 +2102,22 @@ void substepping (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t
 		}
 
 
-		if ( ( Dt == Dtmin ) && ( *euler_error > theErrorTol ) ) {
+		if ( ( Dt == Dtmin ) && ( *euler_error > theErrorTol ) ) { // one step explicit
 
-			int steps_rem = ceil((1-T)/Dtmin);
+			int steps_rem = ceil((1.0-T)/Dtmin);
+
+			Dtmin        = (1.0-T)/steps_rem;
 
 			for (i = 0; i < steps_rem ; i++) {
-				Euler2steps ( el_cnt, sigma_n, De, De_dev, De_vol, Dt, sigma_ref, sigma_up, kappa_n, kappa_up,  ErrB, ErrS, euler_error, 1 );
+				Euler2steps ( el_cnt, sigma_n, De, De_dev, De_vol, Dtmin, sigma_ref, sigma_up, kappa_n, kappa_up,  ErrB, ErrS, euler_error, 1 );
 
 				/* Update initial values  */
 				sigma_n = copy_tensor(*sigma_up);
 				kappa_n = *kappa_up;
-				*euler_error = MAX(maxErrB, *ErrB);
+				maxErrB = MAX(maxErrB, *ErrB);
 
 			}
-
+			*euler_error = maxErrB;
 			break;
 		}
 
@@ -2439,7 +2440,7 @@ double getHardening(nlconstants_t el_cnt, double kappa) {
 
 double get_kappa( nlconstants_t el_cnt, tensor_t Sdev, tensor_t Sref, double kn ) {
 
-	double R, kappa, A, B, C, toto;
+	double R, kappa, A, B, C;
 	tensor_t SmSo;
 
 	double Su=el_cnt.c;
