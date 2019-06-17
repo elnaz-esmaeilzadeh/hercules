@@ -304,6 +304,9 @@ void substepping (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t
 		          double *kappa_up, double *ErrB, double *ErrS, double *euler_error );
 
 
+double get_BS_value (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t De_dev, tensor_t *sigma_ref, double kappa );
+
+
 tensor_t ApproxGravity_tensor(double Szz, double phi, double h, double lz, double rho);
 
 

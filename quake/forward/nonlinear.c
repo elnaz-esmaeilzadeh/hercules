@@ -2062,6 +2062,26 @@ void Euler2steps (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t
 }
 
 
+double get_BS_value (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t De_dev, tensor_t *sigma_ref, double kappa ) {
+
+	tensor_t Sdev_n, DSdev1, Sdev1, r1;
+	double   H_k, xi_k, Su=el_cnt.c, G=el_cnt.mu;
+
+	/* get variables at the beginning of the increment */
+	Sdev_n   = tensor_deviator( sigma_n, tensor_octahedral ( tensor_I1 ( sigma_n ) ) );
+	H_k      = getHardening( el_cnt, kappa );
+	xi_k     = 2.0 * G / ( 1.0 + 3.0 * G / H_k );
+
+	/* get first order estimates */
+	DSdev1   = scaled_tensor( De_dev,xi_k );
+	Sdev1    = add_tensors( Sdev_n, DSdev1 );
+	r1       = add_tensors ( Sdev1, scaled_tensor( subtrac_tensors( Sdev1, *sigma_ref ), kappa ) );
+
+	return ( sqrt( ddot_tensors(r1,r1) ) - Su * sqrt(8.0/3.0)  );
+
+}
+
+
 void substepping (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t De_dev, double De_vol,
 		          double Dt, tensor_t *sigma_ref, tensor_t *sigma_up, double kappa_n,
 		          double *kappa_up, double *ErrB, double *ErrS, double *euler_error ) {
@@ -2122,52 +2142,6 @@ void substepping (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t
 		}
 
 	}
-
-
-/*    if ( (Dt == Dtmin) && ( *euler_error > theErrorTol ) ) { // do one step euler explicit for each substep
-
-
-    	for (i = 0; i < theNoSubsteps ; i++) {
-
-    		Euler2steps ( el_cnt, sigma_n, De, De_dev, De_vol, Dtmin, sigma_ref, &sigma_up, kappa_n, &kappa_up,  &ErrB, &ErrS, &euler_error, n1 );
-
-    	}*/
-
-//		fprintf(stdout," Increase error tolerance, increase number of substeps or reduce time-step. \n"
-		//		       " BoundSurf error=%f, PsiFnc error=%f, Tol=%f  \n", ErrB, ErrS, theErrorTol);
-        //MPI_Abort(MPI_COMM_WORLD, ERROR2);
-        //exit(1);
-
-      /*  if (ErrB > *ErrMax) {
-        	*ErrMax = ErrB;
-            step_Emax = i;
-        }  */
-  //  }
-
-/*     Update initial values
-    sigma_n = copy_tensor(sigma_up);
-    kappa_n = kappa_up;
-    Sdev    = tensor_deviator( sigma_n, tensor_octahedral ( tensor_I1 ( sigma_n ) ) );
-    *kappa  = get_kappa(  el_cnt, Sdev,  *sigma_ref,  kappa_o  );
-    *sigma  = copy_tensor(sigma_up);
-    T       = T + Dt;
-
-    if ( T == 1 ) {
-    	if ( step_Emax != -1 ) {
-    		*FlagTolSubSteps = 1;
-    	}
-
-		if ( isnan( tensor_J2(Sdev) ) || isinf( tensor_J2(Sdev) ) ) {
-			fprintf(stdout," NAN or INF at T=1. J2= %f.  \n",tensor_J2(Sdev));
-	        MPI_Abort(MPI_COMM_WORLD, ERROR3);
-	        exit(1);
-		}
-		*ErrMax = ErrB;
-    	return;
-    }
-    xi_sup = MIN(0.9*sqrt(theErrorTol/ErrB),1.1);
-    ErrB   = 1E10;*/
-
 
 }
 
@@ -2502,6 +2476,85 @@ double get_kappa( nlconstants_t el_cnt, tensor_t Sdev, tensor_t Sref, double kn 
 
 
 double Pegasus(double beta, nlconstants_t el_cnt) {
+	// (1973) King, R. An Improved Pegasus method for root finding
+
+	double k0 = 1E-10, k1 = 0.005, k2,  f0, f1, f2,  G=el_cnt.mu, tmp;
+	int cnt1=1, cnt2=1, cntMax = 1000;
+
+	f0 = ( 1.0 + k0 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k0);
+	f1 = ( 1.0 + k1 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k1);
+
+	// get initial range for k
+	while ( f0 * f1 > 0 && cnt1 < cntMax ) {
+		k0 = k1;
+		k1 = 2.0 * k1;
+
+		f0 = ( 1.0 + k0 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k0);
+		f1 = ( 1.0 + k1 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k1);
+		cnt1++;
+	}
+
+	if (cnt1 == cntMax) {
+		fprintf(stdout,"Cannot obtain initial range for kappa at unloading: k0=%f, k1=%f, beta=%f, psi=%f, m=%f. \n", k0, k1, beta, el_cnt.psi0, el_cnt.m );
+		//MPI_Abort(MPI_COMM_WORLD, ERROR7);
+		//exit(1);
+	}
+
+	cnt1=1;
+
+	k2 = k1 - f1 * ( k1 - k0 ) / ( f1 - f0 );
+	f2 = ( 1.0 + k2 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k2);
+
+	while ( fabs(f2) > theErrorTol && cnt1 < cntMax ) {
+
+		if ( f1 * f2 < 0 ) {
+			tmp = k0;
+			k0  = k1;
+			k1  = tmp;
+			tmp = f0;
+			f0  = f1;
+			f1  = tmp;
+		}
+
+		while( f1 * f2 > 0 && cnt2 < cntMax) {
+			f0 = f0 * f1 / ( f1 + f2 );
+
+			k1 = k2;
+			f1 = f2;
+
+			k2 = k1 - f1 * ( k1 - k0 ) / ( f1 - f0 );
+			f2 = ( 1.0 + k2 - beta ) - 3.0 * beta * G / getHardening(el_cnt, k2);
+
+			cnt2++;
+		}
+
+		k0 = k1;
+		f0 = f1;
+
+		k1 = k2;
+		f1 = f2;
+
+		if ( k0 == k1 ) {
+			k2 = k1;
+			break;
+		}
+
+		k2 = k1 - f1 * ( k1 - k0 ) / ( f1 - f0 );
+		f2 = ( 1.0 + k2 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k2);
+
+		cnt1++;
+
+	}
+
+	if ( cnt1 == cntMax || cnt2 == cntMax )
+		fprintf(stdout,"Increase the number of steps for root finding in Pegasus method. k=%f, beta=%f, Error=%f, ErroTol=%f \n", k2, beta, fabs(f2), theErrorTol );
+
+	return k2;
+
+}
+
+
+double get_kappa_Pegasus(double beta, nlconstants_t el_cnt, tensor_t  sigma_n) {
 	// (1973) King, R. An Improved Pegasus method for root finding
 
 	double k0 = 1E-10, k1 = 0.005, k2,  f0, f1, f2,  G=el_cnt.mu, tmp;
