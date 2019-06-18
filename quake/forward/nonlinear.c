@@ -1988,7 +1988,7 @@ void MatUpd_vMGeneralII ( nlconstants_t el_cnt, double *kappa,
 		}
 	}
 
-	update_stress (el_cnt,   sigma_n,  De,  De_dev,  De_vol,  *sigma_ref,  &sigma_up, &kappa_up, &ErrB, &ErrS);
+	update_stress (el_cnt,   sigma_n,  kappa_n,  De_dev,  De_vol,  *sigma_ref,  &sigma_up, &kappa_up, &ErrB, &ErrS);
 
 	*kappa  = kappa_up;
 	*sigma  = copy_tensor(sigma_up);
@@ -2123,27 +2123,30 @@ void Euler2steps (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t
 }
 
 
-void update_stress (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t De_dev, double De_vol,
+void update_stress (nlconstants_t el_cnt, tensor_t  sigma_n, double kappa_n, tensor_t De_dev, double De_vol,
 		            tensor_t sigma_ref, tensor_t *sigma_up, double *kappa_up, double *ErrB, double *ErrS) {
 
 	tensor_t Sdev_n, DSdev, S_up, r_up;
 	double   Su=el_cnt.c, Lambda=el_cnt.lambda, G=el_cnt.mu, K, xi_up, R, H_up;
 
-	K       = Lambda + 2.0 * G / 3.0;
+	K         = Lambda + 2.0 * G / 3.0;
 
-	Sdev_n   = tensor_deviator( sigma_n, tensor_octahedral ( tensor_I1 ( sigma_n ) ) );
+	Sdev_n    = tensor_deviator( sigma_n, tensor_octahedral ( tensor_I1 ( sigma_n ) ) );
 
 	// get kappa
-	*kappa_up = get_kappa_Pegasus(  el_cnt,   sigma_n,  sigma_ref,  De_dev,  De );
-	H_up       = getHardening( el_cnt, *kappa_up );
-	xi_up      = 2.0 * G / ( 1.0 + 3.0 * G / H_up );
-	DSdev      = scaled_tensor(De_dev,xi_up);
-	S_up       =  add_tensors (  Sdev_n, DSdev ) ;
+	*kappa_up = get_kappa_Pegasus(  el_cnt,   Sdev_n,  sigma_ref,  De_dev, kappa_n/4, kappa_n/2  );
 
-	*sigma_up  = add_tensors (  add_tensors( sigma_n, isotropic_tensor(K*De_vol) ), DSdev );
 
-	r_up       = add_tensors ( S_up, scaled_tensor( subtrac_tensors( S_up, sigma_ref ), *kappa_up ) );
-	*ErrS      = xi_up * ( 1.0 + 3.0*G/getHardening( el_cnt, *kappa_up ) ) / G - 2.0 ;
+
+	H_up      = getHardening( el_cnt, *kappa_up );
+	xi_up     = 2.0 * G / ( 1.0 + 3.0 * G / H_up );
+	DSdev     = scaled_tensor(De_dev,xi_up);
+	S_up      =  add_tensors (  Sdev_n, DSdev ) ;
+
+	*sigma_up = add_tensors (  add_tensors( sigma_n, isotropic_tensor(K*De_vol) ), DSdev );
+
+	r_up      = add_tensors ( S_up, scaled_tensor( subtrac_tensors( S_up, sigma_ref ), *kappa_up ) );
+	*ErrS     = xi_up * ( 1.0 + 3.0*G/getHardening( el_cnt, *kappa_up ) ) / G - 2.0 ;
 
 	R         = Su * sqrt(8.0/3.0);
 	*ErrB     = fabs( sqrt( ddot_tensors(r_up,r_up) ) - R );
@@ -2151,13 +2154,13 @@ void update_stress (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor
 
 
 
-double get_BS_value (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t De_dev, tensor_t sigma_ref, double kappa ) {
+double get_BS_value (nlconstants_t el_cnt, tensor_t  Sdev_n, tensor_t De_dev, tensor_t sigma_ref, double kappa ) {
 
-	tensor_t Sdev_n, DSdev1, Sdev1, r1;
+	tensor_t DSdev1, Sdev1, r1;
 	double   H_k, xi_k, Su=el_cnt.c, G=el_cnt.mu;
 
 	/* get variables at the beginning of the increment */
-	Sdev_n   = tensor_deviator( sigma_n, tensor_octahedral ( tensor_I1 ( sigma_n ) ) );
+	//Sdev_n   = tensor_deviator( sigma_n, tensor_octahedral ( tensor_I1 ( sigma_n ) ) );
 	H_k      = getHardening( el_cnt, kappa );
 	xi_k     = 2.0 * G / ( 1.0 + 3.0 * G / H_k );
 
@@ -2643,39 +2646,64 @@ double Pegasus(double beta, nlconstants_t el_cnt) {
 }
 
 
-double get_kappa_Pegasus( nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t sigma_ref, tensor_t De_dev, tensor_t De ) {
+double get_kappa_Pegasus( nlconstants_t el_cnt, tensor_t  Sdev_n, tensor_t sigma_ref, tensor_t De_dev, double k0, double k1 ) {
 	// (1973) King, R. An Improved Pegasus method for root finding
 
-	double k0 = 1E-10, k1 = 0.005, k2,  f0, f1, f2, tmp;
-	int cnt1=1, cnt2=1, cntMax = 1000;
+	//double k0 = 1.0E-10, k1 = 0.0050;
+	double  k2,  f0, f1, f2, tmp;
+	int     cnt1=1, cnt2=1, cntMax = 1000;
 
 	//f0 = ( 1.0 + k0 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k0);
 	//f1 = ( 1.0 + k1 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k1);
 
-	f0 = get_BS_value ( el_cnt,  sigma_n,  De, De_dev, sigma_ref, k0 );
-	f1 = get_BS_value ( el_cnt,  sigma_n,  De, De_dev, sigma_ref, k1 );
+	f0 = get_BS_value ( el_cnt,  Sdev_n, De_dev, sigma_ref, k0 );
+	f1 = get_BS_value ( el_cnt,  Sdev_n, De_dev, sigma_ref, k1 );
 
 	// get initial range for k
 	while ( f0 * f1 > 0 && cnt1 < cntMax ) {
 		k0 = k1;
 		k1 = 2.0 * k1;
 
-		f0 = get_BS_value ( el_cnt,  sigma_n,  De, De_dev, sigma_ref, k0 );
-		f1 = get_BS_value ( el_cnt,  sigma_n,  De, De_dev, sigma_ref, k1 );
+		f0 = get_BS_value ( el_cnt,  Sdev_n, De_dev, sigma_ref, k0 );
+		f1 = get_BS_value ( el_cnt,  Sdev_n, De_dev, sigma_ref, k1 );
 		cnt1++;
 	}
 
 	if (cnt1 == cntMax) {
-		fprintf(stdout,"Cannot obtain initial range for kappa: k0=%f, k1=%f, psi=%f, m=%f. \n", k0, k1, el_cnt.psi0, el_cnt.m );
-		//MPI_Abort(MPI_COMM_WORLD, ERROR7);
-		//exit(1);
+
+		k0 = 1.0E-10, k1 = 0.0050, cnt1=0;
+
+		f0 = get_BS_value ( el_cnt,  Sdev_n, De_dev, sigma_ref, k0 );
+		f1 = get_BS_value ( el_cnt,  Sdev_n, De_dev, sigma_ref, k1 );
+
+		// get initial range for k
+		while ( f0 * f1 > 0 && cnt1 < cntMax ) {
+			k0 = k1;
+			k1 = 2.0 * k1;
+
+			f0 = get_BS_value ( el_cnt,  Sdev_n, De_dev, sigma_ref, k0 );
+			f1 = get_BS_value ( el_cnt,  Sdev_n, De_dev, sigma_ref, k1 );
+			cnt1++;
+		}
+
+		if (cnt1 == cntMax) {
+			//tensor_t Sdev_n   = tensor_deviator( sigma_n, tensor_octahedral ( tensor_I1 ( sigma_n ) ) );
+			double   sq_eij   = sqrt(ddot_tensors(De_dev,De_dev));
+			double   sqJ2_n   = sqrt(ddot_tensors(Sdev_n,Sdev_n));
+			fprintf(stdout,"\n Cannot obtain initial range for kappa. sqrt(De_ijDe_ij)=%f, sqrt(SijSij)=%f, psi=%f, m=%f. \n", sq_eij, sqJ2_n, el_cnt.psi0, el_cnt.m );
+
+			return 0.0;
+			//MPI_Abort(MPI_COMM_WORLD, ERROR7);
+			//exit(1);
+		}
+
 	}
 
 	cnt1=1;
 
 	k2 = k1 - f1 * ( k1 - k0 ) / ( f1 - f0 );
 	//f2 = ( 1.0 + k2 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k2);
-	f2 = get_BS_value ( el_cnt,  sigma_n,  De, De_dev, sigma_ref, k2 );
+	f2 = get_BS_value ( el_cnt,  Sdev_n, De_dev, sigma_ref, k2 );
 
 	while ( fabs(f2) > theErrorTol && cnt1 < cntMax ) {
 
@@ -2696,7 +2724,7 @@ double get_kappa_Pegasus( nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t sigm
 
 			k2 = k1 - f1 * ( k1 - k0 ) / ( f1 - f0 );
 			//f2 = ( 1.0 + k2 - beta ) - 3.0 * beta * G / getHardening(el_cnt, k2);
-			f2 = get_BS_value ( el_cnt,  sigma_n,  De, De_dev, sigma_ref, k2 );
+			f2 = get_BS_value ( el_cnt,  Sdev_n, De_dev, sigma_ref, k2 );
 
 			cnt2++;
 		}
@@ -2714,13 +2742,13 @@ double get_kappa_Pegasus( nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t sigm
 
 		k2 = k1 - f1 * ( k1 - k0 ) / ( f1 - f0 );
 		//f2 = ( 1.0 + k2 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k2);
-		f2 = get_BS_value ( el_cnt,  sigma_n,  De, De_dev, sigma_ref, k2 );
+		f2 = get_BS_value ( el_cnt,  Sdev_n, De_dev, sigma_ref, k2 );
 
 		cnt1++;
 
 	}
 
-	if ( cnt1 == cntMax || cnt2 == cntMax )
+	if ( cnt1 == cntMax || cnt2 == cntMax  )
 		fprintf(stdout,"Increase the number of steps for root finding in Pegasus method. k=%f, Error=%f, ErroTol=%f \n", k2, fabs(f2), theErrorTol );
 
 	return k2;
@@ -4642,11 +4670,10 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
 				int flagTolSubSteps=0, flagNoSubSteps=0;
 				double ErrBA=0;
 
-				//double po=90;
-				//if (i==1 && eindex == 14428 && ( step == 208 ) ) {
-				//if ( step == 418 ) {
-				//	po=89;
-				//}
+				double po=90;
+				if (i==2 && eindex == 38816 && ( step == 248 || step == 249 ) ) {
+					po=89;
+				}
 
 				material_update ( *enlcons,           tstrains->qp[i],      tstrains1->qp[i],   pstrains1->qp[i],  alphastress1->qp[i], epstr1->qv[i],   sigma0,        theDeltaT,
 						          &pstrains2->qp[i],  &alphastress2->qp[i], &stresses->qp[i],   &epstr2->qv[i],    &enlcons->fs[i],     &psi_n->qv[i],

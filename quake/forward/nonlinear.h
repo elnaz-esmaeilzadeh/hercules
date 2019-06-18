@@ -304,9 +304,9 @@ void substepping (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t
 		          double *kappa_up, double *ErrB, double *ErrS, double *euler_error );
 
 
-double get_BS_value (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t De_dev, tensor_t sigma_ref, double kappa );
-double get_kappa_Pegasus( nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t sigma_ref, tensor_t De_dev, tensor_t De );
-void   update_stress (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t De_dev, double De_vol,
+double get_BS_value (nlconstants_t el_cnt, tensor_t  Sdev_n, tensor_t De_dev, tensor_t sigma_ref, double kappa );
+double get_kappa_Pegasus( nlconstants_t el_cnt, tensor_t  Sdev_n, tensor_t sigma_ref, tensor_t De_dev, double k0, double k1 );
+void   update_stress (nlconstants_t el_cnt, tensor_t  sigma_n, double k_n, tensor_t De_dev, double De_vol,
 		            tensor_t sigma_ref, tensor_t *sigma_up, double *kappa_up, double *ErrB, double *ErrS);
 
 void MatUpd_vMGeneralII ( nlconstants_t el_cnt, double *kappa,
