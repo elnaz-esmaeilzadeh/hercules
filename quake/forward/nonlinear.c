@@ -2134,9 +2134,7 @@ void update_stress (nlconstants_t el_cnt, tensor_t  sigma_n, double kappa_n, ten
 	Sdev_n    = tensor_deviator( sigma_n, tensor_octahedral ( tensor_I1 ( sigma_n ) ) );
 
 	// get kappa
-	*kappa_up = get_kappa_Pegasus(  el_cnt,   Sdev_n,  sigma_ref,  De_dev, kappa_n/4, kappa_n/2  );
-
-
+	*kappa_up = get_kappa_Pegasus(  el_cnt,   Sdev_n,  sigma_ref,  De_dev, 0.10 * kappa_n, kappa_n  );
 
 	H_up      = getHardening( el_cnt, *kappa_up );
 	xi_up     = 2.0 * G / ( 1.0 + 3.0 * G / H_up );
@@ -4670,10 +4668,10 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
 				int flagTolSubSteps=0, flagNoSubSteps=0;
 				double ErrBA=0;
 
-				double po=90;
+/*				double po=90;
 				if (i==2 && eindex == 38816 && ( step == 248 || step == 249 ) ) {
 					po=89;
-				}
+				}*/
 
 				material_update ( *enlcons,           tstrains->qp[i],      tstrains1->qp[i],   pstrains1->qp[i],  alphastress1->qp[i], epstr1->qv[i],   sigma0,        theDeltaT,
 						          &pstrains2->qp[i],  &alphastress2->qp[i], &stresses->qp[i],   &epstr2->qv[i],    &enlcons->fs[i],     &psi_n->qv[i],
