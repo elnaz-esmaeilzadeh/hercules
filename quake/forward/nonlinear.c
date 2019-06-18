@@ -1823,35 +1823,11 @@ void MatUpd_vMGeneral ( nlconstants_t el_cnt, double *kappa,
 
 	EvalSubStep ( el_cnt,  sigma_n,  De,  De_dev,  De_vol, Dt,  sigma_ref,  &sigma_up,  kappa_n, &kappa_up,  &ErrB,  &ErrS);
 
-	double euler_error;
-
-	//update_stress (el_cnt,   sigma_n,  De,  De_dev,  De_vol,  *sigma_ref,  &sigma_up, &kappa_up, &ErrB, &ErrS);
-
-	//*kappa  = kappa_up;
-	//*sigma  = copy_tensor(sigma_up);
-	//*ErrMax = MAX(ErrB,ErrS);
-
-
-   /* ImplicitExponential ( el_cnt,   sigma_n,  De,
-			           sigma_ref,  &sigma_up_oo,  *kappa_impl ,  *xi_impl,
-			           kappa_impl,  xi_impl,  &ErrB_o) ;  */
-
-	//double Emax     = 0;
 	int    step_Emax = -1, i;
 
 	if ( ErrB > theErrorTol ) { // begin sub-stepping
 		xi_sup  = 0.0;
 		kappa_o = kappa_n;
-
-		update_stress (el_cnt,   sigma_n,  De,  De_dev,  De_vol,  *sigma_ref,  &sigma_up, &kappa_up, &ErrB, &ErrS);
-
-		*kappa  = kappa_up;
-		*sigma  = copy_tensor(sigma_up);
-		*ErrMax = MAX(ErrB,ErrS);
-
-
-
-		substepping ( el_cnt,  sigma_n,  De,  De_dev,  De_vol, Dt,  sigma_ref,  &sigma_up,  kappa_n, &kappa_up,  &ErrB,  &ErrS, &euler_error );
 
 	    for (i = 0; i < theNoSubsteps ; i++) {
 
@@ -1947,6 +1923,79 @@ void MatUpd_vMGeneral ( nlconstants_t el_cnt, double *kappa,
 	}
 
 }
+
+
+/*===============================================================*/
+/*===============================================================*/
+/*   Material update function for material models based on (1994) Borja & Amies approach    */
+void MatUpd_vMGeneralII ( nlconstants_t el_cnt, double *kappa,
+		                  tensor_t e_n, tensor_t e_n1, tensor_t *sigma_ref,
+		                  tensor_t *sigma, double *ErrMax ) {
+
+/*	 INPUTS:
+    * el_cnt            : Material constants
+
+ 	* e_n           	: Total strain tensor.
+ 	* e_n1         		: Total strain tensor at t-1
+    * sigma_ref     	: reference stress
+    * substepTol, BoundSurfTol 	: substep Tolerance, Bounding surface Tolerance
+
+ 	* OUTPUTS:
+ 	* sigma         : Updated stress tensor
+ 	* kappa         : Updated hardening variable
+    * sigma_ref     : Updated reference deviator stress tensor          */
+
+	double   kappa_n, load_unload, Den1, Den2, kappa_up,
+			 ErrB, ErrS, K,
+			 G=el_cnt.mu, Lambda = el_cnt.lambda, xi1;
+	tensor_t sigma_n, sigma_up, Num;
+
+	K     = Lambda + 2.0 * G / 3.0;
+
+	/* At  this point *sigma and *kappa have the information at t-1 */
+	kappa_n = *kappa;
+	sigma_n = copy_tensor(*sigma);
+
+	/* deviatoric stress at t-1. At  this point *sigma has the information at t-1  */
+	tensor_t Sdev_n1   = tensor_deviator( *sigma, tensor_octahedral ( tensor_I1 ( *sigma ) ) );
+
+	/* total strain increment and deviatoric strain increment */
+	tensor_t De       = subtrac_tensors ( e_n, e_n1 );
+	double   De_vol   = tensor_I1 ( De );
+	tensor_t De_dev   = tensor_deviator( De, tensor_octahedral ( De_vol ) );
+
+	Den1 = ddot_tensors(Sdev_n1, subtrac_tensors (Sdev_n1 , *sigma_ref));
+	Den2 = kappa_n * ( ddot_tensors(subtrac_tensors (Sdev_n1 , *sigma_ref), subtrac_tensors (Sdev_n1 , *sigma_ref)) );
+	Num  = add_tensors ( scaled_tensor( Sdev_n1, (1.0+kappa_n) ), scaled_tensor( (subtrac_tensors (Sdev_n1 , *sigma_ref) ) ,kappa_n*(1.0+kappa_n) ) );
+
+	load_unload = -ddot_tensors(Num,De_dev) / (Den1 + Den2);
+
+	if ( load_unload > 0 ) {
+
+		*kappa = get_kappaUnLoading_II(  el_cnt, Sdev_n1,  De_dev, ErrMax, &xi1 );
+
+		if ( *kappa != 0.0 ) {
+			*sigma_ref = copy_tensor( Sdev_n1 );
+			tensor_t DSdev  = scaled_tensor( De_dev, xi1 );
+
+			if ( isnan( tensor_J2(DSdev) ) || isinf( tensor_J2(DSdev) ) ) {
+				fprintf(stdout," NAN at unloading: %f.  \n",tensor_J2(DSdev));
+				//MPI_Abort(MPI_COMM_WORLD, ERROR1);
+				//exit(1);
+			}
+			*sigma          = add_tensors (  add_tensors( sigma_n, isotropic_tensor(K * De_vol) ),  DSdev  );
+			return;
+		}
+	}
+
+	update_stress (el_cnt,   sigma_n,  De,  De_dev,  De_vol,  *sigma_ref,  &sigma_up, &kappa_up, &ErrB, &ErrS);
+
+	*kappa  = kappa_up;
+	*sigma  = copy_tensor(sigma_up);
+	*ErrMax = MAX(ErrB,ErrS);
+
+}
+
 
 
 void EvalSubStep (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t De_dev, double De_vol,
@@ -3087,7 +3136,8 @@ void material_update ( nlconstants_t constants, tensor_t e_n, tensor_t e_n1, ten
 
 	}  else if ( theMaterialModel != MOHR_COULOMB ) {
 
-		MatUpd_vMGeneral ( constants,  kp,  e_n,  e_n1, sigma_ref, sigma, flagTolSubSteps, flagNoSubSteps, ErrBA );
+		MatUpd_vMGeneralII ( constants, kp, e_n, e_n1,  sigma_ref, sigma,  ErrBA ) ;
+		//MatUpd_vMGeneral ( constants,  kp,  e_n,  e_n1, sigma_ref, sigma, flagTolSubSteps, flagNoSubSteps, ErrBA );
 		return;
 
 	} else { /* Must be MohrCoulomb soil */

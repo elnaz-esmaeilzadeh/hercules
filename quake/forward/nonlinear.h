@@ -309,6 +309,9 @@ double get_kappa_Pegasus( nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t sigm
 void   update_stress (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t De_dev, double De_vol,
 		            tensor_t sigma_ref, tensor_t *sigma_up, double *kappa_up, double *ErrB, double *ErrS);
 
+void MatUpd_vMGeneralII ( nlconstants_t el_cnt, double *kappa,
+		                tensor_t e_n, tensor_t e_n1, tensor_t *sigma_ref, tensor_t *sigma, double *ErrMax );
+
 
 tensor_t ApproxGravity_tensor(double Szz, double phi, double h, double lz, double rho);
 
