@@ -2134,7 +2134,7 @@ void update_stress (nlconstants_t el_cnt, tensor_t  sigma_n, double kappa_n, ten
 	Sdev_n    = tensor_deviator( sigma_n, tensor_octahedral ( tensor_I1 ( sigma_n ) ) );
 
 	// get kappa
-	*kappa_up = get_kappa_Pegasus(  el_cnt,   Sdev_n,  sigma_ref,  De_dev, 0.10 * kappa_n, kappa_n  );
+	*kappa_up = get_kappa_Pegasus(  el_cnt,   Sdev_n,  sigma_ref,  De_dev, 0.01 * kappa_n, 0.10 * kappa_n  );
 
 	H_up      = getHardening( el_cnt, *kappa_up );
 	xi_up     = 2.0 * G / ( 1.0 + 3.0 * G / H_up );
@@ -2568,7 +2568,7 @@ double get_kappa( nlconstants_t el_cnt, tensor_t Sdev, tensor_t Sref, double kn 
 double Pegasus(double beta, nlconstants_t el_cnt) {
 	// (1973) King, R. An Improved Pegasus method for root finding
 
-	double k0 = 1E-10, k1 = 0.005, k2,  f0, f1, f2,  G=el_cnt.mu, tmp;
+	double k0 = 1000.0, k1 = 2000.0, k2,  f0, f1, f2,  G=el_cnt.mu, tmp;
 	int cnt1=1, cnt2=1, cntMax = 1000;
 
 	f0 = ( 1.0 + k0 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k0);
@@ -2584,11 +2584,37 @@ double Pegasus(double beta, nlconstants_t el_cnt) {
 		cnt1++;
 	}
 
+	// *=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=
+
 	if (cnt1 == cntMax) {
-		fprintf(stdout,"Cannot obtain initial range for kappa at unloading: k0=%f, k1=%f, beta=%f, psi=%f, m=%f. \n", k0, k1, beta, el_cnt.psi0, el_cnt.m );
-		//MPI_Abort(MPI_COMM_WORLD, ERROR7);
-		//exit(1);
+
+		k0 = 1.0E-10, k1 = 0.0050, cnt1=0;
+
+		f0 = ( 1.0 + k0 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k0);
+		f1 = ( 1.0 + k1 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k1);
+
+		// get initial range for k
+		while ( f0 * f1 > 0 && cnt1 < cntMax ) {
+			k0 = k1;
+			k1 = 2.0 * k1;
+
+			f0 = ( 1.0 + k0 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k0);
+			f1 = ( 1.0 + k1 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k1);
+			cnt1++;
+		}
+
+		if (cnt1 == cntMax) {
+			fprintf(stdout,"Cannot obtain initial range for kappa at unloading: k0=%f, k1=%f, beta=%f, psi=%f, m=%f. \n", k0, k1, beta, el_cnt.psi0, el_cnt.m );
+			//MPI_Abort(MPI_COMM_WORLD, ERROR7);
+			//exit(1);
+		}
+
 	}
+
+
+
+	//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=
+
 
 	cnt1=1;
 
@@ -2756,7 +2782,7 @@ double get_kappa_Pegasus( nlconstants_t el_cnt, tensor_t  Sdev_n, tensor_t sigma
 
 double get_kappaUnLoading_II( nlconstants_t el_cnt, tensor_t Sn, tensor_t De, double *Err, double *Psi ) {
 
-	double R, A, B, C, kappa1, kappa2, beta, phi, G=el_cnt.mu, Su=el_cnt.c, kn=0;
+	double R, A, B, C, kappa1, kappa2, beta, phi=0, G=el_cnt.mu, Su=el_cnt.c, kn=0;
 
 	R     = sqrt(8.0/3.0) * Su;
 
