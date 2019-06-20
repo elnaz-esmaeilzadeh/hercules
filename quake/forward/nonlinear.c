@@ -1990,7 +1990,10 @@ void MatUpd_vMGeneralII ( nlconstants_t el_cnt, double *kappa,
 
 	//update_stress (el_cnt,   sigma_n,  kappa_n,  De_dev,  De_vol,  *sigma_ref,  &sigma_up, &kappa_up, &ErrB, &ErrS);
 
-	ImplicitExponential ( el_cnt,   sigma_n,  De, *sigma_ref,  &sigma_up, kappa_n, &kappa_up, &ErrB);
+	//ImplicitExponential ( el_cnt,   sigma_n,  De, *sigma_ref,  &sigma_up, kappa_n, &kappa_up, &ErrB);
+
+	double euler_error = 100;
+	substepping ( el_cnt,   sigma_n,  De,  De_dev,  De_vol, *sigma_ref,  &sigma_up,  kappa_n,  &kappa_up,  &ErrB,  &ErrS,  &euler_error );
 
 	*kappa  = kappa_up;
 	*sigma  = copy_tensor(sigma_up);
@@ -2054,7 +2057,7 @@ void EvalSubStep (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t
 }
 
 void Euler2steps (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t De_dev, double De_vol,
-		          double Dt, tensor_t *sigma_ref, tensor_t *sigma_up, double kappa_n,
+		          double Dt, tensor_t sigma_ref, tensor_t *sigma_up, double kappa_n,
 		          double *kappa_up, double *ErrB, double *ErrS, double *euler_error, int nsteps) {
 
 	tensor_t Sdev_0, DSdev1, DSdev2, Sdev1, Sdev2, S_up, r_up, DSdev_diff, r2, r1, r_diff;
@@ -2074,19 +2077,19 @@ void Euler2steps (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t
 	/* get first order estimates */
 	DSdev1   = scaled_tensor( De_dev,xi_n );
 	Sdev1    = add_tensors( Sdev_0, DSdev1 );
-	kappa1   = get_kappa( el_cnt, Sdev1, *sigma_ref, kappa_n );
+	kappa1   = get_kappa( el_cnt, Sdev1, sigma_ref, kappa_n );
 	H1       = getHardening( el_cnt, kappa1 );
 	xi1      = 2.0 * G / ( 1.0 + 3.0 * G / H1 );
-	r1       = add_tensors ( Sdev1, scaled_tensor( subtrac_tensors( Sdev1, *sigma_ref ), kappa1 ) );
+	r1       = add_tensors ( Sdev1, scaled_tensor( subtrac_tensors( Sdev1, sigma_ref ), kappa1 ) );
 
 	/* get second order estimates */
 	if ( nsteps == 2 ) {
 		DSdev2   = scaled_tensor( De_dev,xi1 );
 		Sdev2    = add_tensors( Sdev_0, DSdev2 );
-		kappa2   = get_kappa( el_cnt, Sdev2, *sigma_ref, kappa_n );
+		kappa2   = get_kappa( el_cnt, Sdev2, sigma_ref, kappa_n );
 		H2     = getHardening( el_cnt, kappa2 );
 		xi2      = 2.0 * G / ( 1.0 + 3.0 * G / H2 );
-		r2       = add_tensors ( Sdev2, scaled_tensor( subtrac_tensors( Sdev2, *sigma_ref ), kappa2 ) );
+		r2       = add_tensors ( Sdev2, scaled_tensor( subtrac_tensors( Sdev2, sigma_ref ), kappa2 ) );
 	}
 
 	/* updated state */
@@ -2116,7 +2119,7 @@ void Euler2steps (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t
 		*euler_error  =  200200;
 	}
 
-	r_up       = add_tensors ( S_up, scaled_tensor( subtrac_tensors( S_up, *sigma_ref ), *kappa_up ) );
+	r_up       = add_tensors ( S_up, scaled_tensor( subtrac_tensors( S_up, sigma_ref ), *kappa_up ) );
 
 	*ErrS  = xi_up * ( 1.0 + 3.0*G/getHardening( el_cnt, *kappa_up ) ) / G - 2.0 ;
 
@@ -2176,14 +2179,16 @@ double get_BS_value (nlconstants_t el_cnt, tensor_t  Sdev_n, tensor_t De_dev, te
 
 
 void substepping (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t De_dev, double De_vol,
-		          double Dt, tensor_t *sigma_ref, tensor_t *sigma_up, double kappa_n,
+		          tensor_t sigma_ref, tensor_t *sigma_up, double kappa_n,
 		          double *kappa_up, double *ErrB, double *ErrS, double *euler_error ) {
 
 
-	double   xi_sup=0.0, T=0.0, Dt_sup, xi, Dtmin = 1.0/theNoSubsteps, maxErrB=0;
-	int      i;
+	double   xi_sup=0.0, T=0.0, Dt_sup, xi, Dtmin = 1.0/theNoSubsteps, maxErrB=0, Dt=1.0;
+	int      i, maxIter=500, cnt=0;
 
-	while ( *euler_error > theErrorTol ) {
+	Euler2steps (  el_cnt, sigma_n, De, De_dev,  De_vol, Dt,  sigma_ref,  sigma_up, kappa_n, kappa_up, ErrB, ErrS, euler_error, 2 );
+
+	while ( *euler_error > theErrorTol && cnt < maxIter ) {
 
 		Dt_sup = MIN( xi_sup * Dt, 1-T );
 		xi     = MAX( 0.9 * sqrt(theErrorTol / *euler_error ), 0.10 );
@@ -2193,6 +2198,7 @@ void substepping (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t
 		/*  compute state for xi_sup (xi_sup is an extrapolated value of xi)  */
 		if ( Dt_sup > Dt ) {
 			Euler2steps (  el_cnt, sigma_n, De, De_dev,  De_vol, Dt_sup,  sigma_ref,  sigma_up, kappa_n, kappa_up, ErrB, ErrS, euler_error, 2 );
+			Dt = Dt_sup;
 		} else {
 			Euler2steps ( el_cnt, sigma_n, De, De_dev, De_vol, Dt, sigma_ref, sigma_up, kappa_n, kappa_up,  ErrB, ErrS, euler_error, 2 );
 			xi_sup = 0.0;  // forget previous xi_sup
@@ -2212,10 +2218,12 @@ void substepping (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t
 
 			xi_sup         = MIN( 0.9 * sqrt( theErrorTol / *euler_error ), 1.1 );
 			*euler_error   = 1E10;
+			Dt = 1.0;
 		}
 
+		cnt += 1;
 
-		if ( ( Dt == Dtmin ) && ( *euler_error > theErrorTol ) ) { // one step explicit
+		if ( ( ( Dt == Dtmin ) && ( *euler_error > theErrorTol ) ) || cnt == maxIter ) { // one step explicit
 
 			int steps_rem = ceil((1.0-T)/Dtmin);
 
