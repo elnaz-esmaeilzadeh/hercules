@@ -1988,11 +1988,14 @@ void MatUpd_vMGeneralII ( nlconstants_t el_cnt, double *kappa,
 		}
 	}
 
-	update_stress (el_cnt,   sigma_n,  kappa_n,  De_dev,  De_vol,  *sigma_ref,  &sigma_up, &kappa_up, &ErrB, &ErrS);
+	//update_stress (el_cnt,   sigma_n,  kappa_n,  De_dev,  De_vol,  *sigma_ref,  &sigma_up, &kappa_up, &ErrB, &ErrS);
+
+	ImplicitExponential ( el_cnt,   sigma_n,  De, *sigma_ref,  &sigma_up, kappa_n, &kappa_up, &ErrB);
 
 	*kappa  = kappa_up;
 	*sigma  = copy_tensor(sigma_up);
-	*ErrMax = MAX(ErrB,ErrS);
+	//*ErrMax = MAX(ErrB,ErrS);
+	*ErrMax = ErrB;
 
 }
 
@@ -2666,6 +2669,87 @@ double Pegasus(double beta, nlconstants_t el_cnt) {
 		fprintf(stdout,"Increase the number of steps for root finding in Pegasus method. k=%f, beta=%f, Error=%f, ErroTol=%f \n", k2, beta, fabs(f2), theErrorTol );
 
 	return k2;
+
+}
+
+
+void ImplicitExponential (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De,
+		          tensor_t Sigma_ref, tensor_t *sigma_up, double kappa_n,
+		          double *kappa_up, double *ErrB) {
+
+	tensor_t Sdev_n, S1, Sigma, Sigma_star;
+	double   H_n, K, Det, Su=el_cnt.c, Lambda=el_cnt.lambda, G=el_cnt.mu, R, m=el_cnt.m;
+	double   J11, J12, J21, J22, psi_k, kappa_k, F1, F2, psi_n;
+	int      cnt=0, cnt_max=500;
+
+	double   De_vol   = tensor_I1 ( De );
+	tensor_t De_dev   = tensor_deviator( De, tensor_octahedral ( De_vol ) );
+
+	R = sqrt(8.0/3.0) * Su;
+	K = Lambda + 2.0 * G / 3.0;
+
+	/* get sigma_n deviatoric */
+	Sdev_n = tensor_deviator( sigma_n, tensor_octahedral ( tensor_I1 ( sigma_n ) ) );
+	//SmSo   = subtrac_tensors(Sdev_n, *Sigma_ref);
+	Sigma      = add_tensors( Sdev_n, scaled_tensor(De_dev,psi_n));
+	Sigma_star = subtrac_tensors(Sigma,Sigma_ref);
+
+	H_n    = getHardening( el_cnt, kappa_n );
+	S1     = add_tensors(Sigma, scaled_tensor(Sigma_star,kappa_n));
+
+	psi_n =   2.0 * G / ( 1.0 + 3.0 * G / H_n ) ;
+
+	F1   = psi_n * ( 1.0 + 3.0 * G / H_n ) - 2.0 * G;
+	F2   = ddot_tensors(S1,S1) - R * R;
+
+	double error = 10000;
+
+	while ( sqrt(error) > theErrorTol ) {
+
+		//Sigma      = add_tensors( Sdev_n, scaled_tensor(De_dev,psi_n));
+		//Sigma_star = subtrac_tensors(Sigma,*Sigma_ref);
+
+		J11 = 1.0 + 3.0*G/H_n;
+		J12 = -3.0 * G * psi_n / ( H_n * H_n ) * ( ( el_cnt.psi0 * G * m ) * pow( kappa_n, m - 1.0 ) ) ;
+		J21 = 2.0 * ( 1.0 + kappa_n ) * ( ddot_tensors(add_tensors( Sigma, scaled_tensor(Sigma_star,kappa_n)), De_dev) );
+		J22 = 2.0 * ( ddot_tensors(add_tensors( Sigma, scaled_tensor(Sigma_star,kappa_n)), Sigma_star) );
+
+		Det = J11 * J22 - J12 * J21;
+
+		psi_k   =  (  J22 * F1 - J12 * F2 ) / Det;
+		kappa_k =  ( -J21 * F1 + J11 * F2 ) / Det;
+
+		psi_n   = psi_n - psi_k;
+		kappa_n = kappa_n - kappa_k;
+
+		Sigma      = add_tensors( Sdev_n, scaled_tensor(De_dev,psi_n));
+		Sigma_star = subtrac_tensors(Sigma,Sigma_ref);
+
+		H_n    = getHardening( el_cnt, kappa_n );
+		S1     = add_tensors(Sigma, scaled_tensor(Sigma_star,kappa_n));
+
+		//H_n    = getHardening( el_cnt, kappa_n );
+		//S1     = add_tensors(Sdev_n, scaled_tensor(SmSo,kappa_n));
+
+		F1   = psi_n * ( 1.0 + 3.0 * G / H_n ) - 2.0 * G;
+		F2   = ddot_tensors(S1,S1) - R * R;
+
+		//error =  pow( F1/G, 2 ) + pow( (sqrt(ddot_tensors(S1,S1)) - R)/R, 2 )  ;
+		//error =  pow( F1, 2 ) + pow( (sqrt(ddot_tensors(S1,S1)) - R), 2 )  ;
+		error =   MAX( fabs(F1),  fabs( sqrt( ddot_tensors(S1,S1) ) - R ) );
+
+		cnt += 1;
+		if (cnt == cnt_max) {
+			fprintf(stdout," Cannot find roots for implicit exponential \n");
+	        //MPI_Abort(MPI_COMM_WORLD, ERROR);
+	        //exit(1);
+			//break;
+		}
+	}
+
+	*sigma_up = add_tensors (  add_tensors( sigma_n, isotropic_tensor(K*De_vol) ), scaled_tensor(De_dev,psi_n) );
+	*kappa_up = kappa_n;
+	*ErrB     = error;
 
 }
 
