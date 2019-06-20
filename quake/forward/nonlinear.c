@@ -2679,7 +2679,7 @@ void ImplicitExponential (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De,
 
 	tensor_t Sdev_n, S1, Sigma, Sigma_star;
 	double   H_n, K, Det, Su=el_cnt.c, Lambda=el_cnt.lambda, G=el_cnt.mu, R, m=el_cnt.m;
-	double   J11, J12, J21, J22, psi_k, kappa_k, F1, F2, psi_n;
+	double   J11, J12, J21, J22, psi_k, kappa_k, F1, F2, psi_n=0;
 	int      cnt=0, cnt_max=500;
 
 	double   De_vol   = tensor_I1 ( De );
@@ -2688,23 +2688,23 @@ void ImplicitExponential (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De,
 	R = sqrt(8.0/3.0) * Su;
 	K = Lambda + 2.0 * G / 3.0;
 
+	H_n    =  getHardening( el_cnt, kappa_n );
+	psi_n  =  2.0 * G / ( 1.0 + 3.0 * G / H_n );
+
 	/* get sigma_n deviatoric */
 	Sdev_n = tensor_deviator( sigma_n, tensor_octahedral ( tensor_I1 ( sigma_n ) ) );
 	//SmSo   = subtrac_tensors(Sdev_n, *Sigma_ref);
 	Sigma      = add_tensors( Sdev_n, scaled_tensor(De_dev,psi_n));
 	Sigma_star = subtrac_tensors(Sigma,Sigma_ref);
 
-	H_n    = getHardening( el_cnt, kappa_n );
 	S1     = add_tensors(Sigma, scaled_tensor(Sigma_star,kappa_n));
-
-	psi_n =   2.0 * G / ( 1.0 + 3.0 * G / H_n ) ;
 
 	F1   = psi_n * ( 1.0 + 3.0 * G / H_n ) - 2.0 * G;
 	F2   = ddot_tensors(S1,S1) - R * R;
 
 	double error = 10000;
 
-	while ( sqrt(error) > theErrorTol ) {
+	while ( error > theErrorTol ) {
 
 		//Sigma      = add_tensors( Sdev_n, scaled_tensor(De_dev,psi_n));
 		//Sigma_star = subtrac_tensors(Sigma,*Sigma_ref);
