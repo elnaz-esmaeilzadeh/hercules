@@ -2184,14 +2184,14 @@ void substepping (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t
 
 
 	double   xi_sup=0.0, T=0.0, Dt_sup, xi, Dtmin = 1.0/theNoSubsteps, maxErrB=0, Dt=1.0;
-	int      i, maxIter=500, cnt=0;
+	int      i, maxIter=250, cnt=0;
 
 	Euler2steps (  el_cnt, sigma_n, De, De_dev,  De_vol, Dt,  sigma_ref,  sigma_up, kappa_n, kappa_up, ErrB, ErrS, euler_error, 2 );
 
 	while ( *euler_error > theErrorTol && cnt < maxIter ) {
 
 		Dt_sup = MIN( xi_sup * Dt, 1-T );
-		xi     = MAX( 0.9 * sqrt(theErrorTol / *euler_error ), 0.10 );
+		xi     = MAX( 0.9 * sqrt(theErrorTol / *euler_error ), 0.50 );
 		Dt     = MAX( xi * Dt, Dtmin );
 		Dt     = MIN( Dt, 1 - T );
 
