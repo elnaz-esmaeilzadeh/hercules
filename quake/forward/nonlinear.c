@@ -2065,7 +2065,6 @@ void Euler2steps (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De_dev, doub
 			 Sdev_error, r_error, kappa_err, xi_err, R;
 
 	K       = Lambda + 2.0 * G / 3.0;
-	//De 		= scaled_tensor(De,Dt);
 	De_dev 	= scaled_tensor(De_dev,Dt);
 	De_vol 	= De_vol * Dt;
 
@@ -2080,7 +2079,7 @@ void Euler2steps (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De_dev, doub
 	kappa1   = get_kappa( el_cnt, Sdev1, sigma_ref, kappa_n );
 	H1       = getHardening( el_cnt, kappa1 );
 	xi1      = 2.0 * G / ( 1.0 + 3.0 * G / H1 );
-	//r1       = add_tensors ( Sdev1, scaled_tensor( subtrac_tensors( Sdev1, sigma_ref ), kappa1 ) );
+	r1       = add_tensors ( Sdev1, scaled_tensor( subtrac_tensors( Sdev1, sigma_ref ), kappa1 ) );
 
 	/* get second order estimates */
 	if ( nsteps == 2 ) {
@@ -2089,7 +2088,7 @@ void Euler2steps (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De_dev, doub
 		kappa2   = get_kappa( el_cnt, Sdev2, sigma_ref, kappa_n );
 		H2     = getHardening( el_cnt, kappa2 );
 		xi2      = 2.0 * G / ( 1.0 + 3.0 * G / H2 );
-		//r2       = add_tensors ( Sdev2, scaled_tensor( subtrac_tensors( Sdev2, sigma_ref ), kappa2 ) );
+		r2       = add_tensors ( Sdev2, scaled_tensor( subtrac_tensors( Sdev2, sigma_ref ), kappa2 ) );
 	}
 
 	/* updated state */
@@ -2100,16 +2099,18 @@ void Euler2steps (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De_dev, doub
 		*sigma_up  =  add_tensors (  add_tensors( sigma_n, isotropic_tensor(K*De_vol) ),
 				                   add_tensors( scaled_tensor(DSdev1,0.5), scaled_tensor(DSdev2,0.5) ) );
 		// compute errors
-		//DSdev_diff = subtrac_tensors ( DSdev2, DSdev1 );
-		//r_diff     = subtrac_tensors ( r2, r1 );
-		//Sdev_error = 0.50 * sqrt( ddot_tensors(DSdev_diff,DSdev_diff) / ddot_tensors(*sigma_up,*sigma_up) );
-		//r_error    = 0.50 * sqrt( ddot_tensors(r_diff,r_diff) / ddot_tensors(r_up,r_up) );
+		DSdev_diff = subtrac_tensors ( DSdev2, DSdev1 );
+		r_diff     = subtrac_tensors ( r2, r1 );
+		Sdev_error = 0.50 * sqrt( ddot_tensors(DSdev_diff,DSdev_diff) / ddot_tensors(*sigma_up,*sigma_up) );
+		r_error    = 0.50 * sqrt( ddot_tensors(r_diff,r_diff) / ddot_tensors(r_up,r_up) );
 		kappa_err  = 0.5 * ( fabs(kappa1 - kappa2)/ (*kappa_up) );
 		xi_err     = 0.5 * ( fabs(xi1 - xi2)/ xi_up );
 
-		//err_tmp       = MAX(Sdev_error,r_error);
-		*euler_error       = MAX(xi_err,kappa_err);
-		//*euler_error  = MAX(err_tmp,xi_err);
+		err_tmp        = MAX(Sdev_error,r_error);
+		err_tmp        = MAX(err_tmp,kappa_err);
+		*euler_error  = MAX(err_tmp,xi_err);
+		//*euler_error       = MAX(xi_err,kappa_err);
+
 
 	} else { // this is euler explicit without error control
 		xi_up         =  xi1;
@@ -2127,9 +2128,9 @@ void Euler2steps (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De_dev, doub
 
 	*ErrS  = xi_up * ( 1.0 + 3.0*G/getHardening( el_cnt, *kappa_up ) ) / G - 2.0 ;
 
-	//R  = Su * sqrt(8.0/3.0);
+	R  = Su * sqrt(8.0/3.0);
 
-	*ErrB     = fabs( sqrt( ddot_tensors(r_up,r_up) ) - Su * sqrt(8.0/3.0) );
+	*ErrB     = fabs( sqrt( ddot_tensors(r_up,r_up) ) - R );
 }
 
 
