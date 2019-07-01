@@ -208,12 +208,15 @@ void calc_conv(mesh_t *myMesh, mysolver_t *mySolver, double theFreq, double theD
     int32_t eindex;
     int i;
     double rmax = 2. * M_PI * theFreq * theDeltaT;
+    int32_t   lin_eindex;
 
-    for (eindex = 0; eindex < myMesh->lenum; eindex++)
+    for (lin_eindex = 0; lin_eindex < myLinearElementsCount; lin_eindex++)
     {
+
     	elem_t *elemp;
     	edata_t *edata;
 
+    	eindex = myLinearElementsMapper[lin_eindex];
     	elemp = &myMesh->elemTable[eindex];
     	edata = (edata_t *)elemp->data;
 
@@ -329,13 +332,14 @@ void constant_Q_addforce(mesh_t *myMesh, mysolver_t *mySolver, double theFreq, d
 	fvector_t localForce[8];
 	int32_t   eindex;
 	fvector_t damping_vector_shear[8], damping_vector_kappa[8];
+	int32_t   lin_eindex;
 
 	double rmax = 2. * M_PI * theFreq * theDeltaT;
 
 	/* theAddForceETime -= MPI_Wtime(); */
 
 	/* loop on the number of elements */
-	for (eindex = 0; eindex < myMesh->lenum; eindex++)
+	for (lin_eindex = 0; lin_eindex < myLinearElementsCount; lin_eindex++)
 	{
 		elem_t *elemp;
 		e_t    *ep;
@@ -343,6 +347,7 @@ void constant_Q_addforce(mesh_t *myMesh, mysolver_t *mySolver, double theFreq, d
 
 		double a0_shear, a1_shear, b_shear, a0_kappa, a1_kappa, b_kappa, csum;
 
+		eindex = myLinearElementsMapper[lin_eindex];
 		elemp = &myMesh->elemTable[eindex];
 		edata = (edata_t *)elemp->data;
 		ep = &mySolver->eTable[eindex];
