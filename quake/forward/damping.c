@@ -26,6 +26,7 @@
 #include "damping.h"
 #include "stiffness.h"
 
+
 void damping_addforce(mesh_t *myMesh, mysolver_t *mySolver, fmatrix_t (*theK1)[8], fmatrix_t (*theK2)[8]){
 
     fvector_t localForce[8];
