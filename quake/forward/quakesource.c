@@ -155,9 +155,10 @@ static double theRegionOriginLatDeg,
     theRegionAzimuthDeg;
 static double theRegionDepthShallowM, theRegionLengthEastM;
 static double theRegionLengthNorthM, theRegionDepthDeepM;
-static double theDeltaT,theValidFreq;
+static double theDeltaT,theValidFreq, theSRFHdt = 0, theEndT, theStartT;
 
 static int32_t	      theNumberOfTimeSteps;
+static int32_t	      theNumberOfSRFHSourceTimeSteps=0;
 static int32_t	      theSourceIsFiltered;
 static source_type_t  theTypeOfSource;
 
@@ -257,7 +258,13 @@ source_get_local_loaded_nodes_count()
     return myNumberOfNodesLoaded;
 }
 
+double get_srfhdt() {
+    return theSRFHdt;
+}
 
+source_function_t get_sourceType() {
+	return theTypeOfSource;
+}
 
 /**
  * Interpolate linearly a function if the time is larger than the one
@@ -378,7 +385,7 @@ compute_source_function (ptsrc_t* pointSource)
       decay =0;
     }
 
-    pointSource->displacement[ iTime ] += decay * pointSource->maxSlip;
+    pointSource->displacement[ iTime ] = decay * pointSource->maxSlip; // Dorian says: changed += by =
 
   }
 
@@ -764,6 +771,7 @@ print_filter(
 
 /**
  * Print the slip function for the "average" source function.
+ * Todo: Dorian says: This function is not used. Revise to delete
  */
 static int
 print_slip_function (const char* filename)
@@ -1210,9 +1218,10 @@ load_myForces_with_point_source(
 	j = pointSource -> lnid [ iNode ];
 
 	if ( myForces [ j ] == NULL  && myForcesCycle[j] == cycle){
-	    myForces [ j ] =
+	    /*myForces [ j ] =
 		( vector3D_t * ) malloc ( sizeof ( vector3D_t ) *
-					  theNumberOfTimeSteps);
+					  theNumberOfTimeSteps);  */
+	    myForces [ j ] = ( vector3D_t * ) calloc ( theNumberOfTimeSteps, sizeof ( vector3D_t ) ); // Dorian says: changed to calloc to avoid initialization
 	    myNumberOfNodesLoaded +=1;
 	    myMemoryAllocated +=  sizeof ( vector3D_t ) * theNumberOfTimeSteps;
 
@@ -1223,11 +1232,11 @@ load_myForces_with_point_source(
 		exit(1);
 	    }
 
-	    for (iCoord = 0; iCoord < 3; iCoord++) {
+	    /*for (iCoord = 0; iCoord < 3; iCoord++) {
 		for (iTime = 0; iTime < theNumberOfTimeSteps; iTime++) {
 		    myForces [j][iTime].x[iCoord]=0;
 		}
-	    }
+	    } */ // Dorian says: not necessary if changed to calloc
 	    isinprocessor+=1;
 	}
     }
@@ -2399,7 +2408,18 @@ read_srfh_source ( FILE *fp, FILE *fpcoords, FILE *fparea, FILE *fpstrike,
       fscanf(fpslipfun," %lf ", &(theSourceSlipFunArray[iSrc][iTime]));
   }
 
+  for ( iSrc = 0; iSrc < theNumberOfPointSources - 1; iSrc++ ){
+	  if ( theSourceDtArray[iSrc] != theSourceDtArray[iSrc+1] ) {
+		  fprintf(stderr, "Thread %d: source_init: source:%d with different time-step\n", myID, iSrc+1);
+		  MPI_Abort(MPI_COMM_WORLD, ERROR);
+		  exit(1);
+	  }
+  }
 
+  theSRFHdt                      = theSourceDtArray[0];
+  theNumberOfSRFHSourceTimeSteps =  (int)(((theEndT - theStartT) / theSRFHdt)) + 10; // added ten aditional steps to avoid interpolation issues at theEndT
+
+  theNumberOfTimeSteps = theNumberOfSRFHSourceTimeSteps; // rewrite the number of timesteps
 
   return 1;
 
@@ -3318,13 +3338,14 @@ static int  compute_myForces_srfh(const char *physicsin){
   theIOInitTime          = -MPI_Wtime();
 
 
-  pntSrc.displacement = (double*)malloc(sizeof(double)*theNumberOfTimeSteps );
+  pntSrc.displacement = (double*)calloc(theNumberOfTimeSteps, sizeof(double) ); // Dorian says: changed to calloc for array initialization
   if(pntSrc.displacement == NULL){
     fprintf(stdout, "Err alloc displacments");
     return -1;
   }
 
-  pntSrc.dt = theDeltaT;
+  //pntSrc.dt = theDeltaT;
+  pntSrc.dt = theSRFHdt;
   pntSrc.numberOfTimeSteps = theNumberOfTimeSteps;
 
   WAIT;
@@ -3764,8 +3785,8 @@ broadcast_plane_source_parameters( void )
 static void
 source_broadcast_parameters( void )
 {
-    int32_t i_buf[5];
-    double  d_buf[15];
+    int32_t i_buf[6];
+    double  d_buf[18];
 
     const int i_len = INT32_ARRAY_LENGTH( i_buf );
     const int d_len = DOUBLE_ARRAY_LENGTH( d_buf );
@@ -3779,16 +3800,18 @@ source_broadcast_parameters( void )
     i_buf[2] = theTypeOfSource;
     i_buf[3] = theNumberOfPoles;
     i_buf[4] = theSourceFunctionType;
+    i_buf[5] = theNumberOfSRFHSourceTimeSteps;
 
     /* broadcast int parameters */
     MPI_Bcast( i_buf, i_len, MPI_INT, 0, comm_solver );
 
     /* this is an identity assigment on PE 0 */
-    theNumberOfTimeSteps   = i_buf[0];
-    theSourceIsFiltered    = i_buf[1];
-    theTypeOfSource	   = i_buf[2];
-    theNumberOfPoles	   = i_buf[3];
-    theSourceFunctionType  = i_buf[4];
+    theNumberOfTimeSteps            = i_buf[0];
+    theSourceIsFiltered             = i_buf[1];
+    theTypeOfSource	                = i_buf[2];
+    theNumberOfPoles	            = i_buf[3];
+    theSourceFunctionType           = i_buf[4];
+    theNumberOfSRFHSourceTimeSteps  = i_buf[5];
 
     /* group all double parameters in an array and broadcast the array */
     d_buf[0]  = theRegionOriginLatDeg;
@@ -3806,6 +3829,9 @@ source_broadcast_parameters( void )
     d_buf[12] = theRickerTs;
     d_buf[13] = theRickerTp;
     d_buf[14] = theThresholdFrequency;
+    d_buf[15] = theEndT;
+    d_buf[16] = theStartT;
+    d_buf[17] = theSRFHdt;
 
     /* broadcast theRegion* parameters and other double parameters */
     MPI_Bcast( d_buf, d_len, MPI_DOUBLE, 0, comm_solver );
@@ -3817,14 +3843,17 @@ source_broadcast_parameters( void )
     theRegionLengthEastM   = d_buf[ 4];
     theRegionLengthNorthM  = d_buf[ 5];
     theRegionDepthDeepM    = d_buf[ 6];
-    theDeltaT		   = d_buf[ 7];
-    theValidFreq	   = d_buf[ 8];
+    theDeltaT		       = d_buf[ 7];
+    theValidFreq	       = d_buf[ 8];
     theAverageRisetimeSec  = d_buf[ 9];
     theMomentMagnitude     = d_buf[10];
     theMomentAmplitude     = d_buf[11];
-    theRickerTs		   = d_buf[12];
-    theRickerTp		   = d_buf[13];
+    theRickerTs		       = d_buf[12];
+    theRickerTp		       = d_buf[13];
     theThresholdFrequency  = d_buf[14];
+    theEndT                = d_buf[15];
+    theStartT              = d_buf[16];
+    theSRFHdt              = d_buf[17];
 
     /* broadcast the time windows */
     MPI_Bcast( &theNumberOfTimeWindows, 1, MPI_INT, 0, comm_solver );
@@ -4037,6 +4066,8 @@ compute_print_source( const char *physicsin, octree_t *myoctree,
     theNumberOfTimeSteps = numericsinformation.numberoftimesteps;
     theValidFreq	 = numericsinformation.validfrequency;
     theMinimumEdge	 = numericsinformation.minimumh;
+    theEndT	         = numericsinformation.endT;
+    theStartT	     = numericsinformation.startT;
 
     theDomainX = numericsinformation.xlength;
     theDomainY = numericsinformation.ylength;
