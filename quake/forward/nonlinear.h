@@ -130,6 +130,11 @@ typedef struct nlconstants_t {
     double maxFs;
     double avgFs;
 
+    int    isTopoNonlin; /* variables for topononlin elements */
+    double tetraVol[5];
+    int    topoPart;
+
+
 } nlconstants_t;
 
 typedef struct nlsolver_t {
@@ -295,6 +300,7 @@ double evalBackboneFn        (nlconstants_t el_cnt, double gamma_bar, double tao
 double evalHardFnc           (nlconstants_t el_cnt, double gamma_bar);
 double getHard_Pegassus      (nlconstants_t el_cnt, double kappa);
 
+
 void Euler2steps (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De_dev, double De_vol,
 		          double Dt, tensor_t sigma_ref, tensor_t *sigma_up, double kappa_n,
 		          double *kappa_up, double *ErrB, double *ErrS, double *euler_error, int nsteps);
@@ -381,6 +387,10 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
                                station_t  *myStations,
                                double      theDeltaT,
                                int         step );
+
+tensor_t point_strain_tetrah (fvector_t *u, double h, int teth_i, int cube_part );
+tensor_t point_strain_tetrah_symm (fvector_t *u, double h, int teth_i);
+void TetraForces_from_stresses( fvector_t* resVec, double tetraVol[5], edata_t *edata, int cube_part, qptensors_t stresses );
 
 /* -------------------------------------------------------------------------- */
 /*                        Nonlinear Output to Stations                        */

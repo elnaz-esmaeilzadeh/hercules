@@ -463,6 +463,20 @@ static void source_initnodalforce ( ptsrc_t *sourcePtr )
 	}
     }
 
+/*    // Dorian: Added changes for isotropic source
+    for (j = 0; j < 3; j++) {
+    	for ( k = 0; k < 3; k++) {
+
+    		if ( j==k )
+    			v[j][k] = 1.0;
+    		else {
+    			v[j][k] = 0.0;
+    		}
+
+    		//v[j][k] = n[j] * t[k] + n[k] * t[j];
+    	}
+    }*/
+
     /* calculate equivalent force on each node */
     for (j = 0; j < 8 ; j++) {
 	dx= (2 * xi[0][j]) * (h + 2 * xi[1][j] * y) * (h + 2 * xi[2][j] * z)
@@ -1181,9 +1195,14 @@ load_myForces_with_point_source(
     }
 
     /* derive the local coordinate of the source inside the element */
-    pointSource->x = pointSource->domainCoords.x[ 0 ] - center_x;
-    pointSource->y = pointSource->domainCoords.x[ 1 ] - center_y;
-    pointSource->z = pointSource->domainCoords.x[ 2 ] - center_z;
+//    pointSource->x = pointSource->domainCoords.x[ 0 ] - center_x;
+//    pointSource->y = pointSource->domainCoords.x[ 1 ] - center_y;
+//    pointSource->z = pointSource->domainCoords.x[ 2 ] - center_z;
+
+    /* Dorian: here I am forcing the load to be at the center of the element  */
+    pointSource->x = 0;
+    pointSource->y = 0;
+    pointSource->z = 0;
 
     /* obtain the value of mu to get the moment in the case of extended fault*/
     elemp = &myMesh->elemTable[eindex];
@@ -2390,6 +2409,7 @@ read_srfh_source ( FILE *fp, FILE *fpcoords, FILE *fparea, FILE *fpstrike,
     theSourceTinitArray[iSrc] += globalDelayT;
 
     /* Dorian: Source location wrt the free surface, i.e. hypocentral distance */
+    /* Dorian: keeping the z coordinate unmodified  */
     if ( get_thebase_topo() != 0.0 ) {
 
     	vector3D_t coords_aux = compute_domain_coords_linearinterp(theSourceLonArray[iSrc],
@@ -2399,7 +2419,7 @@ read_srfh_source ( FILE *fp, FILE *fpcoords, FILE *fparea, FILE *fpstrike,
     								     theRegionLengthEastM,
     								     theRegionLengthNorthM );
 
-    	theSourceDepthArray[iSrc] += point_elevation ( coords_aux.x[0], coords_aux.x[1] );
+    	// theSourceDepthArray[iSrc] += point_elevation ( coords_aux.x[0], coords_aux.x[1] );
     }
 
     theSourceSlipFunArray[iSrc]=malloc(sizeof(double)*theSourceNt1Array[iSrc]);
@@ -3256,6 +3276,10 @@ compute_myForces_point( const char* physicsin )
     pntSrc.M0		      = theMomentAmplitude;
     pntSrc.dt		      = theDeltaT;
     pntSrc.numberOfTimeSteps  = theNumberOfTimeSteps;
+
+    /* dorian. added Ricker«s pulse parameters */
+    pntSrc.Tp  = theRickerTp;
+    pntSrc.Ts  = theRickerTs;
 
     pntSrc.displacement
 	= (double*)calloc (theNumberOfTimeSteps, sizeof (double));

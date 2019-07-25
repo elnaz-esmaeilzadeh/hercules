@@ -25,13 +25,15 @@
 #include <gsl/gsl_poly.h>
 #include <stdio.h>
 
+//#include "octor.h"
 #include "geometrics.h"
 #include "nonlinear.h"
-#include "octor.h"
-#include "psolve.h"
+//#include "psolve.h"
 #include "quake_util.h"
 #include "util.h"
 #include "stiffness.h"
+#include "topography.h"
+
 
 #define  QC  qc = 0.577350269189 /* sqrt(3.0)/3.0; */
 
@@ -44,15 +46,15 @@
 
 static int superflag = 0;
 
-#define ERROR1		-1
-#define ERROR2		-2
-#define ERROR3		-3
-#define ERROR4		-4
-#define ERROR5		-5
-#define ERROR6		-6
-#define ERROR7		-7
-#define ERROR8		-8
-#define ERROR9		-9
+#define ERROR1      -1
+#define ERROR2      -2
+#define ERROR3      -3
+#define ERROR4      -4
+#define ERROR5      -5
+#define ERROR6      -6
+#define ERROR7      -7
+#define ERROR8      -8
+#define ERROR9      -9
 
 /* -------------------------------------------------------------------------- */
 /*                             Global Variables                               */
@@ -113,19 +115,25 @@ double get_geostatic_total_time() {
  */
 int isThisElementNonLinear(mesh_t *myMesh, int32_t eindex) {
 
-	elem_t  *elemp;
-	edata_t *edata;
+    elem_t  *elemp;
+    edata_t *edata;
 
-	if ( theNonlinearFlag == 0 )
-		return NO;
+    if ( theNonlinearFlag == 0 )
+        return NO;
 
-	elemp = &myMesh->elemTable[eindex];
-	edata = (edata_t *)elemp->data;
+    elemp = &myMesh->elemTable[eindex];
+    edata = (edata_t *)elemp->data;
 
-	if ( ( edata->Vs <=  theVsLimits[thePropertiesCount-1] ) && ( edata->Vs >=  theVsLimits[0] ) )
-		return YES;
+    if ( ( edata->Vs <=  theVsLimits[thePropertiesCount-1] ) && ( edata->Vs >=  theVsLimits[0] ) ) {
+        if ( ( get_thebase_topo()==0.0  ) || ( get_topo_nonlin_flag() )  ) {
+            return YES;
+        } else {
+            if ( !get_topo_nonlin_flag() && isTopoElement ( myMesh, eindex, 0 ) == 0  )
+                return YES;
+        }
+    }
 
-	return NO;
+    return NO;
 }
 
 /*
@@ -178,10 +186,10 @@ double get_alpha(double vs, double phi) {
     double alpha;
     alpha = 2. * sin(phi) / ( sqrt(3.0) * ( 3. - sin(phi) ) );
     if ( alpha > 0.40 ) {
-    	fprintf(stderr,"Illegal alpha= %f "
-    			"Friction angle larger that 50deg\n", alpha);
-    	MPI_Abort(MPI_COMM_WORLD, ERROR);
-    	exit(1);
+        fprintf(stderr,"Illegal alpha= %f "
+                "Friction angle larger that 50deg\n", alpha);
+        MPI_Abort(MPI_COMM_WORLD, ERROR);
+        exit(1);
     }
 
     return alpha;
@@ -203,11 +211,11 @@ double get_gamma(double vs, double phi) {
  */
 double get_phi(double vs) {
 
-	double phi;
+    double phi;
 
-	phi   = interpolate_property_value(vs, theKayPhis) * PI / 180.0;
+    phi   = interpolate_property_value(vs, theKayPhis) * PI / 180.0;
 
-	return phi;
+    return phi;
 }
 
 /*
@@ -216,11 +224,11 @@ double get_phi(double vs) {
  */
 double get_dilatancy(double vs) {
 
-	double dilt;
+    double dilt;
 
-	dilt   = interpolate_property_value(vs, theBetaDilatancy) * PI / 180.0;
+    dilt   = interpolate_property_value(vs, theBetaDilatancy) * PI / 180.0;
 
-	return dilt;
+    return dilt;
 }
 
 /*
@@ -229,77 +237,76 @@ double get_dilatancy(double vs) {
  */
 double get_beta(double vs) {
 
-	double  beta, dil;
+    double  beta, dil;
 
-	dil   = interpolate_property_value(vs, theBetaDilatancy) * PI / 180.0;
-	beta  = 2. * sin(dil) / ( sqrt(3.0) * ( 3. - sin(dil) ) );
+    dil   = interpolate_property_value(vs, theBetaDilatancy) * PI / 180.0;
+    beta  = 2. * sin(dil) / ( sqrt(3.0) * ( 3. - sin(dil) ) );
 
-	return beta;
+    return beta;
 }
-
 
 double get_cohesion(double vs) {
 
-	double  coh;
-	coh   = interpolate_property_value(vs, theAlphaCohes);
-	return coh;
+    double  coh;
+    coh   = interpolate_property_value(vs, theAlphaCohes);
+    return coh;
 }
 
 double get_hardmod(double vs) {
 
-	double  hrd;
-	hrd   = interpolate_property_value(vs, theHardeningModulus);
+    double  hrd;
+    hrd   = interpolate_property_value(vs, theHardeningModulus);
 
-	return hrd;
+    return hrd;
 }
 
 double get_gamma_eff (double vs30, double zo)  {
 
-	double gamma_eff=0;
+    double gamma_eff=0;
 
-	if ( ( vs30 >= 760 ) && ( vs30 <= 1500 ) )  { /* Site class B "Rock"  */
-		if ( ( zo >= 0 ) && ( zo <= 6.096 ) ) {
-			gamma_eff = pow(10.0,-1.73) / 100.0;
-		} else if ( ( zo > 6.096 ) && ( zo <= 15.24 ) )   {
-			gamma_eff = pow(10.0,-1.66) / 100.0;
-		} else if ( ( zo > 15.24 ) && ( zo <= 36.576 ) )  {
-			gamma_eff = pow(10.0,-1.58) / 100.0;
-		} else if ( ( zo > 36.576 ) && ( zo <= 76.20 ) )  {
-			gamma_eff = pow(10.0,-1.45) / 100.0;
-		} else if ( ( zo > 76.20 ) && ( zo <= 152.40 ) )  {
-			gamma_eff = pow(10.0,-1.39) / 100.0;
-		} else if ( ( zo > 152.40 ) && ( zo <= 304.80 ) ) {
-			gamma_eff = pow(10.0,-1.317) / 100.0;
-		} else { /* This should not happen */
-	    	fprintf(stderr, "nonlinear error for site class B. Attempting to get gamma_eff for vs30= %f at z= %f \n", vs30, zo);
-	    	MPI_Abort(MPI_COMM_WORLD, ERROR);
-	    	exit(1);
-	    }
-	} else if ( ( vs30 >= 200 ) && ( vs30 < 760 ) ) { /* Site class C & D "Sand"  */
+    if ( ( vs30 >= 760 ) && ( vs30 <= 1500 ) )  { /* Site class B "Rock"  */
+        if ( ( zo >= 0 ) && ( zo <= 6.096 ) ) {
+            gamma_eff = pow(10.0,-1.73) / 100.0;
+        } else if ( ( zo > 6.096 ) && ( zo <= 15.24 ) )   {
+            gamma_eff = pow(10.0,-1.66) / 100.0;
+        } else if ( ( zo > 15.24 ) && ( zo <= 36.576 ) )  {
+            gamma_eff = pow(10.0,-1.58) / 100.0;
+        } else if ( ( zo > 36.576 ) && ( zo <= 76.20 ) )  {
+            gamma_eff = pow(10.0,-1.45) / 100.0;
+        } else if ( ( zo > 76.20 ) && ( zo <= 152.40 ) )  {
+            gamma_eff = pow(10.0,-1.39) / 100.0;
+        } else if ( ( zo > 152.40 ) && ( zo <= 304.80 ) ) {
+            gamma_eff = pow(10.0,-1.317) / 100.0;
+        } else { /* This should not happen */
+            fprintf(stderr, "nonlinear error for site class B. Attempting to get gamma_eff for vs30= %f at z= %f \n", vs30, zo);
+            MPI_Abort(MPI_COMM_WORLD, ERROR);
+            exit(1);
+        }
+    } else if ( ( vs30 >= 200 ) && ( vs30 < 760 ) ) { /* Site class C & D "Sand"  */
 
-		if ( ( zo >= 0 ) && ( zo <= 6.096 ) ) {
-			gamma_eff = pow(10.0,-1.49) / 100.0;
-		} else if ( ( zo > 6.096 ) && ( zo <= 15.24 ) )   {
-			gamma_eff = pow(10.0,-1.29) / 100.0;
-		} else if ( ( zo > 15.24 ) && ( zo <= 36.576 ) )  {
-			gamma_eff = pow(10.0,-1.14) / 100.0;
-		} else if ( ( zo > 36.576 ) && ( zo <= 76.20 ) )  {
-			gamma_eff = pow(10.0,-1.00) / 100.0;
-		} else if ( ( zo > 76.20 ) && ( zo <= 152.40 ) )  {
-			gamma_eff = pow(10.0,-0.87) / 100.0;
-		} else if ( ( zo > 152.40 ) && ( zo <= 304.80 ) ) {
-			gamma_eff = pow(10.0,-0.7) / 100.0;
-		} else { /* This should not happen */
-	    	fprintf(stderr, "nonlinear error for site class C and D.  Attempting to get gamma_eff for vs30= %f at z= %f \n", vs30, zo);
-	    	MPI_Abort(MPI_COMM_WORLD, ERROR);
-	    	exit(1);
-	    }
-	} else {
+        if ( ( zo >= 0 ) && ( zo <= 6.096 ) ) {
+            gamma_eff = pow(10.0,-1.49) / 100.0;
+        } else if ( ( zo > 6.096 ) && ( zo <= 15.24 ) )   {
+            gamma_eff = pow(10.0,-1.29) / 100.0;
+        } else if ( ( zo > 15.24 ) && ( zo <= 36.576 ) )  {
+            gamma_eff = pow(10.0,-1.14) / 100.0;
+        } else if ( ( zo > 36.576 ) && ( zo <= 76.20 ) )  {
+            gamma_eff = pow(10.0,-1.00) / 100.0;
+        } else if ( ( zo > 76.20 ) && ( zo <= 152.40 ) )  {
+            gamma_eff = pow(10.0,-0.87) / 100.0;
+        } else if ( ( zo > 152.40 ) && ( zo <= 304.80 ) ) {
+            gamma_eff = pow(10.0,-0.7) / 100.0;
+        } else { /* This should not happen */
+            fprintf(stderr, "nonlinear error for site class C and D.  Attempting to get gamma_eff for vs30= %f at z= %f \n", vs30, zo);
+            MPI_Abort(MPI_COMM_WORLD, ERROR);
+            exit(1);
+        }
+    } else {
 
-			fprintf(stderr, "nonlinear error attempting to get gamma_eff - vs30: %f or z= %f are out of range \n", vs30, zo);
-			MPI_Abort(MPI_COMM_WORLD, ERROR);
-			exit(1);
-	}
+            fprintf(stderr, "nonlinear error attempting to get gamma_eff - vs30: %f or z= %f are out of range \n", vs30, zo);
+            MPI_Abort(MPI_COMM_WORLD, ERROR);
+            exit(1);
+    }
 
 return gamma_eff;
 }
@@ -511,12 +518,12 @@ void nonlinear_init( int32_t     myID,
         theGamma0           = (double*)malloc(sizeof(double) * thePropertiesCount);
         thePsi              = (double*)malloc(sizeof(double) * thePropertiesCount);
         theM                = (double*)malloc(sizeof(double) * thePropertiesCount);
-        theTheta1	 	    = (double*)malloc( sizeof(double) * thePropertiesCount);
-        theTheta2	 	    = (double*)malloc( sizeof(double) * thePropertiesCount);
-        theTheta3	 	    = (double*)malloc( sizeof(double) * thePropertiesCount);
-        theTheta4	 	    = (double*)malloc( sizeof(double) * thePropertiesCount);
-        theTheta5	 	    = (double*)malloc( sizeof(double) * thePropertiesCount);
-        thePhi_RO 	 	    = (double*)malloc( sizeof(double) * thePropertiesCount);
+        theTheta1           = (double*)malloc( sizeof(double) * thePropertiesCount);
+        theTheta2           = (double*)malloc( sizeof(double) * thePropertiesCount);
+        theTheta3           = (double*)malloc( sizeof(double) * thePropertiesCount);
+        theTheta4           = (double*)malloc( sizeof(double) * thePropertiesCount);
+        theTheta5           = (double*)malloc( sizeof(double) * thePropertiesCount);
+        thePhi_RO           = (double*)malloc( sizeof(double) * thePropertiesCount);
     }
 
     /* Broadcast table of properties */
@@ -619,7 +626,7 @@ int32_t nonlinear_initparameters ( const char *parametersin,
                 "Illegal material model for nonlinear analysis \n"
                 "(linear, vonMises_ep (Elasto-plastic), vonMises_FA (Frederick-Armstrong), vonMises_FAM (Frederick-Armstrong modified), \n "
                 "vonMises_BAE (Borja-Aimes exponential), vonMises_BAH (Borja-Aimes hyperbolic), vonMises_GQH (Groholski et al GQH model), \n"
-        		"vonMises_MKZ (Matasovic 1994), vonMises_RO (Ramberg-Osgood), DruckerPrager, MohrCoulomb): %s\n", material_model);
+                "vonMises_MKZ (Matasovic 1994), vonMises_RO (Ramberg-Osgood), DruckerPrager, MohrCoulomb): %s\n", material_model);
         return -1;
     }
 
@@ -643,10 +650,10 @@ int32_t nonlinear_initparameters ( const char *parametersin,
     if ( strcasecmp(approx_geostatic_state, "yes") == 0 ) {
         approxgeostatic = YES;
     } else if ( strcasecmp(approx_geostatic_state, "no") == 0 ) {
-    	approxgeostatic = NO;
+        approxgeostatic = NO;
     } else {
         fprintf(stderr,
-        		":Unknown response for considering an "
+                ":Unknown response for considering an "
                 "approximate geostatic state (yes or no): %s\n",
                 approx_geostatic_state );
         return -1;
@@ -655,28 +662,27 @@ int32_t nonlinear_initparameters ( const char *parametersin,
     if ( ( (geostatic_loading_t > 0) || (geostatic_cushion_t > 0) ) &&
          ( approxgeostatic == YES ) ) {
         fprintf(stderr, "Approximate geostatic-state must be set to (no) when geostatic loading/cushion time > 0. %s\n",
-        		approx_geostatic_state);
+                approx_geostatic_state);
         return -1;
     }
 
     if ( ( strcasecmp(tension_cutoff, "yes") == 0 ) && ( ( materialmodel == DRUCKERPRAGER ) || ( materialmodel == MOHR_COULOMB ) ) ) {
-    	tensioncutoff = YES;
+        tensioncutoff = YES;
     } else if ( ( strcasecmp(tension_cutoff, "yes") == 0 ) && ( ( materialmodel != DRUCKERPRAGER ) || ( materialmodel != MOHR_COULOMB ) ) ) {
-    	fprintf(stderr,
-    			":Tension cutoff option available "
-    			"only for Mohr-Coulomb or Drucker-Prager models: %s\n",
-    			material_model );
-    	return -1;
+        fprintf(stderr,
+                ":Tension cutoff option available "
+                "only for Mohr-Coulomb or Drucker-Prager models: %s\n",
+                material_model );
+        return -1;
     } else if ( strcasecmp(tension_cutoff, "no") == 0 ) {
-    	tensioncutoff = NO;
+        tensioncutoff = NO;
     } else {
-    	fprintf(stderr,
-    			":Unknown response for considering "
-    			"tension cutoff (yes or no): %s\n",
-    			tension_cutoff );
-    	return -1;
+        fprintf(stderr,
+                ":Unknown response for considering "
+                "tension cutoff (yes or no): %s\n",
+                tension_cutoff );
+        return -1;
     }
-
 
     /* Initialize the static global variables */
     theGeostaticLoadingT  = geostatic_loading_t;
@@ -702,14 +708,14 @@ int32_t nonlinear_initparameters ( const char *parametersin,
     theHardeningModulus  = (double*)malloc( sizeof(double) * thePropertiesCount );
     theBetaDilatancy     = (double*)malloc( sizeof(double) * thePropertiesCount );
     theGamma0            = (double*)malloc( sizeof(double) * thePropertiesCount );
-    thePsi 				 = (double*)malloc( sizeof(double) * thePropertiesCount );
-    theM 				 = (double*)malloc( sizeof(double) * thePropertiesCount );
-    theTheta1	 	     = (double*)malloc( sizeof(double) * thePropertiesCount );
-    theTheta2	 	     = (double*)malloc( sizeof(double) * thePropertiesCount );
-    theTheta3	 	     = (double*)malloc( sizeof(double) * thePropertiesCount );
-    theTheta4	 	     = (double*)malloc( sizeof(double) * thePropertiesCount );
-    theTheta5	 	     = (double*)malloc( sizeof(double) * thePropertiesCount );
-    thePhi_RO	 	     = (double*)malloc( sizeof(double) * thePropertiesCount );
+    thePsi               = (double*)malloc( sizeof(double) * thePropertiesCount );
+    theM                 = (double*)malloc( sizeof(double) * thePropertiesCount );
+    theTheta1            = (double*)malloc( sizeof(double) * thePropertiesCount );
+    theTheta2            = (double*)malloc( sizeof(double) * thePropertiesCount );
+    theTheta3            = (double*)malloc( sizeof(double) * thePropertiesCount );
+    theTheta4            = (double*)malloc( sizeof(double) * thePropertiesCount );
+    theTheta5            = (double*)malloc( sizeof(double) * thePropertiesCount );
+    thePhi_RO            = (double*)malloc( sizeof(double) * thePropertiesCount );
 
 
     if ( parsedarray( fp, "material_properties_list", thePropertiesCount * 16, auxiliar ) != 0) {
@@ -1019,7 +1025,6 @@ void nonlinear_solver_init(int32_t myID, mesh_t *myMesh, double depth) {
     myNonlinSolver->Sref =
         (qptensors_t *)calloc(myNonlinElementsCount, sizeof(qptensors_t));
 
-
     if ( (myNonlinSolver->constants           == NULL) ||
          (myNonlinSolver->stresses            == NULL) ||
          (myNonlinSolver->strains             == NULL) ||
@@ -1076,7 +1081,7 @@ void nonlinear_solver_init(int32_t myID, mesh_t *myMesh, double depth) {
 
         /* Calculate the vertical stress as a homogeneous half-space */
         if ( theApproxGeoState == YES )
-        	ecp->sigmaZ_st = edata->rho * 9.80 * ( zo + edata->edgesize / 2.0 );
+            ecp->sigmaZ_st = edata->rho * 9.80 * ( zo + edata->edgesize / 2.0 );
 
         /* Calculate the yield function constants */
         switch (theMaterialModel) {
@@ -1090,130 +1095,130 @@ void nonlinear_solver_init(int32_t myID, mesh_t *myMesh, double depth) {
                 break;
 
             case VONMISES_FA:
-            	ecp->c         = get_cohesion(elementVs);
-            	ecp->phi       = 0.0;
-            	ecp->dil_angle = 0.0;
+                ecp->c         = get_cohesion(elementVs);
+                ecp->phi       = 0.0;
+                ecp->dil_angle = 0.0;
 
-            	ecp->alpha     = 0.0;
-            	ecp->beta      = 0.0;
-            	ecp->gamma     = 0.0;
+                ecp->alpha     = 0.0;
+                ecp->beta      = 0.0;
+                ecp->gamma     = 0.0;
 
-            	ecp->Sstrain0  = interpolate_property_value(elementVs, theGamma0);
+                ecp->Sstrain0  = interpolate_property_value(elementVs, theGamma0);
 
-            	ecp->h         = 0.0;
-            	ecp->psi0      = interpolate_property_value(elementVs, thePsi);
-            	break;
+                ecp->h         = 0.0;
+                ecp->psi0      = interpolate_property_value(elementVs, thePsi);
+                break;
 
             case VONMISES_FAM:
-            	ecp->c         = get_cohesion(elementVs);
-            	ecp->phi       = 0.0;
-            	ecp->dil_angle = 0.0;
+                ecp->c         = get_cohesion(elementVs);
+                ecp->phi       = 0.0;
+                ecp->dil_angle = 0.0;
 
-            	ecp->alpha     = 0.0;
-            	ecp->beta      = 0.0;
-            	ecp->gamma     = 0.0;
+                ecp->alpha     = 0.0;
+                ecp->beta      = 0.0;
+                ecp->gamma     = 0.0;
 
-            	ecp->Sstrain0  = 0.0;
+                ecp->Sstrain0  = 0.0;
 
-            	ecp->h         = 0.0;
-            	ecp->psi0      = interpolate_property_value(elementVs, thePsi);
-            	break;
+                ecp->h         = 0.0;
+                ecp->psi0      = interpolate_property_value(elementVs, thePsi);
+                break;
 
             case VONMISES_BAE:
-            	//ecp->c         = get_cohesion(elementVs);
-            	ecp->c         = interpolate_property_value(elementVs, theAlphaCohes);
+                //ecp->c         = get_cohesion(elementVs);
+                ecp->c         = interpolate_property_value(elementVs, theAlphaCohes);
 
-            	//ecp->c         = edata->sigma_0 * 0.2;
-            	ecp->phi       = 0.0;
-            	ecp->dil_angle = 0.0;
+                //ecp->c         = edata->sigma_0 * 0.2;
+                ecp->phi       = 0.0;
+                ecp->dil_angle = 0.0;
 
-            	ecp->alpha     = 0.0;
-            	ecp->beta      = 0.0;
-            	ecp->gamma     = 0.0;
+                ecp->alpha     = 0.0;
+                ecp->beta      = 0.0;
+                ecp->gamma     = 0.0;
 
                 //get_h_m_from_G_Gmax(*ecp, edata->sigma_0, &ecp->m, &ecp->psi0, &ecp->c);
 
                 //fprintf(stderr,"m is %f and h is %f and Su is %f kPa \n",ecp->m, ecp->psi0, ecp->c/1000);
 
-            	ecp->Sstrain0  = 0.0;
-            	ecp->m         = interpolate_property_value(elementVs, theM);
+                ecp->Sstrain0  = 0.0;
+                ecp->m         = interpolate_property_value(elementVs, theM);
 
-            	ecp->h         = 0.0;
-            	ecp->psi0      = interpolate_property_value(elementVs, thePsi);
-            	break;
+                ecp->h         = 0.0;
+                ecp->psi0      = interpolate_property_value(elementVs, thePsi);
+                break;
 
             case VONMISES_BAH:
-            	ecp->c         = get_cohesion(elementVs);
-            	ecp->phi       = 0.0;
-            	ecp->dil_angle = 0.0;
+                ecp->c         = get_cohesion(elementVs);
+                ecp->phi       = 0.0;
+                ecp->dil_angle = 0.0;
 
-            	ecp->alpha     = 0.0;
-            	ecp->beta      = 0.0;
-            	ecp->gamma     = 0.0;
+                ecp->alpha     = 0.0;
+                ecp->beta      = 0.0;
+                ecp->gamma     = 0.0;
 
-            	ecp->Sstrain0  = 0.0;
-            	ecp->m         = 0.0;
+                ecp->Sstrain0  = 0.0;
+                ecp->m         = 0.0;
 
-            	ecp->h         = 0.0;
-            	ecp->psi0      = 0.0;
-            	break;
+                ecp->h         = 0.0;
+                ecp->psi0      = 0.0;
+                break;
 
             case VONMISES_GQH:
-            	ecp->c         = get_cohesion(elementVs);
-            	ecp->phi       = 0.0;
-            	ecp->dil_angle = 0.0;
+                ecp->c         = get_cohesion(elementVs);
+                ecp->phi       = 0.0;
+                ecp->dil_angle = 0.0;
 
-            	ecp->alpha     = 0.0;
-            	ecp->beta      = 0.0;
-            	ecp->gamma     = 0.0;
+                ecp->alpha     = 0.0;
+                ecp->beta      = 0.0;
+                ecp->gamma     = 0.0;
 
-            	ecp->Sstrain0  = 0.0;
-            	ecp->m         = 0.0;
+                ecp->Sstrain0  = 0.0;
+                ecp->m         = 0.0;
 
-            	ecp->h         = 0.0;
-            	ecp->psi0      = 0.0;
+                ecp->h         = 0.0;
+                ecp->psi0      = 0.0;
 
-            	ecp->thetaGQH[0] = interpolate_property_value(elementVs, theTheta1);
-            	ecp->thetaGQH[1] = interpolate_property_value(elementVs, theTheta2);
-            	ecp->thetaGQH[2] = interpolate_property_value(elementVs, theTheta3);
-            	ecp->thetaGQH[3] = interpolate_property_value(elementVs, theTheta4);
-            	ecp->thetaGQH[4] = interpolate_property_value(elementVs, theTheta5);
+                ecp->thetaGQH[0] = interpolate_property_value(elementVs, theTheta1);
+                ecp->thetaGQH[1] = interpolate_property_value(elementVs, theTheta2);
+                ecp->thetaGQH[2] = interpolate_property_value(elementVs, theTheta3);
+                ecp->thetaGQH[3] = interpolate_property_value(elementVs, theTheta4);
+                ecp->thetaGQH[4] = interpolate_property_value(elementVs, theTheta5);
 
-            	break;
+                break;
 
             case VONMISES_MKZ:
-            	ecp->c           = get_cohesion(elementVs);
+                ecp->c           = get_cohesion(elementVs);
 
-            	ecp->beta_MKZ    = interpolate_property_value(elementVs, thePsi);
-            	ecp->s_MKZ       = interpolate_property_value(elementVs, theM);
-            	ecp->phi_MKZ     = interpolate_property_value(elementVs, thePhi_RO);
+                ecp->beta_MKZ    = interpolate_property_value(elementVs, thePsi);
+                ecp->s_MKZ       = interpolate_property_value(elementVs, theM);
+                ecp->phi_MKZ     = interpolate_property_value(elementVs, thePhi_RO);
 
-            	break;
+                break;
 
             case VONMISES_RO:
-            	ecp->c           = get_cohesion(elementVs);
+                ecp->c           = get_cohesion(elementVs);
 
-            	ecp->alpha_RO    = interpolate_property_value(elementVs, thePsi);
-            	ecp->eta_RO      = interpolate_property_value(elementVs, theM);
-            	ecp->phi_RO      = interpolate_property_value(elementVs, thePhi_RO);
+                ecp->alpha_RO    = interpolate_property_value(elementVs, thePsi);
+                ecp->eta_RO      = interpolate_property_value(elementVs, theM);
+                ecp->phi_RO      = interpolate_property_value(elementVs, thePhi_RO);
 
-            	break;
+                break;
 
 
             case VONMISES_EP:
-            	ecp->c         = get_cohesion(elementVs);
-            	ecp->phi       = 0.0;
-            	ecp->dil_angle = 0.0;
+                ecp->c         = get_cohesion(elementVs);
+                ecp->phi       = 0.0;
+                ecp->dil_angle = 0.0;
 
 
-            	ecp->alpha     = 0.0;
-            	ecp->beta      = 0.0;
-            	ecp->gamma     = 1.0;
+                ecp->alpha     = 0.0;
+                ecp->beta      = 0.0;
+                ecp->gamma     = 1.0;
 
-            	ecp->Sstrain0  = 0.0;
+                ecp->Sstrain0  = 0.0;
 
-            	ecp->h         = 0; /*  no isotropic hardening  in von Mises model */
-            	break;
+                ecp->h         = 0; /*  no isotropic hardening  in von Mises model */
+                break;
 
             case DRUCKERPRAGER:
                 ecp->c         = get_cohesion(elementVs);
@@ -1227,7 +1232,7 @@ void nonlinear_solver_init(int32_t myID, mesh_t *myMesh, double depth) {
 
                 ecp->Sstrain0  = 0.0;
 
-            	break;
+                break;
             case MOHR_COULOMB:
                 ecp->c     = get_cohesion(elementVs);
                 ecp->phi   = get_phi(elementVs);
@@ -1239,7 +1244,7 @@ void nonlinear_solver_init(int32_t myID, mesh_t *myMesh, double depth) {
 
                 ecp->h         = get_hardmod(elementVs);
                 ecp->Sstrain0  = 0.0;
-            	break;
+                break;
 
             default:
                 fprintf(stderr, "Thread %d: nonlinear_solver_init:\n"
@@ -1249,11 +1254,17 @@ void nonlinear_solver_init(int32_t myID, mesh_t *myMesh, double depth) {
                 break;
         }
 
+        // check and update topo-database if this is a toponolinear element
+        if ( (get_topo_nonlin_flag == YES) && ( isTopoElement ( myMesh, eindex, 1) ) ) {
+            ecp->isTopoNonlin = 1; // Identify it as topononlinear
+            get_tetraProps( eindex, ecp->tetraVol, &ecp->topoPart ); // get tetrahedral volumes and cube partition
+        }
+
 
         ecp->strainrate  =
-        		interpolate_property_value(elementVs, theStrainRates  );
+                interpolate_property_value(elementVs, theStrainRates  );
         ecp->sensitivity =
-        		interpolate_property_value(elementVs, theSensitivities );
+                interpolate_property_value(elementVs, theSensitivities );
 
     } /* for all elements */
 
@@ -1461,6 +1472,190 @@ tensor_t point_strain (fvector_t *u, double lx, double ly, double lz, double h) 
 }
 
 /*
+ * Compute strain tensor of a given point in the element.
+ */
+tensor_t point_strain_tetrah (fvector_t *u, double h, int teth_i, int cube_part ) {
+
+    tensor_t strain = init_tensor();
+    int32_t  N0, N1, N2, N3;
+
+    if ( cube_part == 1 )
+    {
+        switch ( teth_i ) {
+            case ( 0 ):
+                N0 = 0;
+                N1 = 2;
+                N2 = 1;
+                N3 = 4;
+                strain.xx =  -( u[N0].f[0] - u[N2].f[0] ) / h; // -(u0 - u2)/h
+                strain.yy =  -( u[N0].f[1] - u[N1].f[1] ) / h; // -(v0 - v1)/h
+                strain.zz =  -( u[N0].f[2] - u[N3].f[2] ) / h; // -(w0 - w3)/h
+
+                strain.xy = -0.5 * ( u[N0].f[0] - u[N1].f[0] + u[N0].f[1] - u[N2].f[1] ) / h; // -(u0 - u1 + v0 - v2)/(2*h)
+                strain.yz = -0.5 * ( u[N0].f[1] - u[N3].f[1] + u[N0].f[2] - u[N1].f[2] ) / h; // -(v0 - v3 + w0 - w1)/(2*h)
+                strain.xz = -0.5 * ( u[N0].f[0] - u[N3].f[0] + u[N0].f[2] - u[N2].f[2] ) / h; // -(u0 - u3 + w0 - w2)/(2*h)
+
+                break;
+
+            case ( 1 ):
+                N0 = 3;
+                N1 = 1;
+                N2 = 2;
+                N3 = 7;
+
+                strain.xx =   ( u[N0].f[0] - u[N2].f[0] ) / h; //  (u0 - u2)/h
+                strain.yy =   ( u[N0].f[1] - u[N1].f[1] ) / h; //  (v0 - v1)/h
+                strain.zz =  -( u[N0].f[2] - u[N3].f[2] ) / h; // -(w0 - w3)/h
+
+                strain.xy =  0.5 * ( u[N0].f[0] - u[N1].f[0] + u[N0].f[1] - u[N2].f[1] ) / h; //  (u0 - u1 + v0 - v2)/(2*h)
+                strain.yz = -0.5 * ( u[N0].f[1] - u[N3].f[1] - u[N0].f[2] + u[N1].f[2] ) / h; // -(v0 - v3 - w0 + w1)/(2*h)
+                strain.xz = -0.5 * ( u[N0].f[0] - u[N3].f[0] - u[N0].f[2] + u[N2].f[2] ) / h; // -(u0 - u3 - w0 + w2)/(2*h)
+
+                break;
+
+            case ( 2 ):
+                N0 = 6;
+                N1 = 4;
+                N2 = 7;
+                N3 = 2;
+
+                strain.xx =  -( u[N0].f[0] - u[N2].f[0] ) / h; //  -(u0 - u2)/h
+                strain.yy =   ( u[N0].f[1] - u[N1].f[1] ) / h; //   (v0 - v1)/h
+                strain.zz =   ( u[N0].f[2] - u[N3].f[2] ) / h; //   (w0 - w3)/h
+
+                strain.xy =  0.5 * ( u[N0].f[0] - u[N1].f[0] - u[N0].f[1] + u[N2].f[1] ) / h; //   (u0 - u1 - v0 + v2)/2h
+                strain.yz =  0.5 * ( u[N0].f[1] - u[N3].f[1] + u[N0].f[2] - u[N1].f[2] ) / h; //   (v0 - v3 + w0 - w1)/2h
+                strain.xz =  0.5 * ( u[N0].f[0] - u[N3].f[0] - u[N0].f[2] + u[N2].f[2] ) / h; //   (u0 - u3 - w0 + w2)/2h
+
+                break;
+
+            case ( 3 ):
+                N0 = 5;
+                N1 = 7;
+                N2 = 4;
+                N3 = 1;
+
+                strain.xx =   ( u[N0].f[0] - u[N2].f[0] ) / h; //   (u0 - u2)/h
+                strain.yy =  -( u[N0].f[1] - u[N1].f[1] ) / h; //  -(v0 - v1)/h
+                strain.zz =   ( u[N0].f[2] - u[N3].f[2] ) / h; //   (w0 - w3)/h
+
+                strain.xy =  -0.5 * ( u[N0].f[0] - u[N1].f[0] - u[N0].f[1] + u[N2].f[1] ) / h; //  -(u0 - u1 - v0 + v2)/(2*h)
+                strain.yz =   0.5 * ( u[N0].f[1] - u[N3].f[1] - u[N0].f[2] + u[N1].f[2] ) / h; //   (v0 - v3 - w0 + w1)/(2*h)
+                strain.xz =   0.5 * ( u[N0].f[0] - u[N3].f[0] + u[N0].f[2] - u[N2].f[2] ) / h; //   (u0 - u3 + w0 - w2)/(2*h)
+
+                break;
+
+            case ( 4 ):
+                N0 = 2;
+                N1 = 4;
+                N2 = 7;
+                N3 = 1;
+
+                strain.xx =  -0.5 * ( u[N0].f[0] + u[N1].f[0] - u[N2].f[0] - u[N3].f[0] ) / h; //  -(u0 + u1 - u2 - u3)/(2*h)
+                strain.yy =   0.5 * ( u[N0].f[1] - u[N1].f[1] + u[N2].f[1] - u[N3].f[1] ) / h; //   (v0 - v1 + v2 - v3)/(2*h)]
+                strain.zz =  -0.5 * ( u[N0].f[2] - u[N1].f[2] - u[N2].f[2] + u[N3].f[2] ) / h; //  -(w0 - w1 - w2 + w3)/(2*h)
+
+                strain.xy =   0.25 * ( u[N0].f[0] - u[N1].f[0] + u[N2].f[0] - u[N3].f[0] - u[N0].f[1] - u[N1].f[1] + u[N2].f[1] + u[N3].f[1] ) / h;
+                             //   (u0 - u1 + u2 - u3 - v0 - v1 + v2 + v3)/(4*h)
+                strain.yz =  -0.25 * ( u[N0].f[1] - u[N1].f[1] - u[N2].f[1] + u[N3].f[1] - u[N0].f[2] + u[N1].f[2] - u[N2].f[2] + u[N3].f[2] ) / h;
+                             //  -(v0 - v1 - v2 + v3 - w0 + w1 - w2 + w3)/(4*h)
+                strain.xz =  -0.25 * ( u[N0].f[0] - u[N1].f[0] - u[N2].f[0] + u[N3].f[0] + u[N0].f[2] + u[N1].f[2] - u[N2].f[2] - u[N3].f[2] ) / h;
+                            //   -(u0 - u1 - u2 + u3 + w0 + w1 - w2 - w3)/(4*h)
+            break;
+
+        } }  else {
+                switch ( teth_i ) {
+
+                    case ( 0 ):
+                        N0 = 0;
+                        N1 = 3;
+                        N2 = 1;
+                        N3 = 5;
+
+                        strain.xx =  -( u[N0].f[0] - u[N2].f[0] ) / h; //  -(u0 - u2)/h
+                        strain.yy =   ( u[N1].f[1] - u[N2].f[1] ) / h; //   (v1 - v2)/h
+                        strain.zz =  -( u[N2].f[2] - u[N3].f[2] ) / h; //  -(w2 - w3)/h
+
+                        strain.xy =  0.5 * ( u[N1].f[0] - u[N2].f[0] - u[N0].f[1] + u[N2].f[1] ) / h; //   (u1 - u2 - v0 + v2)/2h
+                        strain.yz = -0.5 * ( u[N2].f[1] - u[N3].f[1] - u[N1].f[2] + u[N2].f[2] ) / h; //  -(v2 - v3 - w1 + w2)/2h
+                        strain.xz = -0.5 * ( u[N2].f[0] - u[N3].f[0] + u[N0].f[2] - u[N2].f[2] ) / h; //  -(u2 - u3 + w0 - w2)/2h
+
+                        break;
+
+                    case ( 1 ):
+                        N0 = 0;
+                        N1 = 2;
+                        N2 = 3;
+                        N3 = 6;
+
+                        strain.xx =  -( u[N1].f[0] - u[N2].f[0] ) / h; //  -(u1 - u2)/h
+                        strain.yy =  -( u[N0].f[1] - u[N1].f[1] ) / h; //  -(v0 - v1)/h
+                        strain.zz =  -( u[N1].f[2] - u[N3].f[2] ) / h; //  -(w1 - w3)/h
+
+                        strain.xy = -0.5 * ( u[N0].f[0] - u[N1].f[0] + u[N1].f[1] - u[N2].f[1] ) / h;  // -(u0 - u1 + v1 - v2)/2h
+                        strain.yz = -0.5 * ( u[N1].f[1] - u[N3].f[1] + u[N0].f[2] - u[N1].f[2] ) / h;  // -(v1 - v3 + w0 - w1)/2h
+                        strain.xz = -0.5 * ( u[N1].f[0] - u[N3].f[0] + u[N1].f[2] - u[N2].f[2] ) / h;  // -(u1 - u3 + w1 - w2)/2h
+
+                        break;
+
+                    case ( 2 ):
+                        N0 = 4;
+                        N1 = 5;
+                        N2 = 6;
+                        N3 = 0;
+
+                        strain.xx =  -( u[N0].f[0] - u[N1].f[0] ) / h; //  -(u0 - u1)/h
+                        strain.yy =  -( u[N0].f[1] - u[N2].f[1] ) / h; //  -(v0 - v2)/h
+                        strain.zz =   ( u[N0].f[2] - u[N3].f[2] ) / h; //   (w0 - w3)/h
+
+                        strain.xy = -0.5 * ( u[N0].f[0] - u[N2].f[0] + u[N0].f[1] - u[N1].f[1] ) / h; //  -(u0 - u2 + v0 - v1)/(2*h)
+                        strain.yz =  0.5 * ( u[N0].f[1] - u[N3].f[1] - u[N0].f[2] + u[N2].f[2] ) / h; //   (v0 - v3 - w0 + w2)/(2*h)
+                        strain.xz =  0.5 * ( u[N0].f[0] - u[N3].f[0] - u[N0].f[2] + u[N1].f[2] ) / h; //   (u0 - u3 - w0 + w1)/(2*h)
+
+                        break;
+
+                    case ( 3 ):
+                        N0 = 6;
+                        N1 = 5;
+                        N2 = 7;
+                        N3 = 3;
+
+                        strain.xx =  -( u[N0].f[0] - u[N2].f[0] ) / h;   //  -(u0 - u2)/h
+                        strain.yy =  -( u[N1].f[1] - u[N2].f[1] ) / h;   //  -(v1 - v2)/h
+                        strain.zz =   ( u[N2].f[2] - u[N3].f[2] ) / h;  //    (w2 - w3)/h
+
+                        strain.xy = -0.5 * ( u[N1].f[0] - u[N2].f[0] + u[N0].f[1] - u[N2].f[1] ) / h; // -(u1 - u2 + v0 - v2)/2h
+                        strain.yz =  0.5 * ( u[N2].f[1] - u[N3].f[1] - u[N1].f[2] + u[N2].f[2] ) / h; //  (v2 - v3 - w1 + w2)/2h
+                        strain.xz =  0.5 * ( u[N2].f[0] - u[N3].f[0] - u[N0].f[2] + u[N2].f[2] ) / h; //  (u2 - u3 - w0 + w2)/2h
+
+                        break;
+
+                    case ( 4 ):
+                        N0 = 0;
+                        N1 = 6;
+                        N2 = 3;
+                        N3 = 5;
+
+                        strain.xx =  -0.5 * ( u[N0].f[0] + u[N1].f[0] - u[N2].f[0] - u[N3].f[0] ) / h; // -(u0 + u1 - u2 - u3)/(2*h)
+                        strain.yy =  -0.5 * ( u[N0].f[1] - u[N1].f[1] - u[N2].f[1] + u[N3].f[1] ) / h; // -(v0 - v1 - v2 + v3)/(2*h)
+                        strain.zz =  -0.5 * ( u[N0].f[2] - u[N1].f[2] + u[N2].f[2] - u[N3].f[2] ) / h; // -(w0 - w1 + w2 - w3)/(2*h)
+
+                        strain.xy =  -0.25 * ( u[N0].f[0] - u[N1].f[0] - u[N2].f[0] + u[N3].f[0] + u[N0].f[1] + u[N1].f[1] - u[N2].f[1] - u[N3].f[1] ) / h;
+                        //  -(u0 - u1 - u2 + u3 + v0 + v1 - v2 - v3)/(4*h)
+                        strain.yz =  -0.25 * ( u[N0].f[1] - u[N1].f[1] + u[N2].f[1] - u[N3].f[1] + u[N0].f[2] - u[N1].f[2] - u[N2].f[2] + u[N3].f[2] ) / h;
+                        //  -(v0 - v1 + v2 - v3 + w0 - w1 - w2 + w3)/(4*h)
+                        strain.xz =  -0.25 * ( u[N0].f[0] - u[N1].f[0] + u[N2].f[0] - u[N3].f[0] + u[N0].f[2] + u[N1].f[2] - u[N2].f[2] - u[N3].f[2] ) / h;
+                        //  -(u0 - u1 + u2 - u3 + w0 + w1 - w2 - w3)/(4*h)
+
+                        break;
+                    }
+        }
+
+    return strain;
+}
+
+
+/*
  * Computes the stress tensor in a given point in the element from the point's
  * strain tensor and the element properties according to the linear elastic
  * stress-strain relationship.
@@ -1597,8 +1792,8 @@ tensor_t zero_tensor() {
  */
 tensor_t ApproxGravity_tensor(double Szz, double phi, double h, double lz, double rho) {
 
-	double Ko = 1 - sin(phi);
-	double Sigma = -( Szz + 9.8 * rho * h * lz * 0.5);
+    double Ko = 1 - sin(phi);
+    double Sigma = -( Szz + 9.8 * rho * h * lz * 0.5);
 
     tensor_t C;
 
@@ -1644,109 +1839,109 @@ tensor_t copy_tensor (tensor_t original) {
 
 double compute_yield_surface_stateII ( double J3, double J2, double I1, double alpha, double phi, tensor_t Sigma ) {
 
-	double Yf=0., p, q, r, teta, Rmc, s1, s3;
+    double Yf=0., p, q, r, teta, Rmc, s1, s3;
 
-	if ( theMaterialModel == MOHR_COULOMB ) {
-		p = (1./3.) * I1;
-		q = 2.0 * pow( J2, 1.5 );
-		r = -3.0 * sqrt(3.0) * (J3);
+    if ( theMaterialModel == MOHR_COULOMB ) {
+        p = (1./3.) * I1;
+        q = 2.0 * pow( J2, 1.5 );
+        r = -3.0 * sqrt(3.0) * (J3);
 
-		if ( ( r/q <= 1.00000001 ) && ( r/q >= 0.99999999 ) )
-			teta = PI / 6.0;
-		else if ( ( r/q >= -1.00000001 ) && ( r/q <= -0.99999999 ) )
-			teta = -PI / 6.0;
-		else
-			teta = 1./3. * asin(r/q);
+        if ( ( r/q <= 1.00000001 ) && ( r/q >= 0.99999999 ) )
+            teta = PI / 6.0;
+        else if ( ( r/q >= -1.00000001 ) && ( r/q <= -0.99999999 ) )
+            teta = -PI / 6.0;
+        else
+            teta = 1./3. * asin(r/q);
 
-		if ( ( teta > PI / 6.0 ) || ( teta < -PI / 6.0 ) ) {
+        if ( ( teta > PI / 6.0 ) || ( teta < -PI / 6.0 ) ) {
 
-			vect1_t n1, n2, n3, eig_vals;
+            vect1_t n1, n2, n3, eig_vals;
 
-		    specDecomp(Sigma, &n1, &n2, &n3, &eig_vals);
+            specDecomp(Sigma, &n1, &n2, &n3, &eig_vals);
 
-		    s1 = eig_vals.x;
-		    s3 = eig_vals.z;
+            s1 = eig_vals.x;
+            s3 = eig_vals.z;
 
-		    Yf = s1 - s3 + ( s1 + s3 )*sin(phi);
+            Yf = s1 - s3 + ( s1 + s3 )*sin(phi);
 
-		} else {
-			Rmc = -1./sqrt(3.0) * ( sin(phi)*sin(teta) ) + cos(teta);
-			Yf = 2. * ( Rmc * sqrt(J2) + p * sin(phi) );
-		}
+        } else {
+            Rmc = -1./sqrt(3.0) * ( sin(phi)*sin(teta) ) + cos(teta);
+            Yf = 2. * ( Rmc * sqrt(J2) + p * sin(phi) );
+        }
 
-	} else if ( theMaterialModel == DRUCKERPRAGER ) {
-		Yf = alpha * I1 + sqrt( J2 );
-	} else {
-		Yf = sqrt( J2 ); // the rest of the models a deviatoric
-	}
+    } else if ( theMaterialModel == DRUCKERPRAGER ) {
+        Yf = alpha * I1 + sqrt( J2 );
+    } else {
+        Yf = sqrt( J2 ); // the rest of the models a deviatoric
+    }
 
-	return Yf;
+    return Yf;
 
     // old fnc
-/*	if ( ( theMaterialModel == VONMISES_EP )  || ( theMaterialModel == DRUCKERPRAGER ) ||
-	     ( theMaterialModel == VONMISES_FAM ) || ( theMaterialModel == VONMISES_FA   ) ||
-	     ( theMaterialModel == VONMISES_BAE ) || ( theMaterialModel == VONMISES_BAH  ) ||
-	     ( theMaterialModel == VONMISES_GQH   )  ) {
-		if ( theMaterialModel == DRUCKERPRAGER )
-			Yf = alpha * I1 + sqrt( J2 );
-		else
-			Yf = sqrt( J2 ); // alpha must be zero in any vonMises model
-	} else {
-		p = (1./3.) * I1;
-		q = 2.0 * pow( J2, 1.5 );
-		r = -3.0 * sqrt(3.0) * (J3);
+/*  if ( ( theMaterialModel == VONMISES_EP )  || ( theMaterialModel == DRUCKERPRAGER ) ||
+         ( theMaterialModel == VONMISES_FAM ) || ( theMaterialModel == VONMISES_FA   ) ||
+         ( theMaterialModel == VONMISES_BAE ) || ( theMaterialModel == VONMISES_BAH  ) ||
+         ( theMaterialModel == VONMISES_GQH   )  ) {
+        if ( theMaterialModel == DRUCKERPRAGER )
+            Yf = alpha * I1 + sqrt( J2 );
+        else
+            Yf = sqrt( J2 ); // alpha must be zero in any vonMises model
+    } else {
+        p = (1./3.) * I1;
+        q = 2.0 * pow( J2, 1.5 );
+        r = -3.0 * sqrt(3.0) * (J3);
 
-		if ( ( r/q <= 1.00000001 ) && ( r/q >= 0.99999999 ) )
-			teta = PI / 6.0;
-		else if ( ( r/q >= -1.00000001 ) && ( r/q <= -0.99999999 ) )
-			teta = -PI / 6.0;
-		else
-			teta = 1./3. * asin(r/q);
+        if ( ( r/q <= 1.00000001 ) && ( r/q >= 0.99999999 ) )
+            teta = PI / 6.0;
+        else if ( ( r/q >= -1.00000001 ) && ( r/q <= -0.99999999 ) )
+            teta = -PI / 6.0;
+        else
+            teta = 1./3. * asin(r/q);
 
-		if ( ( teta > PI / 6.0 ) || ( teta < -PI / 6.0 ) ) {
+        if ( ( teta > PI / 6.0 ) || ( teta < -PI / 6.0 ) ) {
 
-			vect1_t n1, n2, n3, eig_vals;
+            vect1_t n1, n2, n3, eig_vals;
 
-		    specDecomp(Sigma, &n1, &n2, &n3, &eig_vals);
+            specDecomp(Sigma, &n1, &n2, &n3, &eig_vals);
 
-		    s1 = eig_vals.x;
-		    s3 = eig_vals.z;
+            s1 = eig_vals.x;
+            s3 = eig_vals.z;
 
-		    Yf = s1 - s3 + ( s1 + s3 )*sin(phi);
+            Yf = s1 - s3 + ( s1 + s3 )*sin(phi);
 
-		} else {
-			Rmc = -1./sqrt(3.0) * ( sin(phi)*sin(teta) ) + cos(teta);
-			Yf = 2. * ( Rmc * sqrt(J2) + p * sin(phi) );
-		}
+        } else {
+            Rmc = -1./sqrt(3.0) * ( sin(phi)*sin(teta) ) + cos(teta);
+            Yf = 2. * ( Rmc * sqrt(J2) + p * sin(phi) );
+        }
 
-	}
+    }
 
-	return Yf;*/
+    return Yf;*/
 
 }
 
 double compute_hardening ( double gamma, double c, double Sy, double h, double ep_bar, double phi, double psi ) {
-	double H=0.;
+    double H=0.;
 
-	if ( theMaterialModel        == VONMISES_EP ) {
-		H = c * 2.0 / sqrt(3.0);   // c=Su and tao_max = 2Su/sqrt(3)
-	} else if ( theMaterialModel == MOHR_COULOMB ) {
-		H = 2.0 * ( c + h * ep_bar) * cos(phi);
-	} else if ( theMaterialModel == DRUCKERPRAGER ) {
-		H = gamma * ( c + h * ep_bar);
-	} else if ( theMaterialModel == VONMISES_FA ) {
-		H = Sy; // Since Sy comes from the G/Gmax it does not require the constant 2/sqrt(3)
-	}
+    if ( theMaterialModel        == VONMISES_EP ) {
+        H = c * 2.0 / sqrt(3.0);   // c=Su and tao_max = 2Su/sqrt(3)
+    } else if ( theMaterialModel == MOHR_COULOMB ) {
+        H = 2.0 * ( c + h * ep_bar) * cos(phi);
+    } else if ( theMaterialModel == DRUCKERPRAGER ) {
+        H = gamma * ( c + h * ep_bar);
+    } else if ( theMaterialModel == VONMISES_FA ) {
+        H = Sy; // Since Sy comes from the G/Gmax it does not require the constant 2/sqrt(3)
+    }
 
-	return H;
-/*	else if ( theMaterialModel == VONMISES_FAM || theMaterialModel == VONMISES_BAE ||
-			    theMaterialModel == VONMISES_BAH || theMaterialModel == VONMISES_GQH ) { // no elastic region in vonMisesKinHard_Modified
-		H = 0.0;
-	} else if ( theMaterialModel == DRUCKERPRAGER ) {
-		H = gamma * ( c + h * ep_bar);
-	}	else {
-		H = 2.0 * ( c + h * ep_bar) * cos(phi);
-	}*/
+    return H;
+/*  else if ( theMaterialModel == VONMISES_FAM || theMaterialModel == VONMISES_BAE ||
+                theMaterialModel == VONMISES_BAH || theMaterialModel == VONMISES_GQH ) { // no elastic region in vonMisesKinHard_Modified
+        H = 0.0;
+    } else if ( theMaterialModel == DRUCKERPRAGER ) {
+        H = gamma * ( c + h * ep_bar);
+    }   else {
+        H = 2.0 * ( c + h * ep_bar) * cos(phi);
+    }*/
 
 }
 
@@ -1754,173 +1949,173 @@ double compute_hardening ( double gamma, double c, double Sy, double h, double e
 /*===============================================================*/
 /*   Material update function for material models based on (1994) Borja & Amies approach    */
 void MatUpd_vMGeneral ( nlconstants_t el_cnt, double *kappa,
-		                tensor_t e_n, tensor_t e_n1, tensor_t *sigma_ref, tensor_t *sigma,
-		                int *FlagTolSubSteps, int *FlagNoSubSteps, double *ErrMax ) {
+                        tensor_t e_n, tensor_t e_n1, tensor_t *sigma_ref, tensor_t *sigma,
+                        int *FlagTolSubSteps, int *FlagNoSubSteps, double *ErrMax ) {
 
-/*	 INPUTS:
+/*   INPUTS:
     * el_cnt            : Material constants
 
- 	* e_n           	: Total strain tensor.
- 	* e_n1         		: Total strain tensor at t-1
-    * sigma_ref     	: reference stress
-    * substepTol, BoundSurfTol 	: substep Tolerance, Bounding surface Tolerance
+    * e_n               : Total strain tensor.
+    * e_n1              : Total strain tensor at t-1
+    * sigma_ref         : reference stress
+    * substepTol, BoundSurfTol  : substep Tolerance, Bounding surface Tolerance
 
- 	* OUTPUTS:
- 	* sigma         : Updated stress tensor
- 	* kappa         : Updated hardening variable
+    * OUTPUTS:
+    * sigma         : Updated stress tensor
+    * kappa         : Updated hardening variable
     * Sref          : Updated reference deviator stress tensor          */
 
-	double   Dt=1.0, T=0.0, Dtmin, Dt_sup, kappa_n, load_unload, Den1, Den2, kappa_up,
-			 ErrB, ErrS, xi, xi_sup, kappa_o, K,
-			 G=el_cnt.mu, Lambda = el_cnt.lambda, xi1;
-	tensor_t sigma_n, sigma_up, Num, Sdev;
-	int cnt=0;
+    double   Dt=1.0, T=0.0, Dtmin, Dt_sup, kappa_n, load_unload, Den1, Den2, kappa_up,
+             ErrB, ErrS, xi, xi_sup, kappa_o, K,
+             G=el_cnt.mu, Lambda = el_cnt.lambda, xi1;
+    tensor_t sigma_n, sigma_up, Num, Sdev;
+    int cnt=0;
 
-	Dtmin = Dt/theNoSubsteps;
-	K     = Lambda + 2.0 * G / 3.0;
+    Dtmin = Dt/theNoSubsteps;
+    K     = Lambda + 2.0 * G / 3.0;
 
-	/* At  this point *sigma and *kappa have the information at t-1 */
-	kappa_n = *kappa;
-	sigma_n = copy_tensor(*sigma);
+    /* At  this point *sigma and *kappa have the information at t-1 */
+    kappa_n = *kappa;
+    sigma_n = copy_tensor(*sigma);
 
-	/* deviatoric stress at t-1. At  this point *sigma has the information at t-1  */
-	tensor_t Sdev_n1   = tensor_deviator( *sigma, tensor_octahedral ( tensor_I1 ( *sigma ) ) );
+    /* deviatoric stress at t-1. At  this point *sigma has the information at t-1  */
+    tensor_t Sdev_n1   = tensor_deviator( *sigma, tensor_octahedral ( tensor_I1 ( *sigma ) ) );
 
 
-	/* total strain increment and deviatoric strain increment */
-	tensor_t De       = subtrac_tensors ( e_n, e_n1 );
-	double   De_vol   = tensor_I1 ( De );
-	tensor_t De_dev   = tensor_deviator( De, tensor_octahedral ( De_vol ) );
+    /* total strain increment and deviatoric strain increment */
+    tensor_t De       = subtrac_tensors ( e_n, e_n1 );
+    double   De_vol   = tensor_I1 ( De );
+    tensor_t De_dev   = tensor_deviator( De, tensor_octahedral ( De_vol ) );
 
-	Den1 = ddot_tensors(Sdev_n1, subtrac_tensors (Sdev_n1 , *sigma_ref));
-	Den2 = kappa_n * ( ddot_tensors(subtrac_tensors (Sdev_n1 , *sigma_ref), subtrac_tensors (Sdev_n1 , *sigma_ref)) );
-	Num  = add_tensors ( scaled_tensor( Sdev_n1, (1.0+kappa_n) ), scaled_tensor( (subtrac_tensors (Sdev_n1 , *sigma_ref) ) ,kappa_n*(1.0+kappa_n) ) );
+    Den1 = ddot_tensors(Sdev_n1, subtrac_tensors (Sdev_n1 , *sigma_ref));
+    Den2 = kappa_n * ( ddot_tensors(subtrac_tensors (Sdev_n1 , *sigma_ref), subtrac_tensors (Sdev_n1 , *sigma_ref)) );
+    Num  = add_tensors ( scaled_tensor( Sdev_n1, (1.0+kappa_n) ), scaled_tensor( (subtrac_tensors (Sdev_n1 , *sigma_ref) ) ,kappa_n*(1.0+kappa_n) ) );
 
-	load_unload = -ddot_tensors(Num,De_dev) / (Den1 + Den2);
+    load_unload = -ddot_tensors(Num,De_dev) / (Den1 + Den2);
 
-	if ( load_unload > 0 ) {
+    if ( load_unload > 0 ) {
 
-		*kappa = get_kappaUnLoading_II(  el_cnt, Sdev_n1,  De_dev, ErrMax, &xi1 );
+        *kappa = get_kappaUnLoading_II(  el_cnt, Sdev_n1,  De_dev, ErrMax, &xi1 );
 
-		if ( *kappa != 0.0 ) {
-			*sigma_ref = copy_tensor( Sdev_n1 );
+        if ( *kappa != 0.0 ) {
+            *sigma_ref = copy_tensor( Sdev_n1 );
 
-			/* get sigma_n deviatoric */
-			//double H_n      = getHardening( el_cnt, *kappa);
-			//double xi1      = 2.0 * G / ( 1.0 + 3.0 * G / H_n );
-			tensor_t DSdev  = scaled_tensor( De_dev, xi1 );
+            /* get sigma_n deviatoric */
+            //double H_n      = getHardening( el_cnt, *kappa);
+            //double xi1      = 2.0 * G / ( 1.0 + 3.0 * G / H_n );
+            tensor_t DSdev  = scaled_tensor( De_dev, xi1 );
 
-			if ( isnan( tensor_J2(DSdev) ) || isinf( tensor_J2(DSdev) ) ) {
-				fprintf(stdout," NAN at unloading: %f.  \n",tensor_J2(DSdev));
-				//MPI_Abort(MPI_COMM_WORLD, ERROR1);
-				//exit(1);
-			}
+            if ( isnan( tensor_J2(DSdev) ) || isinf( tensor_J2(DSdev) ) ) {
+                fprintf(stdout," NAN at unloading: %f.  \n",tensor_J2(DSdev));
+                //MPI_Abort(MPI_COMM_WORLD, ERROR1);
+                //exit(1);
+            }
 
-			*sigma          = add_tensors (  add_tensors( sigma_n, isotropic_tensor(K * De_vol) ),  DSdev  );
-			return;
-		}
-	}
+            *sigma          = add_tensors (  add_tensors( sigma_n, isotropic_tensor(K * De_vol) ),  DSdev  );
+            return;
+        }
+    }
 
-	EvalSubStep ( el_cnt,  sigma_n,  De,  De_dev,  De_vol, Dt,  sigma_ref,  &sigma_up,  kappa_n, &kappa_up,  &ErrB,  &ErrS);
+    EvalSubStep ( el_cnt,  sigma_n,  De,  De_dev,  De_vol, Dt,  sigma_ref,  &sigma_up,  kappa_n, &kappa_up,  &ErrB,  &ErrS);
 
-	int    step_Emax = -1, i;
+    int    step_Emax = -1, i;
 
-	if ( ErrB > theErrorTol ) { // begin sub-stepping
-		xi_sup  = 0.0;
-		kappa_o = kappa_n;
+    if ( ErrB > theErrorTol ) { // begin sub-stepping
+        xi_sup  = 0.0;
+        kappa_o = kappa_n;
 
-	    for (i = 0; i < theNoSubsteps ; i++) {
+        for (i = 0; i < theNoSubsteps ; i++) {
 
-	    	while ( ErrB > theErrorTol ) {
+            while ( ErrB > theErrorTol ) {
 
-	    		Dt_sup = MIN( xi_sup * Dt, 1-T );
-	    		xi     = MAX( 0.9 * sqrt(theErrorTol / ErrB), 0.10 );
-	    		Dt     = MAX( xi * Dt, Dtmin );
-	    		Dt     = MIN( Dt, 1 - T );
+                Dt_sup = MIN( xi_sup * Dt, 1-T );
+                xi     = MAX( 0.9 * sqrt(theErrorTol / ErrB), 0.10 );
+                Dt     = MAX( xi * Dt, Dtmin );
+                Dt     = MIN( Dt, 1 - T );
 
-	    		/*  compute state for xi_sup (xi_sup is an extrapolated value of xi)  */
-	    		if ( Dt_sup > Dt ) {
-	    			EvalSubStep (  el_cnt, sigma_n, De, De_dev,  De_vol, Dt_sup,  sigma_ref,  &sigma_up, kappa_n, &kappa_up, &ErrB, &ErrS );
-	    		}
+                /*  compute state for xi_sup (xi_sup is an extrapolated value of xi)  */
+                if ( Dt_sup > Dt ) {
+                    EvalSubStep (  el_cnt, sigma_n, De, De_dev,  De_vol, Dt_sup,  sigma_ref,  &sigma_up, kappa_n, &kappa_up, &ErrB, &ErrS );
+                }
 
-	    		if ( ErrB > theErrorTol ) {
-	    			EvalSubStep ( el_cnt, sigma_n, De, De_dev, De_vol, Dt, sigma_ref, &sigma_up, kappa_n, &kappa_up,  &ErrB, &ErrS);
-	    			xi_sup = 0.0;  // forget previous xi_sup
-	    		} else
-	    			Dt = Dt_sup;
+                if ( ErrB > theErrorTol ) {
+                    EvalSubStep ( el_cnt, sigma_n, De, De_dev, De_vol, Dt, sigma_ref, &sigma_up, kappa_n, &kappa_up,  &ErrB, &ErrS);
+                    xi_sup = 0.0;  // forget previous xi_sup
+                } else
+                    Dt = Dt_sup;
 
-	    		if ( Dt == Dtmin )
-	    			break;
+                if ( Dt == Dtmin )
+                    break;
 
-	    		cnt = cnt + 1;
-	    		if (ErrS>ErrB)
-	    			ErrB=ErrS;
+                cnt = cnt + 1;
+                if (ErrS>ErrB)
+                    ErrB=ErrS;
 
-	    		if (cnt > theNoSubsteps)
-	    			break;
-	    	}
+                if (cnt > theNoSubsteps)
+                    break;
+            }
 
-	       // if ( (Dt == Dtmin) && (ErrB > theErrorTol) ) {
+           // if ( (Dt == Dtmin) && (ErrB > theErrorTol) ) {
 
-    	//		fprintf(stdout," Increase error tolerance, increase number of substeps or reduce time-step. \n"
-    			//		       " BoundSurf error=%f, PsiFnc error=%f, Tol=%f  \n", ErrB, ErrS, theErrorTol);
-    	        //MPI_Abort(MPI_COMM_WORLD, ERROR2);
-    	        //exit(1);
+        //      fprintf(stdout," Increase error tolerance, increase number of substeps or reduce time-step. \n"
+                //             " BoundSurf error=%f, PsiFnc error=%f, Tol=%f  \n", ErrB, ErrS, theErrorTol);
+                //MPI_Abort(MPI_COMM_WORLD, ERROR2);
+                //exit(1);
 
-	          /*  if (ErrB > *ErrMax) {
-	            	*ErrMax = ErrB;
-	                step_Emax = i;
-	            }  */
-	      //  }
+              /*  if (ErrB > *ErrMax) {
+                    *ErrMax = ErrB;
+                    step_Emax = i;
+                }  */
+          //  }
 
-	        /* Update initial values  */
-	        sigma_n = copy_tensor(sigma_up);
-	        kappa_n = kappa_up;
-	        Sdev    = tensor_deviator( sigma_n, tensor_octahedral ( tensor_I1 ( sigma_n ) ) );
-	        *kappa  = get_kappa(  el_cnt, Sdev,  *sigma_ref,  kappa_o  );
-	        *sigma  = copy_tensor(sigma_up);
-	        T       = T + Dt;
+            /* Update initial values  */
+            sigma_n = copy_tensor(sigma_up);
+            kappa_n = kappa_up;
+            Sdev    = tensor_deviator( sigma_n, tensor_octahedral ( tensor_I1 ( sigma_n ) ) );
+            *kappa  = get_kappa(  el_cnt, Sdev,  *sigma_ref,  kappa_o  );
+            *sigma  = copy_tensor(sigma_up);
+            T       = T + Dt;
 
-	        if ( T == 1 ) {
-	        	if ( step_Emax != -1 ) {
-	        		*FlagTolSubSteps = 1;
-	        	}
+            if ( T == 1 ) {
+                if ( step_Emax != -1 ) {
+                    *FlagTolSubSteps = 1;
+                }
 
-	    		if ( isnan( tensor_J2(Sdev) ) || isinf( tensor_J2(Sdev) ) ) {
-	    			fprintf(stdout," NAN or INF at T=1. J2= %f.  \n",tensor_J2(Sdev));
-	    	        //MPI_Abort(MPI_COMM_WORLD, ERROR3);
-	    	        //exit(1);
-	    		}
-	    		*ErrMax = ErrB;
-	        	return;
-	        }
-	        xi_sup = MIN(0.9*sqrt(theErrorTol/ErrB),1.1);
-	        ErrB   = 1E10;
-	    }
+                if ( isnan( tensor_J2(Sdev) ) || isinf( tensor_J2(Sdev) ) ) {
+                    fprintf(stdout," NAN or INF at T=1. J2= %f.  \n",tensor_J2(Sdev));
+                    //MPI_Abort(MPI_COMM_WORLD, ERROR3);
+                    //exit(1);
+                }
+                *ErrMax = ErrB;
+                return;
+            }
+            xi_sup = MIN(0.9*sqrt(theErrorTol/ErrB),1.1);
+            ErrB   = 1E10;
+        }
 
-	    if ( i == theNoSubsteps - 1 ) { // reached maximum sub-steps
-	    		*FlagNoSubSteps = 1.0;
+        if ( i == theNoSubsteps - 1 ) { // reached maximum sub-steps
+                *FlagNoSubSteps = 1.0;
 
-	    		if ( isnan( tensor_J2(Sdev) ) || isinf( tensor_J2(Sdev) ) ) {
-	    			fprintf(stdout," NAN or INF when reaching Maxsubsteps. J2=%f.  \n",tensor_J2(Sdev));
-	    	        //MPI_Abort(MPI_COMM_WORLD, ERROR4);
-	    	        //exit(1);
-	    		}
-	    		*ErrMax = ErrB;
-	    		return;
-	    }
-	} else {
-		*kappa = kappa_up;
-		*sigma  = copy_tensor(sigma_up);
-		*ErrMax = ErrB;
+                if ( isnan( tensor_J2(Sdev) ) || isinf( tensor_J2(Sdev) ) ) {
+                    fprintf(stdout," NAN or INF when reaching Maxsubsteps. J2=%f.  \n",tensor_J2(Sdev));
+                    //MPI_Abort(MPI_COMM_WORLD, ERROR4);
+                    //exit(1);
+                }
+                *ErrMax = ErrB;
+                return;
+        }
+    } else {
+        *kappa = kappa_up;
+        *sigma  = copy_tensor(sigma_up);
+        *ErrMax = ErrB;
 
-		if ( isnan(tensor_J2(*sigma)) || isinf(tensor_J2(*sigma)) ) {
-			fprintf(stdout," NAN without substepping. J2=%f, kappa=%f,  Sxx=%f, Syy=%f, Szz=%f."
-					"\n",tensor_J2(*sigma), kappa_up,sigma->xx,sigma->yy, sigma->zz);
-	        //MPI_Abort(MPI_COMM_WORLD, ERROR5);
-	        //exit(1);
-		}
-	}
+        if ( isnan(tensor_J2(*sigma)) || isinf(tensor_J2(*sigma)) ) {
+            fprintf(stdout," NAN without substepping. J2=%f, kappa=%f,  Sxx=%f, Syy=%f, Szz=%f."
+                    "\n",tensor_J2(*sigma), kappa_up,sigma->xx,sigma->yy, sigma->zz);
+            //MPI_Abort(MPI_COMM_WORLD, ERROR5);
+            //exit(1);
+        }
+    }
 
 }
 
@@ -1929,327 +2124,327 @@ void MatUpd_vMGeneral ( nlconstants_t el_cnt, double *kappa,
 /*===============================================================*/
 /*   Material update function for material models based on (1994) Borja & Amies approach    */
 void MatUpd_vMGeneralII ( nlconstants_t el_cnt, double *kappa,
-		                  tensor_t e_n, tensor_t e_n1, tensor_t *sigma_ref,
-		                  tensor_t *sigma, double *ErrMax ) {
+                          tensor_t e_n, tensor_t e_n1, tensor_t *sigma_ref,
+                          tensor_t *sigma, double *ErrMax ) {
 
-/*	 INPUTS:
+/*   INPUTS:
     * el_cnt            : Material constants
 
- 	* e_n           	: Total strain tensor.
- 	* e_n1         		: Total strain tensor at t-1
-    * sigma_ref     	: reference stress
-    * substepTol, BoundSurfTol 	: substep Tolerance, Bounding surface Tolerance
+    * e_n               : Total strain tensor.
+    * e_n1              : Total strain tensor at t-1
+    * sigma_ref         : reference stress
+    * substepTol, BoundSurfTol  : substep Tolerance, Bounding surface Tolerance
 
- 	* OUTPUTS:
- 	* sigma         : Updated stress tensor
- 	* kappa         : Updated hardening variable
+    * OUTPUTS:
+    * sigma         : Updated stress tensor
+    * kappa         : Updated hardening variable
     * sigma_ref     : Updated reference deviator stress tensor          */
 
-	double   kappa_n, load_unload, Den1, Den2, kappa_up,
-			 ErrB, ErrS, K,
-			 G=el_cnt.mu, Lambda = el_cnt.lambda, xi1;
-	tensor_t sigma_n, sigma_up, Num;
+    double   kappa_n, load_unload, Den1, Den2, kappa_up,
+             ErrB, ErrS, K,
+             G=el_cnt.mu, Lambda = el_cnt.lambda, xi1;
+    tensor_t sigma_n, sigma_up, Num;
 
-	K     = Lambda + 2.0 * G / 3.0;
+    K     = Lambda + 2.0 * G / 3.0;
 
-	/* At  this point *sigma and *kappa have the information at t-1 */
-	kappa_n = *kappa;
-	sigma_n = copy_tensor(*sigma);
+    /* At  this point *sigma and *kappa have the information at t-1 */
+    kappa_n = *kappa;
+    sigma_n = copy_tensor(*sigma);
 
-	/* deviatoric stress at t-1. At  this point *sigma has the information at t-1  */
-	tensor_t Sdev_n1   = tensor_deviator( *sigma, tensor_octahedral ( tensor_I1 ( *sigma ) ) );
+    /* deviatoric stress at t-1. At  this point *sigma has the information at t-1  */
+    tensor_t Sdev_n1   = tensor_deviator( *sigma, tensor_octahedral ( tensor_I1 ( *sigma ) ) );
 
-	/* total strain increment and deviatoric strain increment */
-	tensor_t De       = subtrac_tensors ( e_n, e_n1 );
-	double   De_vol   = tensor_I1 ( De );
-	tensor_t De_dev   = tensor_deviator( De, tensor_octahedral ( De_vol ) );
+    /* total strain increment and deviatoric strain increment */
+    tensor_t De       = subtrac_tensors ( e_n, e_n1 );
+    double   De_vol   = tensor_I1 ( De );
+    tensor_t De_dev   = tensor_deviator( De, tensor_octahedral ( De_vol ) );
 
-	Den1 = ddot_tensors(Sdev_n1, subtrac_tensors (Sdev_n1 , *sigma_ref));
-	Den2 = kappa_n * ( ddot_tensors(subtrac_tensors (Sdev_n1 , *sigma_ref), subtrac_tensors (Sdev_n1 , *sigma_ref)) );
-	Num  = add_tensors ( scaled_tensor( Sdev_n1, (1.0+kappa_n) ), scaled_tensor( (subtrac_tensors (Sdev_n1 , *sigma_ref) ) ,kappa_n*(1.0+kappa_n) ) );
+    Den1 = ddot_tensors(Sdev_n1, subtrac_tensors (Sdev_n1 , *sigma_ref));
+    Den2 = kappa_n * ( ddot_tensors(subtrac_tensors (Sdev_n1 , *sigma_ref), subtrac_tensors (Sdev_n1 , *sigma_ref)) );
+    Num  = add_tensors ( scaled_tensor( Sdev_n1, (1.0+kappa_n) ), scaled_tensor( (subtrac_tensors (Sdev_n1 , *sigma_ref) ) ,kappa_n*(1.0+kappa_n) ) );
 
-	load_unload = -ddot_tensors(Num,De_dev) / (Den1 + Den2);
+    load_unload = -ddot_tensors(Num,De_dev) / (Den1 + Den2);
 
-	if ( load_unload > 0 ) {
+    if ( load_unload > 0 ) {
 
-		*kappa = get_kappaUnLoading_II(  el_cnt, Sdev_n1,  De_dev, ErrMax, &xi1 );
+        *kappa = get_kappaUnLoading_II(  el_cnt, Sdev_n1,  De_dev, ErrMax, &xi1 );
 
-		if ( *kappa != 0.0 ) {
-			*sigma_ref = copy_tensor( Sdev_n1 );
-			tensor_t DSdev  = scaled_tensor( De_dev, xi1 );
+        if ( *kappa != 0.0 ) {
+            *sigma_ref = copy_tensor( Sdev_n1 );
+            tensor_t DSdev  = scaled_tensor( De_dev, xi1 );
 
-			if ( isnan( tensor_J2(DSdev) ) || isinf( tensor_J2(DSdev) ) ) {
-				fprintf(stdout," NAN at unloading: %f.  \n",tensor_J2(DSdev));
-				//MPI_Abort(MPI_COMM_WORLD, ERROR1);
-				//exit(1);
-			}
-			*sigma          = add_tensors (  add_tensors( sigma_n, isotropic_tensor(K * De_vol) ),  DSdev  );
-			return;
-		}
-	}
+            if ( isnan( tensor_J2(DSdev) ) || isinf( tensor_J2(DSdev) ) ) {
+                fprintf(stdout," NAN at unloading: %f.  \n",tensor_J2(DSdev));
+                //MPI_Abort(MPI_COMM_WORLD, ERROR1);
+                //exit(1);
+            }
+            *sigma          = add_tensors (  add_tensors( sigma_n, isotropic_tensor(K * De_vol) ),  DSdev  );
+            return;
+        }
+    }
 
-	//update_stress (el_cnt,   sigma_n,  kappa_n,  De_dev,  De_vol,  *sigma_ref,  &sigma_up, &kappa_up, &ErrB, &ErrS);
+    //update_stress (el_cnt,   sigma_n,  kappa_n,  De_dev,  De_vol,  *sigma_ref,  &sigma_up, &kappa_up, &ErrB, &ErrS);
 
-	//ImplicitExponential ( el_cnt,   sigma_n,  De, *sigma_ref,  &sigma_up, kappa_n, &kappa_up, &ErrB);
+    //ImplicitExponential ( el_cnt,   sigma_n,  De, *sigma_ref,  &sigma_up, kappa_n, &kappa_up, &ErrB);
 
-	double euler_error = 100;
-	substepping ( el_cnt,   sigma_n,  De_dev,  De_vol, *sigma_ref,  &sigma_up,  kappa_n,  &kappa_up,  &ErrB,  &ErrS,  &euler_error );
+    double euler_error = 100;
+    substepping ( el_cnt,   sigma_n,  De_dev,  De_vol, *sigma_ref,  &sigma_up,  kappa_n,  &kappa_up,  &ErrB,  &ErrS,  &euler_error );
 
-	*kappa  = kappa_up;
-	*sigma  = copy_tensor(sigma_up);
-	*ErrMax = MAX(ErrB,ErrS);
-	//*ErrMax = ErrB;
+    *kappa  = kappa_up;
+    *sigma  = copy_tensor(sigma_up);
+    *ErrMax = MAX(ErrB,ErrS);
+    //*ErrMax = ErrB;
 
 }
 
 
 
 void EvalSubStep (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t De_dev, double De_vol,
-		          double Dt, tensor_t *sigma_ref, tensor_t *sigma_up, double kappa_n,
-		          double *kappa_up, double *ErrB, double *ErrS) {
+                  double Dt, tensor_t *sigma_ref, tensor_t *sigma_up, double kappa_n,
+                  double *kappa_up, double *ErrB, double *ErrS) {
 
-	tensor_t Sdev_0, DSdev1, DSdev2, Sdev1, Sdev2, Dsigma1, Dsigma2;
-	double   H_n, H_n2, xi1, xi2, K, kappa1, kappa2, Su=el_cnt.c, Lambda=el_cnt.lambda, G=el_cnt.mu, psi_up;
+    tensor_t Sdev_0, DSdev1, DSdev2, Sdev1, Sdev2, Dsigma1, Dsigma2;
+    double   H_n, H_n2, xi1, xi2, K, kappa1, kappa2, Su=el_cnt.c, Lambda=el_cnt.lambda, G=el_cnt.mu, psi_up;
 
-	K       = Lambda + 2.0 * G / 3.0;
-	De 		= scaled_tensor(De,Dt);
-	De_dev 	= scaled_tensor(De_dev,Dt);
-	De_vol 	= De_vol * Dt;
+    K       = Lambda + 2.0 * G / 3.0;
+    De      = scaled_tensor(De,Dt);
+    De_dev  = scaled_tensor(De_dev,Dt);
+    De_vol  = De_vol * Dt;
 
-	/* get sigma_n deviatoric */
-	Sdev_0   = tensor_deviator( sigma_n, tensor_octahedral ( tensor_I1 ( sigma_n ) ) );
-	H_n      = getHardening( el_cnt, kappa_n );
-	xi1      = 2.0 * G / ( 1.0 + 3.0 * G / H_n );
+    /* get sigma_n deviatoric */
+    Sdev_0   = tensor_deviator( sigma_n, tensor_octahedral ( tensor_I1 ( sigma_n ) ) );
+    H_n      = getHardening( el_cnt, kappa_n );
+    xi1      = 2.0 * G / ( 1.0 + 3.0 * G / H_n );
 
-	DSdev1   = scaled_tensor( De_dev,xi1 );
-	Sdev1    = add_tensors( Sdev_0, DSdev1 );
-	Dsigma1  = add_tensors( isotropic_tensor(K * De_vol), Sdev1 );
-	kappa1   = get_kappa( el_cnt, Sdev1, *sigma_ref, kappa_n );
+    DSdev1   = scaled_tensor( De_dev,xi1 );
+    Sdev1    = add_tensors( Sdev_0, DSdev1 );
+    Dsigma1  = add_tensors( isotropic_tensor(K * De_vol), Sdev1 );
+    kappa1   = get_kappa( el_cnt, Sdev1, *sigma_ref, kappa_n );
 
-	/* get second set of values */
-	H_n2     = getHardening( el_cnt, kappa1 );
-	xi2      = 2.0 * G / ( 1.0 + 3.0 * G / H_n2 );
+    /* get second set of values */
+    H_n2     = getHardening( el_cnt, kappa1 );
+    xi2      = 2.0 * G / ( 1.0 + 3.0 * G / H_n2 );
 
-	DSdev2   = scaled_tensor( De_dev,xi2 );
-	Sdev2    = add_tensors( Sdev_0, DSdev2 );
-	kappa2   = get_kappa( el_cnt, Sdev2, *sigma_ref, kappa_n );
-	Dsigma2  = add_tensors( isotropic_tensor(K * De_vol), Sdev2 );
+    DSdev2   = scaled_tensor( De_dev,xi2 );
+    Sdev2    = add_tensors( Sdev_0, DSdev2 );
+    kappa2   = get_kappa( el_cnt, Sdev2, *sigma_ref, kappa_n );
+    Dsigma2  = add_tensors( isotropic_tensor(K * De_vol), Sdev2 );
 
-	*sigma_up = add_tensors (  add_tensors( sigma_n, isotropic_tensor(K*De_vol) ),
-			                   add_tensors( scaled_tensor(DSdev1,0.5), scaled_tensor(DSdev2,0.5) ) );
-	*kappa_up = (kappa1+kappa2)/2;
+    *sigma_up = add_tensors (  add_tensors( sigma_n, isotropic_tensor(K*De_vol) ),
+                               add_tensors( scaled_tensor(DSdev1,0.5), scaled_tensor(DSdev2,0.5) ) );
+    *kappa_up = (kappa1+kappa2)/2;
 
-	/* compute errors */
-	//Dss       =  subtrac_tensors(Dsigma2,Dsigma1);
-	//*ErrS     =  sqrt(2.0 *  tensor_J2 ( Dss ) ) / sqrt(2.0 *  tensor_J2 ( *sigma_up ) );
+    /* compute errors */
+    //Dss       =  subtrac_tensors(Dsigma2,Dsigma1);
+    //*ErrS     =  sqrt(2.0 *  tensor_J2 ( Dss ) ) / sqrt(2.0 *  tensor_J2 ( *sigma_up ) );
 
-	psi_up = (xi1+xi2)/2;
+    psi_up = (xi1+xi2)/2;
 
-	*ErrS  = psi_up * ( 1.0 + 3.0*G/getHardening( el_cnt, *kappa_up ) ) / G - 2.0 ;
+    *ErrS  = psi_up * ( 1.0 + 3.0*G/getHardening( el_cnt, *kappa_up ) ) / G - 2.0 ;
 
-	double R  = Su * sqrt(8.0/3.0);
+    double R  = Su * sqrt(8.0/3.0);
 
-	tensor_t SmSo = subtrac_tensors( add_tensors( scaled_tensor(Sdev1,0.5), scaled_tensor(Sdev2,0.5) ), *sigma_ref );
-	tensor_t S1   = add_tensors    ( add_tensors( scaled_tensor(Sdev1,0.5), scaled_tensor(Sdev2,0.5) ), scaled_tensor(SmSo,*kappa_up) );
+    tensor_t SmSo = subtrac_tensors( add_tensors( scaled_tensor(Sdev1,0.5), scaled_tensor(Sdev2,0.5) ), *sigma_ref );
+    tensor_t S1   = add_tensors    ( add_tensors( scaled_tensor(Sdev1,0.5), scaled_tensor(Sdev2,0.5) ), scaled_tensor(SmSo,*kappa_up) );
 
-	*ErrB         = fabs( sqrt( ddot_tensors(S1,S1) ) - R ) / R;
+    *ErrB         = fabs( sqrt( ddot_tensors(S1,S1) ) - R ) / R;
 
 }
 
 void Euler2steps (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De_dev, double De_vol,
-		          double Dt, tensor_t sigma_ref, tensor_t *sigma_up, double kappa_n,
-		          double *kappa_up, double *ErrB, double *ErrS, double *euler_error, int nsteps) {
+                  double Dt, tensor_t sigma_ref, tensor_t *sigma_up, double kappa_n,
+                  double *kappa_up, double *ErrB, double *ErrS, double *euler_error, int nsteps) {
 
-	tensor_t Sdev_0, DSdev1, DSdev2, Sdev1, Sdev2, S_up, r_up, DSdev_diff, r2, r1, r_diff;
-	double   H_n, xi_n, H1, H2, xi1, xi2, K, kappa1, kappa2, Su=el_cnt.c, Lambda=el_cnt.lambda, G=el_cnt.mu, xi_up, err_tmp,
-			 Sdev_error, r_error, kappa_err, xi_err, R;
+    tensor_t Sdev_0, DSdev1, DSdev2, Sdev1, Sdev2, S_up, r_up, DSdev_diff, r2, r1, r_diff;
+    double   H_n, xi_n, H1, H2, xi1, xi2, K, kappa1, kappa2, Su=el_cnt.c, Lambda=el_cnt.lambda, G=el_cnt.mu, xi_up, err_tmp,
+             Sdev_error, r_error, kappa_err, xi_err, R;
 
-	K       = Lambda + 2.0 * G / 3.0;
-	De_dev 	= scaled_tensor(De_dev,Dt);
-	De_vol 	= De_vol * Dt;
+    K       = Lambda + 2.0 * G / 3.0;
+    De_dev  = scaled_tensor(De_dev,Dt);
+    De_vol  = De_vol * Dt;
 
-	/* get variables at the beginning of the increment */
-	Sdev_0   = tensor_deviator( sigma_n, tensor_octahedral ( tensor_I1 ( sigma_n ) ) );
-	H_n      = getHardening( el_cnt, kappa_n );
-	xi_n     = 2.0 * G / ( 1.0 + 3.0 * G / H_n );
+    /* get variables at the beginning of the increment */
+    Sdev_0   = tensor_deviator( sigma_n, tensor_octahedral ( tensor_I1 ( sigma_n ) ) );
+    H_n      = getHardening( el_cnt, kappa_n );
+    xi_n     = 2.0 * G / ( 1.0 + 3.0 * G / H_n );
 
-	/* get first order estimates */
-	DSdev1   = scaled_tensor( De_dev,xi_n );
-	Sdev1    = add_tensors( Sdev_0, DSdev1 );
-	kappa1   = get_kappa( el_cnt, Sdev1, sigma_ref, kappa_n );
-	H1       = getHardening( el_cnt, kappa1 );
-	xi1      = 2.0 * G / ( 1.0 + 3.0 * G / H1 );
-	//r1       = add_tensors ( Sdev1, scaled_tensor( subtrac_tensors( Sdev1, sigma_ref ), kappa1 ) );
+    /* get first order estimates */
+    DSdev1   = scaled_tensor( De_dev,xi_n );
+    Sdev1    = add_tensors( Sdev_0, DSdev1 );
+    kappa1   = get_kappa( el_cnt, Sdev1, sigma_ref, kappa_n );
+    H1       = getHardening( el_cnt, kappa1 );
+    xi1      = 2.0 * G / ( 1.0 + 3.0 * G / H1 );
+    //r1       = add_tensors ( Sdev1, scaled_tensor( subtrac_tensors( Sdev1, sigma_ref ), kappa1 ) );
 
-	/* get second order estimates */
-	if ( nsteps == 2 ) {
-		DSdev2   = scaled_tensor( De_dev,xi1 );
-		Sdev2    = add_tensors( Sdev_0, DSdev2 );
-		kappa2   = get_kappa( el_cnt, Sdev2, sigma_ref, kappa_n );
-		H2     = getHardening( el_cnt, kappa2 );
-		xi2      = 2.0 * G / ( 1.0 + 3.0 * G / H2 );
-		//r2       = add_tensors ( Sdev2, scaled_tensor( subtrac_tensors( Sdev2, sigma_ref ), kappa2 ) );
-	}
+    /* get second order estimates */
+    if ( nsteps == 2 ) {
+        DSdev2   = scaled_tensor( De_dev,xi1 );
+        Sdev2    = add_tensors( Sdev_0, DSdev2 );
+        kappa2   = get_kappa( el_cnt, Sdev2, sigma_ref, kappa_n );
+        H2     = getHardening( el_cnt, kappa2 );
+        xi2      = 2.0 * G / ( 1.0 + 3.0 * G / H2 );
+        //r2       = add_tensors ( Sdev2, scaled_tensor( subtrac_tensors( Sdev2, sigma_ref ), kappa2 ) );
+    }
 
-	/* updated state */
-	if ( nsteps == 2 ) {
-		xi_up      =  ( xi1 + xi2 ) / 2;
-		*kappa_up  =  ( kappa1 + kappa2 ) / 2;
-		S_up       =  add_tensors (  scaled_tensor(Sdev1,0.5), scaled_tensor(Sdev2,0.5) ) ;
-		*sigma_up  =  add_tensors (  add_tensors( sigma_n, isotropic_tensor(K*De_vol) ),
-				                   add_tensors( scaled_tensor(DSdev1,0.5), scaled_tensor(DSdev2,0.5) ) );
-		// compute errors
-		//DSdev_diff = subtrac_tensors ( DSdev2, DSdev1 );
-		//r_diff     = subtrac_tensors ( r2, r1 );
-		//Sdev_error = 0.50 * sqrt( ddot_tensors(DSdev_diff,DSdev_diff) / ddot_tensors(*sigma_up,*sigma_up) );
-		//r_error    = 0.50 * sqrt( ddot_tensors(r_diff,r_diff) / ddot_tensors(r_up,r_up) );
-		kappa_err  = 0.5 * ( fabs(kappa1 - kappa2)/ (*kappa_up) );
-		xi_err     = 0.5 * ( fabs(xi1 - xi2)/ xi_up );
+    /* updated state */
+    if ( nsteps == 2 ) {
+        xi_up      =  ( xi1 + xi2 ) / 2;
+        *kappa_up  =  ( kappa1 + kappa2 ) / 2;
+        S_up       =  add_tensors (  scaled_tensor(Sdev1,0.5), scaled_tensor(Sdev2,0.5) ) ;
+        *sigma_up  =  add_tensors (  add_tensors( sigma_n, isotropic_tensor(K*De_vol) ),
+                                   add_tensors( scaled_tensor(DSdev1,0.5), scaled_tensor(DSdev2,0.5) ) );
+        // compute errors
+        //DSdev_diff = subtrac_tensors ( DSdev2, DSdev1 );
+        //r_diff     = subtrac_tensors ( r2, r1 );
+        //Sdev_error = 0.50 * sqrt( ddot_tensors(DSdev_diff,DSdev_diff) / ddot_tensors(*sigma_up,*sigma_up) );
+        //r_error    = 0.50 * sqrt( ddot_tensors(r_diff,r_diff) / ddot_tensors(r_up,r_up) );
+        kappa_err  = 0.5 * ( fabs(kappa1 - kappa2)/ (*kappa_up) );
+        xi_err     = 0.5 * ( fabs(xi1 - xi2)/ xi_up );
 
-		//err_tmp        = MAX(Sdev_error,r_error);
-		//err_tmp        = MAX(err_tmp,kappa_err);
-		//*euler_error  = MAX(err_tmp,xi_err);
-	    *euler_error       = MAX(xi_err,kappa_err);
-
-
-	} else { // this is euler explicit without error control
-		xi_up         =  xi1;
-		*kappa_up     =  kappa1;
-		//S_up          =  copy_tensor ( Sdev1 );
-		*sigma_up     =  add_tensors (  add_tensors( sigma_n, isotropic_tensor(K*De_vol) ), DSdev1 );
-		*euler_error  =  200200;
-	}
-
-	if ( nsteps == 2 )
-		r_up  = add_tensors ( S_up, scaled_tensor( subtrac_tensors( S_up, sigma_ref ), *kappa_up ) );
-	else
-		r_up  = add_tensors ( Sdev1, scaled_tensor( subtrac_tensors( Sdev1, sigma_ref ), *kappa_up ) );
+        //err_tmp        = MAX(Sdev_error,r_error);
+        //err_tmp        = MAX(err_tmp,kappa_err);
+        //*euler_error  = MAX(err_tmp,xi_err);
+        *euler_error       = MAX(xi_err,kappa_err);
 
 
-	*ErrS  = xi_up * ( 1.0 + 3.0*G/getHardening( el_cnt, *kappa_up ) ) / G - 2.0 ;
+    } else { // this is euler explicit without error control
+        xi_up         =  xi1;
+        *kappa_up     =  kappa1;
+        //S_up          =  copy_tensor ( Sdev1 );
+        *sigma_up     =  add_tensors (  add_tensors( sigma_n, isotropic_tensor(K*De_vol) ), DSdev1 );
+        *euler_error  =  200200;
+    }
 
-	R  = Su * sqrt(8.0/3.0);
+    if ( nsteps == 2 )
+        r_up  = add_tensors ( S_up, scaled_tensor( subtrac_tensors( S_up, sigma_ref ), *kappa_up ) );
+    else
+        r_up  = add_tensors ( Sdev1, scaled_tensor( subtrac_tensors( Sdev1, sigma_ref ), *kappa_up ) );
 
-	*ErrB     = fabs( sqrt( ddot_tensors(r_up,r_up) ) - R );
+
+    *ErrS  = xi_up * ( 1.0 + 3.0*G/getHardening( el_cnt, *kappa_up ) ) / G - 2.0 ;
+
+    R  = Su * sqrt(8.0/3.0);
+
+    *ErrB     = fabs( sqrt( ddot_tensors(r_up,r_up) ) - R );
 }
 
 
 void update_stress (nlconstants_t el_cnt, tensor_t  sigma_n, double kappa_n, tensor_t De_dev, double De_vol,
-		            tensor_t sigma_ref, tensor_t *sigma_up, double *kappa_up, double *ErrB, double *ErrS) {
+                    tensor_t sigma_ref, tensor_t *sigma_up, double *kappa_up, double *ErrB, double *ErrS) {
 
-	tensor_t Sdev_n, DSdev, S_up, r_up;
-	double   Su=el_cnt.c, Lambda=el_cnt.lambda, G=el_cnt.mu, K, xi_up, R, H_up;
+    tensor_t Sdev_n, DSdev, S_up, r_up;
+    double   Su=el_cnt.c, Lambda=el_cnt.lambda, G=el_cnt.mu, K, xi_up, R, H_up;
 
-	K         = Lambda + 2.0 * G / 3.0;
+    K         = Lambda + 2.0 * G / 3.0;
 
-	Sdev_n    = tensor_deviator( sigma_n, tensor_octahedral ( tensor_I1 ( sigma_n ) ) );
+    Sdev_n    = tensor_deviator( sigma_n, tensor_octahedral ( tensor_I1 ( sigma_n ) ) );
 
-	// get kappa
-	*kappa_up = get_kappa_Pegasus(  el_cnt,   Sdev_n,  sigma_ref,  De_dev, 0.01 * kappa_n, 0.10 * kappa_n  );
+    // get kappa
+    *kappa_up = get_kappa_Pegasus(  el_cnt,   Sdev_n,  sigma_ref,  De_dev, 0.01 * kappa_n, 0.10 * kappa_n  );
 
-	H_up      = getHardening( el_cnt, *kappa_up );
-	xi_up     = 2.0 * G / ( 1.0 + 3.0 * G / H_up );
-	DSdev     = scaled_tensor(De_dev,xi_up);
-	S_up      =  add_tensors (  Sdev_n, DSdev ) ;
+    H_up      = getHardening( el_cnt, *kappa_up );
+    xi_up     = 2.0 * G / ( 1.0 + 3.0 * G / H_up );
+    DSdev     = scaled_tensor(De_dev,xi_up);
+    S_up      =  add_tensors (  Sdev_n, DSdev ) ;
 
-	*sigma_up = add_tensors (  add_tensors( sigma_n, isotropic_tensor(K*De_vol) ), DSdev );
+    *sigma_up = add_tensors (  add_tensors( sigma_n, isotropic_tensor(K*De_vol) ), DSdev );
 
-	r_up      = add_tensors ( S_up, scaled_tensor( subtrac_tensors( S_up, sigma_ref ), *kappa_up ) );
-	*ErrS     = xi_up * ( 1.0 + 3.0*G/getHardening( el_cnt, *kappa_up ) ) / G - 2.0 ;
+    r_up      = add_tensors ( S_up, scaled_tensor( subtrac_tensors( S_up, sigma_ref ), *kappa_up ) );
+    *ErrS     = xi_up * ( 1.0 + 3.0*G/getHardening( el_cnt, *kappa_up ) ) / G - 2.0 ;
 
-	R         = Su * sqrt(8.0/3.0);
-	*ErrB     = fabs( sqrt( ddot_tensors(r_up,r_up) ) - R );
+    R         = Su * sqrt(8.0/3.0);
+    *ErrB     = fabs( sqrt( ddot_tensors(r_up,r_up) ) - R );
 }
 
 
 
 double get_BS_value (nlconstants_t el_cnt, tensor_t  Sdev_n, tensor_t De_dev, tensor_t sigma_ref, double kappa ) {
 
-	tensor_t DSdev1, Sdev1, r1;
-	double   H_k, xi_k, Su=el_cnt.c, G=el_cnt.mu;
+    tensor_t DSdev1, Sdev1, r1;
+    double   H_k, xi_k, Su=el_cnt.c, G=el_cnt.mu;
 
-	/* get variables at the beginning of the increment */
-	//Sdev_n   = tensor_deviator( sigma_n, tensor_octahedral ( tensor_I1 ( sigma_n ) ) );
-	H_k      = getHardening( el_cnt, kappa );
-	xi_k     = 2.0 * G / ( 1.0 + 3.0 * G / H_k );
+    /* get variables at the beginning of the increment */
+    //Sdev_n   = tensor_deviator( sigma_n, tensor_octahedral ( tensor_I1 ( sigma_n ) ) );
+    H_k      = getHardening( el_cnt, kappa );
+    xi_k     = 2.0 * G / ( 1.0 + 3.0 * G / H_k );
 
-	/* get first order estimates */
-	DSdev1   = scaled_tensor( De_dev,xi_k );
-	Sdev1    = add_tensors( Sdev_n, DSdev1 );
-	r1       = add_tensors ( Sdev1, scaled_tensor( subtrac_tensors( Sdev1, sigma_ref ), kappa ) );
+    /* get first order estimates */
+    DSdev1   = scaled_tensor( De_dev,xi_k );
+    Sdev1    = add_tensors( Sdev_n, DSdev1 );
+    r1       = add_tensors ( Sdev1, scaled_tensor( subtrac_tensors( Sdev1, sigma_ref ), kappa ) );
 
-	return ( sqrt( ddot_tensors(r1,r1) ) - Su * sqrt(8.0/3.0)  );
+    return ( sqrt( ddot_tensors(r1,r1) ) - Su * sqrt(8.0/3.0)  );
 
 }
 
 
 void substepping (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De_dev, double De_vol,
-		          tensor_t sigma_ref, tensor_t *sigma_up, double kappa_n,
-		          double *kappa_up, double *ErrB, double *ErrS, double *euler_error ) {
+                  tensor_t sigma_ref, tensor_t *sigma_up, double kappa_n,
+                  double *kappa_up, double *ErrB, double *ErrS, double *euler_error ) {
 
 
-	double   xi_sup=0.0, T=0.0, Dt_sup, xi, Dtmin = 1.0/theNoSubsteps, maxErrB=0, Dt=1.0;
-	int      i, maxIter=500, cnt=0;
+    double   xi_sup=0.0, T=0.0, Dt_sup, xi, Dtmin = 1.0/theNoSubsteps, maxErrB=0, Dt=1.0;
+    int      i, maxIter=500, cnt=0;
 
-	Euler2steps (  el_cnt, sigma_n, De_dev,  De_vol, Dt,  sigma_ref,  sigma_up, kappa_n, kappa_up, ErrB, ErrS, euler_error, 2 );
+    Euler2steps (  el_cnt, sigma_n, De_dev,  De_vol, Dt,  sigma_ref,  sigma_up, kappa_n, kappa_up, ErrB, ErrS, euler_error, 2 );
 
-	while ( *euler_error > theErrorTol && cnt < maxIter ) {
+    while ( *euler_error > theErrorTol && cnt < maxIter ) {
 
-		Dt_sup = MIN( xi_sup * Dt, 1-T );
-		xi     = MAX( 0.9 * sqrt(theErrorTol / *euler_error ), 0.50 );
-		Dt     = MAX( xi * Dt, Dtmin );
-		Dt     = MIN( Dt, 1 - T );
+        Dt_sup = MIN( xi_sup * Dt, 1-T );
+        xi     = MAX( 0.9 * sqrt(theErrorTol / *euler_error ), 0.50 );
+        Dt     = MAX( xi * Dt, Dtmin );
+        Dt     = MIN( Dt, 1 - T );
 
-		/*  compute state for xi_sup (xi_sup is an extrapolated value of xi)  */
-		if ( Dt_sup > Dt ) {
-			Euler2steps (  el_cnt, sigma_n, De_dev,  De_vol, Dt_sup,  sigma_ref,  sigma_up, kappa_n, kappa_up, ErrB, ErrS, euler_error, 2 );
-			Dt = Dt_sup;
-		} else {
-			Euler2steps ( el_cnt, sigma_n, De_dev, De_vol, Dt, sigma_ref, sigma_up, kappa_n, kappa_up,  ErrB, ErrS, euler_error, 2 );
-			xi_sup = 0.0;  // forget previous xi_sup
-		}
+        /*  compute state for xi_sup (xi_sup is an extrapolated value of xi)  */
+        if ( Dt_sup > Dt ) {
+            Euler2steps (  el_cnt, sigma_n, De_dev,  De_vol, Dt_sup,  sigma_ref,  sigma_up, kappa_n, kappa_up, ErrB, ErrS, euler_error, 2 );
+            Dt = Dt_sup;
+        } else {
+            Euler2steps ( el_cnt, sigma_n, De_dev, De_vol, Dt, sigma_ref, sigma_up, kappa_n, kappa_up,  ErrB, ErrS, euler_error, 2 );
+            xi_sup = 0.0;  // forget previous xi_sup
+        }
 
-		if ( *euler_error <= theErrorTol ) {
+        if ( *euler_error <= theErrorTol ) {
 
-			/* Update initial values  */
-			sigma_n = copy_tensor(*sigma_up);
-			kappa_n = *kappa_up;
+            /* Update initial values  */
+            sigma_n = copy_tensor(*sigma_up);
+            kappa_n = *kappa_up;
 
-			T      += Dt;
+            T      += Dt;
 
-			if ( T == 1 ) {
-				return;
-			}
+            if ( T == 1 ) {
+                return;
+            }
 
-			xi_sup         = MIN( 0.9 * sqrt( theErrorTol / *euler_error ), 1.1 );
-			*euler_error   = 1E10;
-			Dt = 1.0;
-		}
+            xi_sup         = MIN( 0.9 * sqrt( theErrorTol / *euler_error ), 1.1 );
+            *euler_error   = 1E10;
+            Dt = 1.0;
+        }
 
-		cnt += 1;
+        cnt += 1;
 
-		if ( ( ( Dt == Dtmin ) && ( *euler_error > theErrorTol ) ) || cnt == maxIter ) { // one step explicit
+        if ( ( ( Dt == Dtmin ) && ( *euler_error > theErrorTol ) ) || cnt == maxIter ) { // one step explicit
 
-			int steps_rem = ceil((1.0-T)/Dtmin);
+            int steps_rem = ceil((1.0-T)/Dtmin);
 
-			Dtmin        = (1.0-T)/steps_rem;
+            Dtmin        = (1.0-T)/steps_rem;
 
-			for (i = 0; i < steps_rem ; i++) {
-				Euler2steps ( el_cnt, sigma_n, De_dev, De_vol, Dtmin, sigma_ref, sigma_up, kappa_n, kappa_up,  ErrB, ErrS, euler_error, 1 );
+            for (i = 0; i < steps_rem ; i++) {
+                Euler2steps ( el_cnt, sigma_n, De_dev, De_vol, Dtmin, sigma_ref, sigma_up, kappa_n, kappa_up,  ErrB, ErrS, euler_error, 1 );
 
-				/* Update initial values  */
-				sigma_n = copy_tensor(*sigma_up);
-				kappa_n = *kappa_up;
-				maxErrB = MAX(maxErrB, *ErrB);
-				T += Dtmin;
+                /* Update initial values  */
+                sigma_n = copy_tensor(*sigma_up);
+                kappa_n = *kappa_up;
+                maxErrB = MAX(maxErrB, *ErrB);
+                T += Dtmin;
 
-			}
-			*euler_error = maxErrB;
-			return;
-			//break;
-		}
+            }
+            *euler_error = maxErrB;
+            return;
+            //break;
+        }
 
-	}
+    }
 
 }
 
@@ -2257,12 +2452,12 @@ void substepping (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De_dev, doub
 double getH_GQHmodel (nlconstants_t el_cnt, double kappa) {
 
 double H = 0.0, tao_bar, Theta1, Theta2, Theta3, Theta4, Theta5,
-	   A1, B1, C1, gamma_baro, gamma_bar, theta, Dergamma, Eo, Jac, A, B, C;
+       A1, B1, C1, gamma_baro, gamma_bar, theta, Dergamma, Eo, Jac, A, B, C;
 
 int    cnt=0, cnt_max=200;
 
 if (kappa == 0.0)
-		return H;
+        return H;
 
 Theta1 = el_cnt.thetaGQH[0];
 Theta2 = el_cnt.thetaGQH[1];
@@ -2280,13 +2475,13 @@ gamma_baro = (-B1 + sqrt( B1*B1 -4.0 * A1 * C1 ) ) / ( 2.0 * A1 );
 
 // get theta initial
 if (gamma_baro == 0) {
-	theta    = Theta1;
-	Dergamma = 0.0;
-	H = FLT_MAX;
-	return H;
+    theta    = Theta1;
+    Dergamma = 0.0;
+    H = FLT_MAX;
+    return H;
 } else {
-	theta    = Theta1 + Theta2 * ( Theta4 * pow(gamma_baro,Theta5) ) / ( pow(Theta3,Theta5) + Theta4 * pow(gamma_baro,Theta5) );
-	Dergamma = Theta2 * ( pow(Theta3,Theta5) ) * Theta4 * Theta5 * pow(gamma_baro,(Theta5 - 1.0)) / (pow(( pow(Theta3,Theta5) + Theta4 * pow(gamma_baro,Theta5) ),2.0 ));
+    theta    = Theta1 + Theta2 * ( Theta4 * pow(gamma_baro,Theta5) ) / ( pow(Theta3,Theta5) + Theta4 * pow(gamma_baro,Theta5) );
+    Dergamma = Theta2 * ( pow(Theta3,Theta5) ) * Theta4 * Theta5 * pow(gamma_baro,(Theta5 - 1.0)) / (pow(( pow(Theta3,Theta5) + Theta4 * pow(gamma_baro,Theta5) ),2.0 ));
 }
 
 
@@ -2294,21 +2489,21 @@ Eo  = gamma_baro * ( 1.0 - tao_bar ) - tao_bar + tao_bar * tao_bar * theta;
 gamma_bar = gamma_baro;
 
 while ( fabs(Eo) > 1E-10 ) {
-	Jac       = (1.0 - tao_bar) + tao_bar * tao_bar * Dergamma;
-	gamma_bar = gamma_bar - Eo/Jac;
+    Jac       = (1.0 - tao_bar) + tao_bar * tao_bar * Dergamma;
+    gamma_bar = gamma_bar - Eo/Jac;
 
-	if (gamma_bar == 0) {
-		theta    = Theta1;
-		Dergamma = 0.0;
-	} else {
-		theta     = Theta1 + Theta2 * ( Theta4 * pow(gamma_bar,Theta5) ) / ( pow(Theta3,Theta5) + Theta4 * pow(gamma_bar,Theta5) );
-		Dergamma  = Theta2 * ( pow(Theta3,Theta5) ) * Theta4 * Theta5 * pow(gamma_bar,(Theta5 - 1.0)) / (pow(( pow(Theta3,Theta5) + Theta4 * pow(gamma_bar,Theta5) ), 2.0 ));
-	}
+    if (gamma_bar == 0) {
+        theta    = Theta1;
+        Dergamma = 0.0;
+    } else {
+        theta     = Theta1 + Theta2 * ( Theta4 * pow(gamma_bar,Theta5) ) / ( pow(Theta3,Theta5) + Theta4 * pow(gamma_bar,Theta5) );
+        Dergamma  = Theta2 * ( pow(Theta3,Theta5) ) * Theta4 * Theta5 * pow(gamma_bar,(Theta5 - 1.0)) / (pow(( pow(Theta3,Theta5) + Theta4 * pow(gamma_bar,Theta5) ), 2.0 ));
+    }
 
-	Eo        = gamma_bar * ( 1.0 - tao_bar ) - tao_bar + tao_bar * tao_bar * theta;
-	cnt++;
-	if (cnt == cnt_max)
-		break;
+    Eo        = gamma_bar * ( 1.0 - tao_bar ) - tao_bar + tao_bar * tao_bar * theta;
+    cnt++;
+    if (cnt == cnt_max)
+        break;
 }
 
 /*  Sanity check.   */
@@ -2332,93 +2527,93 @@ return H ;
 
 double getHard_Pegassus (nlconstants_t el_cnt, double kappa) {
 
-	double H = 0.0, tao_bar, k0 = 0.0, k1 = 1.0, k2,  f0, f1, f2, tmp;
-	int    cnt1=1,   cnt2=1,   cntMax = 200;
+    double H = 0.0, tao_bar, k0 = 0.0, k1 = 1.0, k2,  f0, f1, f2, tmp;
+    int    cnt1=1,   cnt2=1,   cntMax = 200;
 
-	if (kappa == 0.0)
-		return H;
+    if (kappa == 0.0)
+        return H;
 
-	tao_bar = 1.0 / ( 1.0 + kappa ) ;
+    tao_bar = 1.0 / ( 1.0 + kappa ) ;
 
-	if ( theMaterialModel==VONMISES_MKZ )
-		tao_bar = tao_bar / el_cnt.phi_MKZ;
+    if ( theMaterialModel==VONMISES_MKZ )
+        tao_bar = tao_bar / el_cnt.phi_MKZ;
 
-	// (1973) King, R. An Improved Pegasus method for root finding
-	f0 = evalBackboneFn( el_cnt, k0,  tao_bar);
-	f1 = evalBackboneFn( el_cnt, k1,  tao_bar);
+    // (1973) King, R. An Improved Pegasus method for root finding
+    f0 = evalBackboneFn( el_cnt, k0,  tao_bar);
+    f1 = evalBackboneFn( el_cnt, k1,  tao_bar);
 
-	// get initial range for k
-	while ( f0 * f1 > 0 && cnt1 < cntMax ) {
-		k0 = k1;
-		k1 = 2.0 * k1;
+    // get initial range for k
+    while ( f0 * f1 > 0 && cnt1 < cntMax ) {
+        k0 = k1;
+        k1 = 2.0 * k1;
 
-		f0 = evalBackboneFn( el_cnt, k0,  tao_bar);
-		f1 = evalBackboneFn( el_cnt, k1,  tao_bar);
-		cnt1++;
-	}
+        f0 = evalBackboneFn( el_cnt, k0,  tao_bar);
+        f1 = evalBackboneFn( el_cnt, k1,  tao_bar);
+        cnt1++;
+    }
 
-	if (cnt1 == cntMax) {
-		fprintf(stdout,"Cannot obtain gamma_bar initial in getHard_Pegassus function: gamma_bar0=%f, gamma_bar1=%f. \n", k0, k1 );
-		//MPI_Abort(MPI_COMM_WORLD, ERROR6);
-		//exit(1);
-	}
+    if (cnt1 == cntMax) {
+        fprintf(stdout,"Cannot obtain gamma_bar initial in getHard_Pegassus function: gamma_bar0=%f, gamma_bar1=%f. \n", k0, k1 );
+        //MPI_Abort(MPI_COMM_WORLD, ERROR6);
+        //exit(1);
+    }
 
-	cnt1=1;
+    cnt1=1;
 
-	k2 = k1 - f1 * ( k1 - k0 ) / ( f1 - f0 );
-	f2 = evalBackboneFn( el_cnt, k2,  tao_bar);
+    k2 = k1 - f1 * ( k1 - k0 ) / ( f1 - f0 );
+    f2 = evalBackboneFn( el_cnt, k2,  tao_bar);
 
-	while ( fabs(f2)  > theBackboneErrorTol && cnt1 < cntMax ) {
+    while ( fabs(f2)  > theBackboneErrorTol && cnt1 < cntMax ) {
 
-		// step 4
-		if ( f1 * f2 < 0 ) {
-			tmp = k0;
-			k0  = k1;
-			k1  = tmp;
-			tmp = f0;
-			f0  = f1;
-			f1  = tmp;
-		}
+        // step 4
+        if ( f1 * f2 < 0 ) {
+            tmp = k0;
+            k0  = k1;
+            k1  = tmp;
+            tmp = f0;
+            f0  = f1;
+            f1  = tmp;
+        }
 
-		// step 5
-		while( f1 * f2 > 0 && cnt2 < cntMax) {
-			f0 = f0 * f1 / ( f1 + f2 );
+        // step 5
+        while( f1 * f2 > 0 && cnt2 < cntMax) {
+            f0 = f0 * f1 / ( f1 + f2 );
 
-			k1 = k2;
-			f1 = f2;
+            k1 = k2;
+            f1 = f2;
 
-			k2 = k1 - f1 * ( k1 - k0 ) / ( f1 - f0 );
-			f2 = evalBackboneFn( el_cnt, k2,  tao_bar);
+            k2 = k1 - f1 * ( k1 - k0 ) / ( f1 - f0 );
+            f2 = evalBackboneFn( el_cnt, k2,  tao_bar);
 
-			if ( fabs(f2)  < theBackboneErrorTol )
-				return evalHardFnc( el_cnt,  k2);
+            if ( fabs(f2)  < theBackboneErrorTol )
+                return evalHardFnc( el_cnt,  k2);
 
-			cnt2++;
-		}
+            cnt2++;
+        }
 
-		k0 = k1;
-		f0 = f1;
+        k0 = k1;
+        f0 = f1;
 
-		k1 = k2;
-		f1 = f2;
+        k1 = k2;
+        f1 = f2;
 
-		if ( k0 == k1 ) {
-			k2 = k1;
-			return evalHardFnc( el_cnt,  k2);
-			break;
-		}
+        if ( k0 == k1 ) {
+            k2 = k1;
+            return evalHardFnc( el_cnt,  k2);
+            break;
+        }
 
-		k2 = k1 - f1 * ( k1 - k0 ) / ( f1 - f0 );
-		f2 = evalBackboneFn( el_cnt, k2,  tao_bar);
+        k2 = k1 - f1 * ( k1 - k0 ) / ( f1 - f0 );
+        f2 = evalBackboneFn( el_cnt, k2,  tao_bar);
 
-		cnt1++;
+        cnt1++;
 
-	}
+    }
 
-	if ( cnt1 == cntMax || cnt2 == cntMax )
-		fprintf(stdout,"Increase the number of steps for root finding in Pegasus method for backbone solving. gamma_bar=%f, min_error=%f, ErroTol=%f \n", k2, fabs(f2), theErrorTol );
+    if ( cnt1 == cntMax || cnt2 == cntMax )
+        fprintf(stdout,"Increase the number of steps for root finding in Pegasus method for backbone solving. gamma_bar=%f, min_error=%f, ErroTol=%f \n", k2, fabs(f2), theErrorTol );
 
-	return evalHardFnc( el_cnt,  k2);
+    return evalHardFnc( el_cnt,  k2);
 
 
 }
@@ -2427,32 +2622,32 @@ double getHard_Pegassus (nlconstants_t el_cnt, double kappa) {
 // eqn (9) of Restrepo and Taborda (2018)
 double evalHardFnc(nlconstants_t el_cnt, double gamma_bar) {
 
-	double  G=el_cnt.mu, beta, s, HardFn=0;
-	double  Theta1, Theta2, Theta3, Theta4, Theta5, theta, Dergamma, df_dgamma=0;
+    double  G=el_cnt.mu, beta, s, HardFn=0;
+    double  Theta1, Theta2, Theta3, Theta4, Theta5, theta, Dergamma, df_dgamma=0;
 
-	if ( theMaterialModel == VONMISES_GQH ) {
-		Theta1 = el_cnt.thetaGQH[0];
-		Theta2 = el_cnt.thetaGQH[1];
-		Theta3 = el_cnt.thetaGQH[2];
-		Theta4 = el_cnt.thetaGQH[3];
-		Theta5 = el_cnt.thetaGQH[4];
+    if ( theMaterialModel == VONMISES_GQH ) {
+        Theta1 = el_cnt.thetaGQH[0];
+        Theta2 = el_cnt.thetaGQH[1];
+        Theta3 = el_cnt.thetaGQH[2];
+        Theta4 = el_cnt.thetaGQH[3];
+        Theta5 = el_cnt.thetaGQH[4];
 
-		theta     = Theta1 + Theta2 * ( Theta4 * pow(gamma_bar,Theta5) ) / ( pow(Theta3,Theta5) + Theta4 * pow(gamma_bar,Theta5) );
-		Dergamma  = Theta2 * ( pow(Theta3,Theta5) ) * Theta4 * Theta5 * pow(gamma_bar,(Theta5 - 1.0)) / (pow(( pow(Theta3,Theta5) + Theta4 * pow(gamma_bar,Theta5) ), 2.0 ));
+        theta     = Theta1 + Theta2 * ( Theta4 * pow(gamma_bar,Theta5) ) / ( pow(Theta3,Theta5) + Theta4 * pow(gamma_bar,Theta5) );
+        Dergamma  = Theta2 * ( pow(Theta3,Theta5) ) * Theta4 * Theta5 * pow(gamma_bar,(Theta5 - 1.0)) / (pow(( pow(Theta3,Theta5) + Theta4 * pow(gamma_bar,Theta5) ), 2.0 ));
 
-		double A  = 1.0 + gamma_bar + sqrt( pow((1.0 + gamma_bar),2.0) - 4.0 * theta * gamma_bar );
-		double B  = 1.0 + ( 1.0 + gamma_bar - 2.0 * (theta + gamma_bar * Dergamma) ) / sqrt( pow((1.0 + gamma_bar),2.0) - 4.0 * theta * gamma_bar );
-		df_dgamma = 2.0 * ( A - gamma_bar * B ) / (A * A);
+        double A  = 1.0 + gamma_bar + sqrt( pow((1.0 + gamma_bar),2.0) - 4.0 * theta * gamma_bar );
+        double B  = 1.0 + ( 1.0 + gamma_bar - 2.0 * (theta + gamma_bar * Dergamma) ) / sqrt( pow((1.0 + gamma_bar),2.0) - 4.0 * theta * gamma_bar );
+        df_dgamma = 2.0 * ( A - gamma_bar * B ) / (A * A);
 
-	} else {
-		if ( theMaterialModel == VONMISES_MKZ ) {
-			beta = el_cnt.beta_MKZ;
-			s    = el_cnt.s_MKZ;
-			df_dgamma = ( 1.0 + beta * (1.0 - s) * pow(gamma_bar,s) ) / (  pow( (1.0 + beta * pow(gamma_bar,s) ),2.0) ) ;
-		}
-	}
+    } else {
+        if ( theMaterialModel == VONMISES_MKZ ) {
+            beta = el_cnt.beta_MKZ;
+            s    = el_cnt.s_MKZ;
+            df_dgamma = ( 1.0 + beta * (1.0 - s) * pow(gamma_bar,s) ) / (  pow( (1.0 + beta * pow(gamma_bar,s) ),2.0) ) ;
+        }
+    }
 
-	return  HardFn = 3.0 * G * df_dgamma / ( 1.0 - df_dgamma );
+    return  HardFn = 3.0 * G * df_dgamma / ( 1.0 - df_dgamma );
 
 }
 
@@ -2463,24 +2658,24 @@ double evalBackboneFn(nlconstants_t el_cnt, double gamma_bar, double tao_bar) {
  double Fbb = 0, beta, s;
  double  Theta1, Theta2, Theta3, Theta4, Theta5, theta;
 
-	if ( theMaterialModel == VONMISES_GQH ) {
-		Theta1 = el_cnt.thetaGQH[0];
-		Theta2 = el_cnt.thetaGQH[1];
-		Theta3 = el_cnt.thetaGQH[2];
-		Theta4 = el_cnt.thetaGQH[3];
-		Theta5 = el_cnt.thetaGQH[4];
+    if ( theMaterialModel == VONMISES_GQH ) {
+        Theta1 = el_cnt.thetaGQH[0];
+        Theta2 = el_cnt.thetaGQH[1];
+        Theta3 = el_cnt.thetaGQH[2];
+        Theta4 = el_cnt.thetaGQH[3];
+        Theta5 = el_cnt.thetaGQH[4];
 
-		theta  = Theta1 + Theta2 * ( Theta4 * pow(gamma_bar,Theta5) ) / ( pow(Theta3,Theta5) + Theta4 * pow(gamma_bar,Theta5) );
-		Fbb    = 2.0 * gamma_bar / ( 1.0 + gamma_bar + sqrt( pow((1.0 + gamma_bar),2.0) - 4.0 * theta * gamma_bar ) );
-	} else {
-		if ( theMaterialModel == VONMISES_MKZ ) {
-			beta = el_cnt.beta_MKZ;
-			s    = el_cnt.s_MKZ;
-			Fbb  = gamma_bar / ( 1.0 + beta * pow(gamma_bar,s) );
-		}
-	}
+        theta  = Theta1 + Theta2 * ( Theta4 * pow(gamma_bar,Theta5) ) / ( pow(Theta3,Theta5) + Theta4 * pow(gamma_bar,Theta5) );
+        Fbb    = 2.0 * gamma_bar / ( 1.0 + gamma_bar + sqrt( pow((1.0 + gamma_bar),2.0) - 4.0 * theta * gamma_bar ) );
+    } else {
+        if ( theMaterialModel == VONMISES_MKZ ) {
+            beta = el_cnt.beta_MKZ;
+            s    = el_cnt.s_MKZ;
+            Fbb  = gamma_bar / ( 1.0 + beta * pow(gamma_bar,s) );
+        }
+    }
 
-	return (Fbb - tao_bar);
+    return (Fbb - tao_bar);
 }
 
 
@@ -2488,470 +2683,470 @@ double evalBackboneFn(nlconstants_t el_cnt, double gamma_bar, double tao_bar) {
 /*  Plastic modulus */
 double getHardening(nlconstants_t el_cnt, double kappa) {
 
-	double H = 0, psi=el_cnt.psi0, m=el_cnt.m, G=el_cnt.mu;
+    double H = 0, psi=el_cnt.psi0, m=el_cnt.m, G=el_cnt.mu;
 
-	if ( kappa == 0.0 ) {
-		return H;
-	}
+    if ( kappa == 0.0 ) {
+        return H;
+    }
 
-	if ( kappa == FLT_MAX ) {
-		H = FLT_MAX;
-		return H;
-	}
-	if ( theMaterialModel == VONMISES_BAE )
-		H = ( psi * G ) * pow( kappa, m );
-	else {
-		if ( theMaterialModel == VONMISES_BAH )
-			H = 3.0 * G * pow(kappa,2.0) / ( 1.0 + 2.0 * kappa );
-		else {
-			if ( theMaterialModel == VONMISES_RO ) {
-				double  eta = el_cnt.eta_RO, phi = el_cnt.phi_RO, alpha = el_cnt.alpha_RO;
-				H = 3.0 * G / ( alpha * eta  ) * pow( phi * (1.0 + kappa), (eta - 1.0) ) ;
-			} else {
-				if ( theMaterialModel == VONMISES_GQH && el_cnt.thetaGQH[3]>=0.99 && el_cnt.thetaGQH[4]>=0.99)
-					H = getH_GQHmodel ( el_cnt,  kappa);
-				else
-					H = getHard_Pegassus ( el_cnt,  kappa );
-			}
-		}
-	}
+    if ( kappa == FLT_MAX ) {
+        H = FLT_MAX;
+        return H;
+    }
+    if ( theMaterialModel == VONMISES_BAE )
+        H = ( psi * G ) * pow( kappa, m );
+    else {
+        if ( theMaterialModel == VONMISES_BAH )
+            H = 3.0 * G * pow(kappa,2.0) / ( 1.0 + 2.0 * kappa );
+        else {
+            if ( theMaterialModel == VONMISES_RO ) {
+                double  eta = el_cnt.eta_RO, phi = el_cnt.phi_RO, alpha = el_cnt.alpha_RO;
+                H = 3.0 * G / ( alpha * eta  ) * pow( phi * (1.0 + kappa), (eta - 1.0) ) ;
+            } else {
+                if ( theMaterialModel == VONMISES_GQH && el_cnt.thetaGQH[3]>=0.99 && el_cnt.thetaGQH[4]>=0.99)
+                    H = getH_GQHmodel ( el_cnt,  kappa);
+                else
+                    H = getHard_Pegassus ( el_cnt,  kappa );
+            }
+        }
+    }
 
-	return H;
+    return H;
 }
 
 
 double get_kappa( nlconstants_t el_cnt, tensor_t Sdev, tensor_t Sref, double kn ) {
 
-	double R, kappa, A, B, C;
-	tensor_t SmSo;
+    double R, kappa, A, B, C;
+    tensor_t SmSo;
 
-	double Su=el_cnt.c;
+    double Su=el_cnt.c;
 
-	//kappa = kn;
-	R = sqrt(8.0/3.0) * Su;
+    //kappa = kn;
+    R = sqrt(8.0/3.0) * Su;
 
-	SmSo = subtrac_tensors(Sdev,Sref);
-	// S1   = add_tensors(Sdev, scaled_tensor(SmSo,kappa));
+    SmSo = subtrac_tensors(Sdev,Sref);
+    // S1   = add_tensors(Sdev, scaled_tensor(SmSo,kappa));
 
-/*	Fk   = sqrt(ddot_tensors(S1,S1)) - R;
+/*  Fk   = sqrt(ddot_tensors(S1,S1)) - R;
 
-	while ( fabs(Fk) > theErrorTol ) {
-		Jk     = ddot_tensors(SmSo,S1)/(sqrt(ddot_tensors(S1,S1)));
-		Dk     = -Fk / Jk;
-		kappa  = kappa + Dk;
-		S1     = add_tensors(Sdev, scaled_tensor(SmSo,kappa));
-		Fk     = sqrt(ddot_tensors(S1,S1)) - R;
-		cnt = cnt + 1;
-		if (cnt == cnt_max)
-			break;
-	}*/
+    while ( fabs(Fk) > theErrorTol ) {
+        Jk     = ddot_tensors(SmSo,S1)/(sqrt(ddot_tensors(S1,S1)));
+        Dk     = -Fk / Jk;
+        kappa  = kappa + Dk;
+        S1     = add_tensors(Sdev, scaled_tensor(SmSo,kappa));
+        Fk     = sqrt(ddot_tensors(S1,S1)) - R;
+        cnt = cnt + 1;
+        if (cnt == cnt_max)
+            break;
+    }*/
 
-	/* =-=-=-= Get kappa from quadrtaic eqn =-=-=-=-=   */
-	A = ddot_tensors(SmSo,SmSo);
-	B = 2.0 * ddot_tensors(Sdev,SmSo);
-	C = ddot_tensors(Sdev,Sdev);
+    /* =-=-=-= Get kappa from quadrtaic eqn =-=-=-=-=   */
+    A = ddot_tensors(SmSo,SmSo);
+    B = 2.0 * ddot_tensors(Sdev,SmSo);
+    C = ddot_tensors(Sdev,Sdev);
 
-	kappa = ( sqrt( B * B - 4.0 * A * ( C - R * R ) ) - B ) * 0.50 / A ;
+    kappa = ( sqrt( B * B - 4.0 * A * ( C - R * R ) ) - B ) * 0.50 / A ;
 
-/*	if ( ( B*B - 4.0*A*(C-R*R) ) > 0 ) {
+/*  if ( ( B*B - 4.0*A*(C-R*R) ) > 0 ) {
 
-		kappa = ( sqrt(B*B - 4.0*A*( C - R * R ) ) - B ) * 0.50 / A ;
+        kappa = ( sqrt(B*B - 4.0*A*( C - R * R ) ) - B ) * 0.50 / A ;
 
-		// Sanity check. Should not get here !!!
-		if ( kappa < 0.0 ) {
-			toto=89;
-			fprintf(stderr,"Material update error: "
-					"found negative kappa:%f \n",kappa);
-			MPI_Abort(MPI_COMM_WORLD, ERROR);
-			exit(1);
-		}
+        // Sanity check. Should not get here !!!
+        if ( kappa < 0.0 ) {
+            toto=89;
+            fprintf(stderr,"Material update error: "
+                    "found negative kappa:%f \n",kappa);
+            MPI_Abort(MPI_COMM_WORLD, ERROR);
+            exit(1);
+        }
 
-	} else {
-		fprintf(stdout," =*=*=*=* CHECK FOR UNSTABLE BEHAVIOR =*=*=*=* \n"
-				"Cannot compute kappa. \n" );
-		MPI_Abort(MPI_COMM_WORLD, ERROR);
-		exit(1);
-	}*/
+    } else {
+        fprintf(stdout," =*=*=*=* CHECK FOR UNSTABLE BEHAVIOR =*=*=*=* \n"
+                "Cannot compute kappa. \n" );
+        MPI_Abort(MPI_COMM_WORLD, ERROR);
+        exit(1);
+    }*/
 
-	/* =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-   */
+    /* =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-   */
 
-	if ( kappa < 0.0 || ( B * B - 4.0 * A * ( C - R * R ) ) < 0.0 )
-		kappa = kn;
+    if ( kappa < 0.0 || ( B * B - 4.0 * A * ( C - R * R ) ) < 0.0 )
+        kappa = kn;
 
-	return kappa;
+    return kappa;
 
 }
 
 
 double Pegasus(double beta, nlconstants_t el_cnt) {
-	// (1973) King, R. An Improved Pegasus method for root finding
+    // (1973) King, R. An Improved Pegasus method for root finding
 
-	double k0 = 1000.0, k1 = 2000.0, k2,  f0, f1, f2,  G=el_cnt.mu, tmp;
-	int cnt1=1, cnt2=1, cntMax = 1000;
+    double k0 = 1000.0, k1 = 2000.0, k2,  f0, f1, f2,  G=el_cnt.mu, tmp;
+    int cnt1=1, cnt2=1, cntMax = 1000;
 
-	f0 = ( 1.0 + k0 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k0);
-	f1 = ( 1.0 + k1 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k1);
+    f0 = ( 1.0 + k0 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k0);
+    f1 = ( 1.0 + k1 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k1);
 
-	// get initial range for k
-	while ( f0 * f1 > 0 && cnt1 < cntMax ) {
-		k0 = k1;
-		k1 = 2.0 * k1;
+    // get initial range for k
+    while ( f0 * f1 > 0 && cnt1 < cntMax ) {
+        k0 = k1;
+        k1 = 2.0 * k1;
 
-		f0 = ( 1.0 + k0 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k0);
-		f1 = ( 1.0 + k1 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k1);
-		cnt1++;
-	}
+        f0 = ( 1.0 + k0 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k0);
+        f1 = ( 1.0 + k1 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k1);
+        cnt1++;
+    }
 
-	// *=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=
+    // *=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=
 
-	if (cnt1 == cntMax) {
+    if (cnt1 == cntMax) {
 
-		k0 = 1.0E-10, k1 = 0.0050, cnt1=0;
+        k0 = 1.0E-10, k1 = 0.0050, cnt1=0;
 
-		f0 = ( 1.0 + k0 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k0);
-		f1 = ( 1.0 + k1 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k1);
+        f0 = ( 1.0 + k0 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k0);
+        f1 = ( 1.0 + k1 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k1);
 
-		// get initial range for k
-		while ( f0 * f1 > 0 && cnt1 < cntMax ) {
-			k0 = k1;
-			k1 = 2.0 * k1;
+        // get initial range for k
+        while ( f0 * f1 > 0 && cnt1 < cntMax ) {
+            k0 = k1;
+            k1 = 2.0 * k1;
 
-			f0 = ( 1.0 + k0 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k0);
-			f1 = ( 1.0 + k1 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k1);
-			cnt1++;
-		}
+            f0 = ( 1.0 + k0 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k0);
+            f1 = ( 1.0 + k1 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k1);
+            cnt1++;
+        }
 
-		if (cnt1 == cntMax) {
-			fprintf(stdout,"Cannot obtain initial range for kappa at unloading: k0=%f, k1=%f, beta=%f, psi=%f, m=%f. \n", k0, k1, beta, el_cnt.psi0, el_cnt.m );
-			//MPI_Abort(MPI_COMM_WORLD, ERROR7);
-			//exit(1);
-		}
+        if (cnt1 == cntMax) {
+            fprintf(stdout,"Cannot obtain initial range for kappa at unloading: k0=%f, k1=%f, beta=%f, psi=%f, m=%f. \n", k0, k1, beta, el_cnt.psi0, el_cnt.m );
+            //MPI_Abort(MPI_COMM_WORLD, ERROR7);
+            //exit(1);
+        }
 
-	}
-
-
-
-	//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=
+    }
 
 
-	cnt1=1;
 
-	k2 = k1 - f1 * ( k1 - k0 ) / ( f1 - f0 );
-	f2 = ( 1.0 + k2 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k2);
+    //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=
 
-	while ( fabs(f2) > theErrorTol && cnt1 < cntMax ) {
 
-		if ( f1 * f2 < 0 ) {
-			tmp = k0;
-			k0  = k1;
-			k1  = tmp;
-			tmp = f0;
-			f0  = f1;
-			f1  = tmp;
-		}
+    cnt1=1;
 
-		while( f1 * f2 > 0 && cnt2 < cntMax) {
-			f0 = f0 * f1 / ( f1 + f2 );
+    k2 = k1 - f1 * ( k1 - k0 ) / ( f1 - f0 );
+    f2 = ( 1.0 + k2 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k2);
 
-			k1 = k2;
-			f1 = f2;
+    while ( fabs(f2) > theErrorTol && cnt1 < cntMax ) {
 
-			k2 = k1 - f1 * ( k1 - k0 ) / ( f1 - f0 );
-			f2 = ( 1.0 + k2 - beta ) - 3.0 * beta * G / getHardening(el_cnt, k2);
+        if ( f1 * f2 < 0 ) {
+            tmp = k0;
+            k0  = k1;
+            k1  = tmp;
+            tmp = f0;
+            f0  = f1;
+            f1  = tmp;
+        }
 
-			cnt2++;
-		}
+        while( f1 * f2 > 0 && cnt2 < cntMax) {
+            f0 = f0 * f1 / ( f1 + f2 );
 
-		k0 = k1;
-		f0 = f1;
+            k1 = k2;
+            f1 = f2;
 
-		k1 = k2;
-		f1 = f2;
+            k2 = k1 - f1 * ( k1 - k0 ) / ( f1 - f0 );
+            f2 = ( 1.0 + k2 - beta ) - 3.0 * beta * G / getHardening(el_cnt, k2);
 
-		if ( k0 == k1 ) {
-			k2 = k1;
-			break;
-		}
+            cnt2++;
+        }
 
-		k2 = k1 - f1 * ( k1 - k0 ) / ( f1 - f0 );
-		f2 = ( 1.0 + k2 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k2);
+        k0 = k1;
+        f0 = f1;
 
-		cnt1++;
+        k1 = k2;
+        f1 = f2;
 
-	}
+        if ( k0 == k1 ) {
+            k2 = k1;
+            break;
+        }
 
-	if ( cnt1 == cntMax || cnt2 == cntMax )
-		fprintf(stdout,"Increase the number of steps for root finding in Pegasus method. k=%f, beta=%f, Error=%f, ErroTol=%f \n", k2, beta, fabs(f2), theErrorTol );
+        k2 = k1 - f1 * ( k1 - k0 ) / ( f1 - f0 );
+        f2 = ( 1.0 + k2 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k2);
 
-	return k2;
+        cnt1++;
+
+    }
+
+    if ( cnt1 == cntMax || cnt2 == cntMax )
+        fprintf(stdout,"Increase the number of steps for root finding in Pegasus method. k=%f, beta=%f, Error=%f, ErroTol=%f \n", k2, beta, fabs(f2), theErrorTol );
+
+    return k2;
 
 }
 
 
 void ImplicitExponential (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De,
-		          tensor_t Sigma_ref, tensor_t *sigma_up, double kappa_n,
-		          double *kappa_up, double *ErrB) {
+                  tensor_t Sigma_ref, tensor_t *sigma_up, double kappa_n,
+                  double *kappa_up, double *ErrB) {
 
-	tensor_t Sdev_n, S1, Sigma, Sigma_star;
-	double   H_n, K, Det, Su=el_cnt.c, Lambda=el_cnt.lambda, G=el_cnt.mu, R, m=el_cnt.m;
-	double   J11, J12, J21, J22, psi_k, kappa_k, F1, F2, psi_n=0;
-	int      cnt=0, cnt_max=500;
+    tensor_t Sdev_n, S1, Sigma, Sigma_star;
+    double   H_n, K, Det, Su=el_cnt.c, Lambda=el_cnt.lambda, G=el_cnt.mu, R, m=el_cnt.m;
+    double   J11, J12, J21, J22, psi_k, kappa_k, F1, F2, psi_n=0;
+    int      cnt=0, cnt_max=500;
 
-	double   De_vol   = tensor_I1 ( De );
-	tensor_t De_dev   = tensor_deviator( De, tensor_octahedral ( De_vol ) );
+    double   De_vol   = tensor_I1 ( De );
+    tensor_t De_dev   = tensor_deviator( De, tensor_octahedral ( De_vol ) );
 
-	R = sqrt(8.0/3.0) * Su;
-	K = Lambda + 2.0 * G / 3.0;
+    R = sqrt(8.0/3.0) * Su;
+    K = Lambda + 2.0 * G / 3.0;
 
-	H_n    =  getHardening( el_cnt, kappa_n );
-	psi_n  =  2.0 * G / ( 1.0 + 3.0 * G / H_n );
+    H_n    =  getHardening( el_cnt, kappa_n );
+    psi_n  =  2.0 * G / ( 1.0 + 3.0 * G / H_n );
 
-	/* get sigma_n deviatoric */
-	Sdev_n = tensor_deviator( sigma_n, tensor_octahedral ( tensor_I1 ( sigma_n ) ) );
-	//SmSo   = subtrac_tensors(Sdev_n, *Sigma_ref);
-	Sigma      = add_tensors( Sdev_n, scaled_tensor(De_dev,psi_n));
-	Sigma_star = subtrac_tensors(Sigma,Sigma_ref);
+    /* get sigma_n deviatoric */
+    Sdev_n = tensor_deviator( sigma_n, tensor_octahedral ( tensor_I1 ( sigma_n ) ) );
+    //SmSo   = subtrac_tensors(Sdev_n, *Sigma_ref);
+    Sigma      = add_tensors( Sdev_n, scaled_tensor(De_dev,psi_n));
+    Sigma_star = subtrac_tensors(Sigma,Sigma_ref);
 
-	S1     = add_tensors(Sigma, scaled_tensor(Sigma_star,kappa_n));
+    S1     = add_tensors(Sigma, scaled_tensor(Sigma_star,kappa_n));
 
-	F1   = psi_n * ( 1.0 + 3.0 * G / H_n ) - 2.0 * G;
-	F2   = ddot_tensors(S1,S1) - R * R;
+    F1   = psi_n * ( 1.0 + 3.0 * G / H_n ) - 2.0 * G;
+    F2   = ddot_tensors(S1,S1) - R * R;
 
-	double error = 10000;
+    double error = 10000;
 
-	while ( error > theErrorTol ) {
+    while ( error > theErrorTol ) {
 
-		//Sigma      = add_tensors( Sdev_n, scaled_tensor(De_dev,psi_n));
-		//Sigma_star = subtrac_tensors(Sigma,*Sigma_ref);
+        //Sigma      = add_tensors( Sdev_n, scaled_tensor(De_dev,psi_n));
+        //Sigma_star = subtrac_tensors(Sigma,*Sigma_ref);
 
-		J11 = 1.0 + 3.0*G/H_n;
-		J12 = -3.0 * G * psi_n / ( H_n * H_n ) * ( ( el_cnt.psi0 * G * m ) * pow( kappa_n, m - 1.0 ) ) ;
-		J21 = 2.0 * ( 1.0 + kappa_n ) * ( ddot_tensors(add_tensors( Sigma, scaled_tensor(Sigma_star,kappa_n)), De_dev) );
-		J22 = 2.0 * ( ddot_tensors(add_tensors( Sigma, scaled_tensor(Sigma_star,kappa_n)), Sigma_star) );
+        J11 = 1.0 + 3.0*G/H_n;
+        J12 = -3.0 * G * psi_n / ( H_n * H_n ) * ( ( el_cnt.psi0 * G * m ) * pow( kappa_n, m - 1.0 ) ) ;
+        J21 = 2.0 * ( 1.0 + kappa_n ) * ( ddot_tensors(add_tensors( Sigma, scaled_tensor(Sigma_star,kappa_n)), De_dev) );
+        J22 = 2.0 * ( ddot_tensors(add_tensors( Sigma, scaled_tensor(Sigma_star,kappa_n)), Sigma_star) );
 
-		Det = J11 * J22 - J12 * J21;
+        Det = J11 * J22 - J12 * J21;
 
-		psi_k   =  (  J22 * F1 - J12 * F2 ) / Det;
-		kappa_k =  ( -J21 * F1 + J11 * F2 ) / Det;
+        psi_k   =  (  J22 * F1 - J12 * F2 ) / Det;
+        kappa_k =  ( -J21 * F1 + J11 * F2 ) / Det;
 
-		psi_n   = psi_n - psi_k;
-		kappa_n = kappa_n - kappa_k;
+        psi_n   = psi_n - psi_k;
+        kappa_n = kappa_n - kappa_k;
 
-		Sigma      = add_tensors( Sdev_n, scaled_tensor(De_dev,psi_n));
-		Sigma_star = subtrac_tensors(Sigma,Sigma_ref);
+        Sigma      = add_tensors( Sdev_n, scaled_tensor(De_dev,psi_n));
+        Sigma_star = subtrac_tensors(Sigma,Sigma_ref);
 
-		H_n    = getHardening( el_cnt, kappa_n );
-		S1     = add_tensors(Sigma, scaled_tensor(Sigma_star,kappa_n));
+        H_n    = getHardening( el_cnt, kappa_n );
+        S1     = add_tensors(Sigma, scaled_tensor(Sigma_star,kappa_n));
 
-		//H_n    = getHardening( el_cnt, kappa_n );
-		//S1     = add_tensors(Sdev_n, scaled_tensor(SmSo,kappa_n));
+        //H_n    = getHardening( el_cnt, kappa_n );
+        //S1     = add_tensors(Sdev_n, scaled_tensor(SmSo,kappa_n));
 
-		F1   = psi_n * ( 1.0 + 3.0 * G / H_n ) - 2.0 * G;
-		F2   = ddot_tensors(S1,S1) - R * R;
+        F1   = psi_n * ( 1.0 + 3.0 * G / H_n ) - 2.0 * G;
+        F2   = ddot_tensors(S1,S1) - R * R;
 
-		//error =  pow( F1/G, 2 ) + pow( (sqrt(ddot_tensors(S1,S1)) - R)/R, 2 )  ;
-		//error =  pow( F1, 2 ) + pow( (sqrt(ddot_tensors(S1,S1)) - R), 2 )  ;
-		error =   MAX( fabs(F1),  fabs( sqrt( ddot_tensors(S1,S1) ) - R ) );
+        //error =  pow( F1/G, 2 ) + pow( (sqrt(ddot_tensors(S1,S1)) - R)/R, 2 )  ;
+        //error =  pow( F1, 2 ) + pow( (sqrt(ddot_tensors(S1,S1)) - R), 2 )  ;
+        error =   MAX( fabs(F1),  fabs( sqrt( ddot_tensors(S1,S1) ) - R ) );
 
-		cnt += 1;
-		if (cnt == cnt_max) {
-			fprintf(stdout," Cannot find roots for implicit exponential \n");
-	        //MPI_Abort(MPI_COMM_WORLD, ERROR);
-	        //exit(1);
-			//break;
-		}
-	}
+        cnt += 1;
+        if (cnt == cnt_max) {
+            fprintf(stdout," Cannot find roots for implicit exponential \n");
+            //MPI_Abort(MPI_COMM_WORLD, ERROR);
+            //exit(1);
+            //break;
+        }
+    }
 
-	*sigma_up = add_tensors (  add_tensors( sigma_n, isotropic_tensor(K*De_vol) ), scaled_tensor(De_dev,psi_n) );
-	*kappa_up = kappa_n;
-	*ErrB     = error;
+    *sigma_up = add_tensors (  add_tensors( sigma_n, isotropic_tensor(K*De_vol) ), scaled_tensor(De_dev,psi_n) );
+    *kappa_up = kappa_n;
+    *ErrB     = error;
 
 }
 
 
 double get_kappa_Pegasus( nlconstants_t el_cnt, tensor_t  Sdev_n, tensor_t sigma_ref, tensor_t De_dev, double k0, double k1 ) {
-	// (1973) King, R. An Improved Pegasus method for root finding
+    // (1973) King, R. An Improved Pegasus method for root finding
 
-	//double k0 = 1.0E-10, k1 = 0.0050;
-	double  k2,  f0, f1, f2, tmp;
-	int     cnt1=1, cnt2=1, cntMax = 1000;
+    //double k0 = 1.0E-10, k1 = 0.0050;
+    double  k2,  f0, f1, f2, tmp;
+    int     cnt1=1, cnt2=1, cntMax = 1000;
 
-	//f0 = ( 1.0 + k0 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k0);
-	//f1 = ( 1.0 + k1 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k1);
+    //f0 = ( 1.0 + k0 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k0);
+    //f1 = ( 1.0 + k1 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k1);
 
-	f0 = get_BS_value ( el_cnt,  Sdev_n, De_dev, sigma_ref, k0 );
-	f1 = get_BS_value ( el_cnt,  Sdev_n, De_dev, sigma_ref, k1 );
+    f0 = get_BS_value ( el_cnt,  Sdev_n, De_dev, sigma_ref, k0 );
+    f1 = get_BS_value ( el_cnt,  Sdev_n, De_dev, sigma_ref, k1 );
 
-	// get initial range for k
-	while ( f0 * f1 > 0 && cnt1 < cntMax ) {
-		k0 = k1;
-		k1 = 2.0 * k1;
+    // get initial range for k
+    while ( f0 * f1 > 0 && cnt1 < cntMax ) {
+        k0 = k1;
+        k1 = 2.0 * k1;
 
-		f0 = get_BS_value ( el_cnt,  Sdev_n, De_dev, sigma_ref, k0 );
-		f1 = get_BS_value ( el_cnt,  Sdev_n, De_dev, sigma_ref, k1 );
-		cnt1++;
-	}
+        f0 = get_BS_value ( el_cnt,  Sdev_n, De_dev, sigma_ref, k0 );
+        f1 = get_BS_value ( el_cnt,  Sdev_n, De_dev, sigma_ref, k1 );
+        cnt1++;
+    }
 
-	if (cnt1 == cntMax) {
+    if (cnt1 == cntMax) {
 
-		k0 = 1.0E-10, k1 = 0.0050, cnt1=0;
+        k0 = 1.0E-10, k1 = 0.0050, cnt1=0;
 
-		f0 = get_BS_value ( el_cnt,  Sdev_n, De_dev, sigma_ref, k0 );
-		f1 = get_BS_value ( el_cnt,  Sdev_n, De_dev, sigma_ref, k1 );
+        f0 = get_BS_value ( el_cnt,  Sdev_n, De_dev, sigma_ref, k0 );
+        f1 = get_BS_value ( el_cnt,  Sdev_n, De_dev, sigma_ref, k1 );
 
-		// get initial range for k
-		while ( f0 * f1 > 0 && cnt1 < cntMax ) {
-			k0 = k1;
-			k1 = 2.0 * k1;
+        // get initial range for k
+        while ( f0 * f1 > 0 && cnt1 < cntMax ) {
+            k0 = k1;
+            k1 = 2.0 * k1;
 
-			f0 = get_BS_value ( el_cnt,  Sdev_n, De_dev, sigma_ref, k0 );
-			f1 = get_BS_value ( el_cnt,  Sdev_n, De_dev, sigma_ref, k1 );
-			cnt1++;
-		}
+            f0 = get_BS_value ( el_cnt,  Sdev_n, De_dev, sigma_ref, k0 );
+            f1 = get_BS_value ( el_cnt,  Sdev_n, De_dev, sigma_ref, k1 );
+            cnt1++;
+        }
 
-		if (cnt1 == cntMax) {
-			//tensor_t Sdev_n   = tensor_deviator( sigma_n, tensor_octahedral ( tensor_I1 ( sigma_n ) ) );
-			double   sq_eij   = sqrt(ddot_tensors(De_dev,De_dev));
-			double   sqJ2_n   = sqrt(ddot_tensors(Sdev_n,Sdev_n));
-			fprintf(stdout,"\n Cannot obtain initial range for kappa. sqrt(De_ijDe_ij)=%f, sqrt(SijSij)=%f, psi=%f, m=%f. \n", sq_eij, sqJ2_n, el_cnt.psi0, el_cnt.m );
+        if (cnt1 == cntMax) {
+            //tensor_t Sdev_n   = tensor_deviator( sigma_n, tensor_octahedral ( tensor_I1 ( sigma_n ) ) );
+            double   sq_eij   = sqrt(ddot_tensors(De_dev,De_dev));
+            double   sqJ2_n   = sqrt(ddot_tensors(Sdev_n,Sdev_n));
+            fprintf(stdout,"\n Cannot obtain initial range for kappa. sqrt(De_ijDe_ij)=%f, sqrt(SijSij)=%f, psi=%f, m=%f. \n", sq_eij, sqJ2_n, el_cnt.psi0, el_cnt.m );
 
-			return 0.0;
-			//MPI_Abort(MPI_COMM_WORLD, ERROR7);
-			//exit(1);
-		}
+            return 0.0;
+            //MPI_Abort(MPI_COMM_WORLD, ERROR7);
+            //exit(1);
+        }
 
-	}
+    }
 
-	cnt1=1;
+    cnt1=1;
 
-	k2 = k1 - f1 * ( k1 - k0 ) / ( f1 - f0 );
-	//f2 = ( 1.0 + k2 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k2);
-	f2 = get_BS_value ( el_cnt,  Sdev_n, De_dev, sigma_ref, k2 );
+    k2 = k1 - f1 * ( k1 - k0 ) / ( f1 - f0 );
+    //f2 = ( 1.0 + k2 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k2);
+    f2 = get_BS_value ( el_cnt,  Sdev_n, De_dev, sigma_ref, k2 );
 
-	while ( fabs(f2) > theErrorTol && cnt1 < cntMax ) {
+    while ( fabs(f2) > theErrorTol && cnt1 < cntMax ) {
 
-		if ( f1 * f2 < 0 ) {
-			tmp = k0;
-			k0  = k1;
-			k1  = tmp;
-			tmp = f0;
-			f0  = f1;
-			f1  = tmp;
-		}
+        if ( f1 * f2 < 0 ) {
+            tmp = k0;
+            k0  = k1;
+            k1  = tmp;
+            tmp = f0;
+            f0  = f1;
+            f1  = tmp;
+        }
 
-		while( f1 * f2 > 0 && cnt2 < cntMax) {
-			f0 = f0 * f1 / ( f1 + f2 );
+        while( f1 * f2 > 0 && cnt2 < cntMax) {
+            f0 = f0 * f1 / ( f1 + f2 );
 
-			k1 = k2;
-			f1 = f2;
+            k1 = k2;
+            f1 = f2;
 
-			k2 = k1 - f1 * ( k1 - k0 ) / ( f1 - f0 );
-			//f2 = ( 1.0 + k2 - beta ) - 3.0 * beta * G / getHardening(el_cnt, k2);
-			f2 = get_BS_value ( el_cnt,  Sdev_n, De_dev, sigma_ref, k2 );
+            k2 = k1 - f1 * ( k1 - k0 ) / ( f1 - f0 );
+            //f2 = ( 1.0 + k2 - beta ) - 3.0 * beta * G / getHardening(el_cnt, k2);
+            f2 = get_BS_value ( el_cnt,  Sdev_n, De_dev, sigma_ref, k2 );
 
-			cnt2++;
-		}
+            cnt2++;
+        }
 
-		k0 = k1;
-		f0 = f1;
+        k0 = k1;
+        f0 = f1;
 
-		k1 = k2;
-		f1 = f2;
+        k1 = k2;
+        f1 = f2;
 
-		if ( k0 == k1 ) {
-			k2 = k1;
-			break;
-		}
+        if ( k0 == k1 ) {
+            k2 = k1;
+            break;
+        }
 
-		k2 = k1 - f1 * ( k1 - k0 ) / ( f1 - f0 );
-		//f2 = ( 1.0 + k2 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k2);
-		f2 = get_BS_value ( el_cnt,  Sdev_n, De_dev, sigma_ref, k2 );
+        k2 = k1 - f1 * ( k1 - k0 ) / ( f1 - f0 );
+        //f2 = ( 1.0 + k2 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k2);
+        f2 = get_BS_value ( el_cnt,  Sdev_n, De_dev, sigma_ref, k2 );
 
-		cnt1++;
+        cnt1++;
 
-	}
+    }
 
-	if ( cnt1 == cntMax || cnt2 == cntMax  )
-		fprintf(stdout,"Increase the number of steps for root finding in Pegasus method. k=%f, Error=%f, ErroTol=%f \n", k2, fabs(f2), theErrorTol );
+    if ( cnt1 == cntMax || cnt2 == cntMax  )
+        fprintf(stdout,"Increase the number of steps for root finding in Pegasus method. k=%f, Error=%f, ErroTol=%f \n", k2, fabs(f2), theErrorTol );
 
-	return k2;
+    return k2;
 
 }
 
 
 double get_kappaUnLoading_II( nlconstants_t el_cnt, tensor_t Sn, tensor_t De, double *Err, double *Psi ) {
 
-	double R, A, B, C, kappa1, kappa2, beta, phi=0, G=el_cnt.mu, Su=el_cnt.c, kn=0;
+    double R, A, B, C, kappa1, kappa2, beta, phi=0, G=el_cnt.mu, Su=el_cnt.c, kn=0;
 
-	R     = sqrt(8.0/3.0) * Su;
+    R     = sqrt(8.0/3.0) * Su;
 
-	A = ddot_tensors(Sn,Sn);
-	B = 2.0 * ddot_tensors(Sn,De);
-	C = ddot_tensors(De,De);
+    A = ddot_tensors(Sn,Sn);
+    B = 2.0 * ddot_tensors(Sn,De);
+    C = ddot_tensors(De,De);
 
-	/* ========== Improve kn value =========== */
-
-
-	if ( ( B*B - 4.0*C*(A-R*R) ) > 0 ) {
-
-		kappa1 = (-B + sqrt( B*B - 4.0*C*(A-R*R) ) ) / (2 * C);
-		kappa2 = (-B - sqrt( B*B - 4.0*C*(A-R*R) ) ) / (2 * C);
-
-		phi  = MAX(kappa1,kappa2);
-
-		/* Sanity check. Should not get here !!!  */
-		if ( phi < 0.0 ) {
+    /* ========== Improve kn value =========== */
 
 
-			*Err  = 0.0;
-			*Psi  = phi;
-			return kn;
-			//fprintf(stderr,"Material update error: "
-			//		"negative phi at unloading:%f \n",phi);
-			//MPI_Abort(MPI_COMM_WORLD, ERROR8);
-			//exit(1);
-		}
+    if ( ( B*B - 4.0*C*(A-R*R) ) > 0 ) {
 
-		beta  = phi * 0.50 / G;
+        kappa1 = (-B + sqrt( B*B - 4.0*C*(A-R*R) ) ) / (2 * C);
+        kappa2 = (-B - sqrt( B*B - 4.0*C*(A-R*R) ) ) / (2 * C);
 
-		if ( beta < 1E-05 ) {
-			kn=0.0;
-			*Err  = 0.0;
-			*Psi  = phi;
-		} else {
+        phi  = MAX(kappa1,kappa2);
 
-			kn    = Pegasus( beta,  el_cnt);  // this is a check
-			*Err  = ( 1.0 + kn - beta ) - 3.0 * beta * G / getHardening(el_cnt, kn);
-			*Psi  = phi / ( 1.0 + kn );
+        /* Sanity check. Should not get here !!!  */
+        if ( phi < 0.0 ) {
 
-			//if ( fabs(*Err) > theErrorTol  ) {
-			//	fprintf(stdout," Warning --- UnloadingError/ErrorTolerance= %f/%f \n", fabs(*Err), theErrorTol );
-			//}
 
-			if ( kn < 0  ) {
-				kn=0.0;
-				*Err  = 0.0;
-		        *Psi  = phi;
-				//fprintf(stdout," =*=*=*=* CHECK FOR UNSTABLE BEHAVIOR =*=*=*=* \n"
-				//		"Found negative kappa at unloading.  k=%f  \n", kn );
-				//MPI_Abort(MPI_COMM_WORLD, ERROR9);
-				//exit(1);
-			}
-		}
+            *Err  = 0.0;
+            *Psi  = phi;
+            return kn;
+            //fprintf(stderr,"Material update error: "
+            //      "negative phi at unloading:%f \n",phi);
+            //MPI_Abort(MPI_COMM_WORLD, ERROR8);
+            //exit(1);
+        }
 
-	} else {
+        beta  = phi * 0.50 / G;
+
+        if ( beta < 1E-05 ) {
+            kn=0.0;
+            *Err  = 0.0;
+            *Psi  = phi;
+        } else {
+
+            kn    = Pegasus( beta,  el_cnt);  // this is a check
+            *Err  = ( 1.0 + kn - beta ) - 3.0 * beta * G / getHardening(el_cnt, kn);
+            *Psi  = phi / ( 1.0 + kn );
+
+            //if ( fabs(*Err) > theErrorTol  ) {
+            //  fprintf(stdout," Warning --- UnloadingError/ErrorTolerance= %f/%f \n", fabs(*Err), theErrorTol );
+            //}
+
+            if ( kn < 0  ) {
+                kn=0.0;
+                *Err  = 0.0;
+                *Psi  = phi;
+                //fprintf(stdout," =*=*=*=* CHECK FOR UNSTABLE BEHAVIOR =*=*=*=* \n"
+                //      "Found negative kappa at unloading.  k=%f  \n", kn );
+                //MPI_Abort(MPI_COMM_WORLD, ERROR9);
+                //exit(1);
+            }
+        }
+
+    } else {
 
         kn=0.0;
         *Err  = 0.0;
         *Psi  = phi;
 
-	//	fprintf(stdout," =*=*=*=* CHECK FOR UNSTABLE BEHAVIOR =*=*=*=* \n"
-	//			"Cannot compute kappa at unloading. \n" );
-		//MPI_Abort(MPI_COMM_WORLD, ERROR);
-		//exit(1);
-	}
+    //  fprintf(stdout," =*=*=*=* CHECK FOR UNSTABLE BEHAVIOR =*=*=*=* \n"
+    //          "Cannot compute kappa at unloading. \n" );
+        //MPI_Abort(MPI_COMM_WORLD, ERROR);
+        //exit(1);
+    }
 
-	return kn;
+    return kn;
 }
 
 
@@ -2962,24 +3157,24 @@ double get_kappaUnLoading_II( nlconstants_t el_cnt, tensor_t Sn, tensor_t De, do
 
 /*   Material update function for Frederick-Armstrong, and Frederick-Armstrong-Modified models    */
 void MatUpd_vMFA (double J2_pr, tensor_t dev_pr, double psi, double Su, tensor_t eta_n, tensor_t e_n1, double mu, double Lambda, double Sy,
-		tensor_t *epl, tensor_t ep, double *ep_bar, double ep_barn, tensor_t *eta, tensor_t *sigma, tensor_t stresses,
-		double *fs,  double *psi_n, double *loadunl_n, double *Tao_n, double *Tao_max ) {
+        tensor_t *epl, tensor_t ep, double *ep_bar, double ep_barn, tensor_t *eta, tensor_t *sigma, tensor_t stresses,
+        double *fs,  double *psi_n, double *loadunl_n, double *Tao_n, double *Tao_max ) {
 
-	double C1, C2, C3, C4, C5, S_ss, S_aa, S_sa, dl, H_kin, H_nlin, G1;
-	int i;
+    double C1, C2, C3, C4, C5, S_ss, S_aa, S_sa, dl, H_kin, H_nlin, G1;
+    int i;
 
-	// update psi value
-	if ( ( theMaterialModel == VONMISES_FAM ) && *psi_n == 0.0 )
-		*psi_n = psi ;
+    // update psi value
+    if ( ( theMaterialModel == VONMISES_FAM ) && *psi_n == 0.0 )
+        *psi_n = psi ;
 
     S_ss    = 2.0 * J2_pr;
     S_aa    = 2.0 * tensor_J2 ( eta_n ); /* eta_n is already deviatoric */
     S_sa    = 2.0 * combtensor_J2(eta_n, dev_pr);
 
     if ( theMaterialModel == VONMISES_FAM ) {
-    	H_kin  = (*psi_n) * mu;
+        H_kin  = (*psi_n) * mu;
     } else {
-    	H_kin  = psi * mu;
+        H_kin  = psi * mu;
     }
 
      H_nlin = H_kin/( sqrt(8.0/3.0) * Su - Sy );  /*Sy was already scaled by srt(2) before calling MatUpd_vMKH() */
@@ -3005,8 +3200,8 @@ void MatUpd_vMFA (double J2_pr, tensor_t dev_pr, double psi, double Su, tensor_t
     dl  = FLT_MAX;
 
     for (i = 0; i < 4; i++) {
-    	if ( ( z[2*i] >= 0.0 ) && ( fabs(z[2*i+1]) <= 1E-10 ) && ( z[2*i] < dl ) )
-    		dl = z[2*i];
+        if ( ( z[2*i] >= 0.0 ) && ( fabs(z[2*i+1]) <= 1E-10 ) && ( z[2*i] < dl ) )
+            dl = z[2*i];
     }
 
     /* Sanity check. Should not get here !!!  */
@@ -3036,29 +3231,29 @@ void MatUpd_vMFA (double J2_pr, tensor_t dev_pr, double psi, double Su, tensor_t
     *fs           = sqrt( 2.0 * tensor_J2( subtrac_tensors( Sdev,*eta ) ) ) - Sy;
 
 
-	/* ================================================================ */
-	/*  check for unloading. Only for vonMises_Modified (VONMISES_FAM)  */
-	if ( theMaterialModel == VONMISES_FAM ) {
+    /* ================================================================ */
+    /*  check for unloading. Only for vonMises_Modified (VONMISES_FAM)  */
+    if ( theMaterialModel == VONMISES_FAM ) {
 
-	    double loadunl = 2.0 * combtensor_J2(n, *eta);
-	    double Tao_v   = sqrt(  tensor_J2( Sdev )  );
+        double loadunl = 2.0 * combtensor_J2(n, *eta);
+        double Tao_v   = sqrt(  tensor_J2( Sdev )  );
 
 
-	    if (  ((*loadunl_n) * loadunl < 0.0) &&  ((*Tao_n) >= (*Tao_max))  ){
+        if (  ((*loadunl_n) * loadunl < 0.0) &&  ((*Tao_n) >= (*Tao_max))  ){
 
             *Tao_max  =  *Tao_n;
 
             // get elastic J2 at t-1
-        	tensor_t stresses_n1    = point_stress ( e_n1, mu, Lambda );    /* elastic stress at t-1   */
+            tensor_t stresses_n1    = point_stress ( e_n1, mu, Lambda );    /* elastic stress at t-1   */
 
-        	/* compute the invariants of the elastic stress at t-1*/
-        	double   I1_n1   = tensor_I1 ( stresses_n1 );
-        	double   oct_n1  = tensor_octahedral ( I1_n1 );
-        	tensor_t dev_n1  = tensor_deviator ( stresses_n1, oct_n1 );
+            /* compute the invariants of the elastic stress at t-1*/
+            double   I1_n1   = tensor_I1 ( stresses_n1 );
+            double   oct_n1  = tensor_octahedral ( I1_n1 );
+            tensor_t dev_n1  = tensor_deviator ( stresses_n1, oct_n1 );
 
-        	double   Tao_e   = sqrt( tensor_J2 ( dev_n1 ) );
+            double   Tao_e   = sqrt( tensor_J2 ( dev_n1 ) );
 
-        	Su           = Su * 2.0/sqrt(3.0);
+            Su           = Su * 2.0/sqrt(3.0);
             *psi_n       = log( ( Su + *Tao_max ) / ( Su - *Tao_max ) ) * Su / ( Tao_e - *Tao_max );
 
             H_kin  = (*psi_n) * mu;
@@ -3085,8 +3280,8 @@ void MatUpd_vMFA (double J2_pr, tensor_t dev_pr, double psi, double Su, tensor_t
             dl  = FLT_MAX;
 
             for (i = 0; i < 4; i++) {
-            	if ( ( z2[2*i] >= 0.0 ) && ( fabs(z2[2*i+1]) <= 1E-10 ) && ( z2[2*i] < dl ) )
-            		dl = z2[2*i];
+                if ( ( z2[2*i] >= 0.0 ) && ( fabs(z2[2*i+1]) <= 1E-10 ) && ( z2[2*i] < dl ) )
+                    dl = z2[2*i];
             }
 
             /* Sanity check. Should not get here !!!  */
@@ -3119,340 +3314,340 @@ void MatUpd_vMFA (double J2_pr, tensor_t dev_pr, double psi, double Su, tensor_t
             Tao_v         = sqrt(  tensor_J2( Sdev )  );
             *Tao_max      = MAX(Tao_v, (*Tao_n) );
 
-	    } else {
+        } else {
 
-	        *Tao_max = MAX(Tao_v, (*Tao_max) );
+            *Tao_max = MAX(Tao_v, (*Tao_max) );
 
-	    }
-
-
-	    *loadunl_n = loadunl; // update load-unload condition
-	    *Tao_n     = Tao_v; // update tao_n
+        }
 
 
-	}
+        *loadunl_n = loadunl; // update load-unload condition
+        *Tao_n     = Tao_v; // update tao_n
+
+
+    }
 
 }
 
 
 void material_update ( nlconstants_t constants, tensor_t e_n, tensor_t e_n1, tensor_t ep, tensor_t eta_n,  double ep_barn, tensor_t sigma0, double dt,
-		tensor_t *epl, tensor_t *eta, tensor_t *sigma, double *ep_bar, double *fs, double *psi_n, double *loadunl_n, double *Tao_n, double *Tao_max, double *kp, tensor_t *sigma_ref,
-		int *flagTolSubSteps, int *flagNoSubSteps, double *ErrBA) {
-	/* INPUTS:
-	 * constants: Material constants
-	 * e_n      : Total strain tensor
-	 * e_n1     : Total strain tensor at t-1
-	 * ep       : Plastic strain tensor at t-1. Used to compute the predictor state
-	 * ep_barn  : equivalent plastic strain at t-1. Used to compute the predictor hardening function
-	 * sigma0   : Approximated self-weight tensor.
-	 * dt       : Time step
-	 * eta_n    : backstress tensor at t-a. Used to compute the predictor state in vonMises kinematics
-	 *
-	 * OUTPUTS:
-	 * fs       : Updated yield function value
-	 * epl      : Updated plastic strain
-	 * sigma    : Updated stress tensor
-	 * eta      : Updated backstress tensor
-	 * ep_bar   : Updated equivalent hardening variable
-	 */
+        tensor_t *epl, tensor_t *eta, tensor_t *sigma, double *ep_bar, double *fs, double *psi_n, double *loadunl_n, double *Tao_n, double *Tao_max, double *kp, tensor_t *sigma_ref,
+        int *flagTolSubSteps, int *flagNoSubSteps, double *ErrBA) {
+    /* INPUTS:
+     * constants: Material constants
+     * e_n      : Total strain tensor
+     * e_n1     : Total strain tensor at t-1
+     * ep       : Plastic strain tensor at t-1. Used to compute the predictor state
+     * ep_barn  : equivalent plastic strain at t-1. Used to compute the predictor hardening function
+     * sigma0   : Approximated self-weight tensor.
+     * dt       : Time step
+     * eta_n    : backstress tensor at t-a. Used to compute the predictor state in vonMises kinematics
+     *
+     * OUTPUTS:
+     * fs       : Updated yield function value
+     * epl      : Updated plastic strain
+     * sigma    : Updated stress tensor
+     * eta      : Updated backstress tensor
+     * ep_bar   : Updated equivalent hardening variable
+     */
 
-	double c, h, kappa, mu, Sy, beta, alpha, gamma, phi, dil, Fs_pr, Lambda, dLambda=0.0,
-		   Tol_sigma = 1e-03, cond1, cond2, psi0, m;
+    double c, h, kappa, mu, Sy, beta, alpha, gamma, phi, dil, Fs_pr, Lambda, dLambda=0.0,
+           Tol_sigma = 1e-03, cond1, cond2, psi0, m;
 
-	h      = constants.h;
-	c      = constants.c;
+    h      = constants.h;
+    c      = constants.c;
 
-	phi    = constants.phi;
-	dil    = constants.dil_angle;
+    phi    = constants.phi;
+    dil    = constants.dil_angle;
 
-	mu     = constants.mu;
-	Lambda = constants.lambda;
-	kappa  = constants.lambda + 2.0 * mu / 3.0;
+    mu     = constants.mu;
+    Lambda = constants.lambda;
+    kappa  = constants.lambda + 2.0 * mu / 3.0;
 
-	beta   = constants.beta;
-	alpha  = constants.alpha;
-	gamma  = constants.gamma;
-	Sy     = constants.Sstrain0*mu;
+    beta   = constants.beta;
+    alpha  = constants.alpha;
+    gamma  = constants.gamma;
+    Sy     = constants.Sstrain0*mu;
 
-	psi0   = constants.psi0;
-	m      = constants.m;
+    psi0   = constants.psi0;
+    m      = constants.m;
 
-	//phi_pt = gamma / (3.0*beta);
+    //phi_pt = gamma / (3.0*beta);
 
-	/* ---------      get the stress predictor tensor      ---------*/
-	tensor_t estrain     = subtrac_tensors ( e_n, ep );             /* strain predictor   */
-	tensor_t stresses    = point_stress ( estrain, mu, Lambda );    /* stress predictor   */
-	tensor_t sigma_trial = add_tensors(stresses,sigma0);            /* stress predictor TOTAL  */
+    /* ---------      get the stress predictor tensor      ---------*/
+    tensor_t estrain     = subtrac_tensors ( e_n, ep );             /* strain predictor   */
+    tensor_t stresses    = point_stress ( estrain, mu, Lambda );    /* stress predictor   */
+    tensor_t sigma_trial = add_tensors(stresses,sigma0);            /* stress predictor TOTAL  */
 
-	/* compute the invariants of the stress predictor*/
-	double   I1_pr   = tensor_I1 ( sigma_trial );
-	double   oct_pr  = tensor_octahedral ( I1_pr );
-	tensor_t dev_pr  = tensor_deviator ( sigma_trial, oct_pr );
+    /* compute the invariants of the stress predictor*/
+    double   I1_pr   = tensor_I1 ( sigma_trial );
+    double   oct_pr  = tensor_octahedral ( I1_pr );
+    tensor_t dev_pr  = tensor_deviator ( sigma_trial, oct_pr );
     dev_pr           = subtrac_tensors ( dev_pr, eta_n );        /* Subtract backstress tensor  */
 
     double   J2_pr   = tensor_J2 ( dev_pr );
-	double   J3_pr   = tensor_J3 (dev_pr);
-	tensor_t dfds_pr = compute_dfds ( dev_pr, J2_pr, beta );
-	vect1_t  sigma_ppal;
+    double   J3_pr   = tensor_J3 (dev_pr);
+    tensor_t dfds_pr = compute_dfds ( dev_pr, J2_pr, beta );
+    vect1_t  sigma_ppal;
 
-	/*  check predictor state */
-	Fs_pr = compute_yield_surface_stateII ( J3_pr, J2_pr, I1_pr, alpha, phi, sigma_trial) - compute_hardening(gamma,c,Sy, h,ep_barn,phi, psi0); /* Fs predictor */
+    /*  check predictor state */
+    Fs_pr = compute_yield_surface_stateII ( J3_pr, J2_pr, I1_pr, alpha, phi, sigma_trial) - compute_hardening(gamma,c,Sy, h,ep_barn,phi, psi0); /* Fs predictor */
 
-	if ( Fs_pr < Tol_sigma ) {
-		*epl    = copy_tensor(ep);
-		*sigma  = copy_tensor(stresses); /* return stresses without self-weight  */
-		*ep_bar = ep_barn;
-		*fs     = Fs_pr;
-		return;
-	}
+    if ( Fs_pr < Tol_sigma ) {
+        *epl    = copy_tensor(ep);
+        *sigma  = copy_tensor(stresses); /* return stresses without self-weight  */
+        *ep_bar = ep_barn;
+        *fs     = Fs_pr;
+        return;
+    }
 
-	// corrector stage
-	if ( ( theMaterialModel == VONMISES_EP ) || ( theMaterialModel == DRUCKERPRAGER ) ){
-		Sy   = 0.0;
-		psi0 = 0.0;
+    // corrector stage
+    if ( ( theMaterialModel == VONMISES_EP ) || ( theMaterialModel == DRUCKERPRAGER ) ){
+        Sy   = 0.0;
+        psi0 = 0.0;
 
-		dLambda = Fs_pr / ( mu + 9.0 * kappa * alpha * beta + h * gamma * gamma ); // ep_bar=gamma*dLambda as in Souza ec., (8.106)
+        dLambda = Fs_pr / ( mu + 9.0 * kappa * alpha * beta + h * gamma * gamma ); // ep_bar=gamma*dLambda as in Souza ec., (8.106)
 
-		/* Updated plastic strains */
-		epl->xx = ep.xx +  dLambda * dfds_pr.xx;
-		epl->yy = ep.yy +  dLambda * dfds_pr.yy;
-		epl->zz = ep.zz +  dLambda * dfds_pr.zz;
-		epl->xy = ep.xy +  dLambda * dfds_pr.xy;
-		epl->yz = ep.yz +  dLambda * dfds_pr.yz;
-		epl->xz = ep.xz +  dLambda * dfds_pr.xz;
+        /* Updated plastic strains */
+        epl->xx = ep.xx +  dLambda * dfds_pr.xx;
+        epl->yy = ep.yy +  dLambda * dfds_pr.yy;
+        epl->zz = ep.zz +  dLambda * dfds_pr.zz;
+        epl->xy = ep.xy +  dLambda * dfds_pr.xy;
+        epl->yz = ep.yz +  dLambda * dfds_pr.yz;
+        epl->xz = ep.xz +  dLambda * dfds_pr.xz;
 
-		/* Updated stresses */
-		estrain     = subtrac_tensors ( e_n, *epl );
-		stresses    = point_stress ( estrain, mu, Lambda );
-		*sigma      = stresses;
-		stresses    = add_tensors ( stresses, sigma0 );
+        /* Updated stresses */
+        estrain     = subtrac_tensors ( e_n, *epl );
+        stresses    = point_stress ( estrain, mu, Lambda );
+        *sigma      = stresses;
+        stresses    = add_tensors ( stresses, sigma0 );
 
-		/* updated invariants*/
-		double I1     = tensor_I1 ( stresses );
-		double oct    = tensor_octahedral ( I1 );
-		tensor_t dev  = tensor_deviator ( stresses, oct );
-		double J2     = tensor_J2 ( dev );
-		double J3     = tensor_J3 ( dev );
+        /* updated invariants*/
+        double I1     = tensor_I1 ( stresses );
+        double oct    = tensor_octahedral ( I1 );
+        tensor_t dev  = tensor_deviator ( stresses, oct );
+        double J2     = tensor_J2 ( dev );
+        double J3     = tensor_J3 ( dev );
 
-		/* Updated equivalent plastic strain */
-		*ep_bar = ep_barn + dLambda * gamma;
+        /* Updated equivalent plastic strain */
+        *ep_bar = ep_barn + dLambda * gamma;
 
-		/* Updated yield function  */
-		*fs = compute_yield_surface_stateII ( J3, J2, I1, alpha, phi, stresses) - compute_hardening(gamma,c,Sy, h,*ep_bar,phi, psi0);
+        /* Updated yield function  */
+        *fs = compute_yield_surface_stateII ( J3, J2, I1, alpha, phi, stresses) - compute_hardening(gamma,c,Sy, h,*ep_bar,phi, psi0);
 
-		/* check for apex zone in DP model */
-		if (  theMaterialModel == DRUCKERPRAGER  ){
+        /* check for apex zone in DP model */
+        if (  theMaterialModel == DRUCKERPRAGER  ){
 
-			double Imin = I1_pr - 9.0 * kappa * beta / mu * sqrt(J2_pr);
-			double Imax = I1_pr + sqrt(J2_pr)/alpha;
+            double Imin = I1_pr - 9.0 * kappa * beta / mu * sqrt(J2_pr);
+            double Imax = I1_pr + sqrt(J2_pr)/alpha;
 
-			if ( (I1 < Imin) || (I1 > Imax) || (sqrt(J2_pr) - mu * dLambda < 0.0) ) { /*return to the apex  */
+            if ( (I1 < Imin) || (I1 > Imax) || (sqrt(J2_pr) - mu * dLambda < 0.0) ) { /*return to the apex  */
 
-				dLambda = (  compute_yield_surface_stateII ( 0.0, 0.0, I1_pr, alpha, phi, sigma_trial ) - compute_hardening(gamma,c,Sy,h,ep_barn,phi, psi0) ) / ( 9.0 * kappa * alpha * beta  + h * gamma * gamma );
+                dLambda = (  compute_yield_surface_stateII ( 0.0, 0.0, I1_pr, alpha, phi, sigma_trial ) - compute_hardening(gamma,c,Sy,h,ep_barn,phi, psi0) ) / ( 9.0 * kappa * alpha * beta  + h * gamma * gamma );
 
-				/* Updated equivalent plastic strain */
-				*ep_bar = ep_barn + dLambda * gamma;
+                /* Updated equivalent plastic strain */
+                *ep_bar = ep_barn + dLambda * gamma;
 
-				double Skk = I1_pr - 9.0 * kappa * beta * dLambda;
+                double Skk = I1_pr - 9.0 * kappa * beta * dLambda;
 
-				/* Updated stresses:
-				 * It must be isotropic at the apex*/
-				stresses.xx    = Skk/3.0;
-				stresses.yy    = Skk/3.0;
-				stresses.zz    = Skk/3.0;
-				stresses.xy    = 0.0;
-				stresses.xz    = 0.0;
-				stresses.yz    = 0.0;
-				*sigma      = subtrac_tensors ( stresses, sigma0 ); /* Sigma is still isotropic since sigma0 is isotropic */
+                /* Updated stresses:
+                 * It must be isotropic at the apex*/
+                stresses.xx    = Skk/3.0;
+                stresses.yy    = Skk/3.0;
+                stresses.zz    = Skk/3.0;
+                stresses.xy    = 0.0;
+                stresses.xz    = 0.0;
+                stresses.yz    = 0.0;
+                *sigma      = subtrac_tensors ( stresses, sigma0 ); /* Sigma is still isotropic since sigma0 is isotropic */
 
-				double Skk_rlt = tensor_I1 ( *sigma );  /* Relative trace. */
+                double Skk_rlt = tensor_I1 ( *sigma );  /* Relative trace. */
 
-				/* Updated strains */
-				estrain.xx = Skk_rlt / (3.0 * kappa);
-				estrain.yy = Skk_rlt / (3.0 * kappa);
-				estrain.zz = Skk_rlt / (3.0 * kappa);
-				estrain.xy = 0.0;
-				estrain.xz = 0.0;
-				estrain.yz = 0.0;
+                /* Updated strains */
+                estrain.xx = Skk_rlt / (3.0 * kappa);
+                estrain.yy = Skk_rlt / (3.0 * kappa);
+                estrain.zz = Skk_rlt / (3.0 * kappa);
+                estrain.xy = 0.0;
+                estrain.xz = 0.0;
+                estrain.yz = 0.0;
 
-				*epl  = subtrac_tensors ( e_n, estrain );
+                *epl  = subtrac_tensors ( e_n, estrain );
 
-				*fs = alpha * Skk - compute_hardening(gamma,c,Sy,h,*ep_bar,phi,psi0);
-			}
-		}
-	} else if ( theMaterialModel == VONMISES_FAM || theMaterialModel == VONMISES_FA ) {
+                *fs = alpha * Skk - compute_hardening(gamma,c,Sy,h,*ep_bar,phi,psi0);
+            }
+        }
+    } else if ( theMaterialModel == VONMISES_FAM || theMaterialModel == VONMISES_FA ) {
 
-		/* compute coefficients of the quartic function */
-		dev_pr = add_tensors ( dev_pr, eta_n );       /* restore deviatoric predictor    */
-		J2_pr   = tensor_J2 ( dev_pr );
-		Sy      = sqrt(2.0)*Sy;                      // scale Sy to comply with the formulation for vonMises kinematic
+        /* compute coefficients of the quartic function */
+        dev_pr = add_tensors ( dev_pr, eta_n );       /* restore deviatoric predictor    */
+        J2_pr   = tensor_J2 ( dev_pr );
+        Sy      = sqrt(2.0)*Sy;                      // scale Sy to comply with the formulation for vonMises kinematic
 
-		MatUpd_vMFA ( J2_pr,  dev_pr,  psi0,  c,  eta_n,  e_n1, mu,  Lambda,  Sy, epl,  ep,  ep_bar,  ep_barn,  eta,  sigma,  stresses, fs,  psi_n,  loadunl_n,  Tao_n,  Tao_max );
-		return;
+        MatUpd_vMFA ( J2_pr,  dev_pr,  psi0,  c,  eta_n,  e_n1, mu,  Lambda,  Sy, epl,  ep,  ep_bar,  ep_barn,  eta,  sigma,  stresses, fs,  psi_n,  loadunl_n,  Tao_n,  Tao_max );
+        return;
 
-	}  else if ( theMaterialModel != MOHR_COULOMB ) {
+    }  else if ( theMaterialModel != MOHR_COULOMB ) {
 
-		MatUpd_vMGeneralII ( constants, kp, e_n, e_n1,  sigma_ref, sigma,  ErrBA ) ;
-		//MatUpd_vMGeneral ( constants,  kp,  e_n,  e_n1, sigma_ref, sigma, flagTolSubSteps, flagNoSubSteps, ErrBA );
-		return;
+        MatUpd_vMGeneralII ( constants, kp, e_n, e_n1,  sigma_ref, sigma,  ErrBA ) ;
+        //MatUpd_vMGeneral ( constants,  kp,  e_n,  e_n1, sigma_ref, sigma, flagTolSubSteps, flagNoSubSteps, ErrBA );
+        return;
 
-	} else { /* Must be MohrCoulomb soil */
+    } else { /* Must be MohrCoulomb soil */
 
-		/* Spectral decomposition of the sigma_trial tensor*/
-		vect1_t   n1, n2, n3, sigma_ppal_trial;
-		tensor_t  stressRecomp;
-		int edge;
+        /* Spectral decomposition of the sigma_trial tensor*/
+        vect1_t   n1, n2, n3, sigma_ppal_trial;
+        tensor_t  stressRecomp;
+        int edge;
 
-		if (theTensionCutoff == YES) {
-			specDecomp(sigma_trial, &n1, &n2, &n3, &sigma_ppal_trial); /* eig_values.x > eig_values.y > eig_values.z   */
-			double ST_fnc = get_ShearTensionLimits (phi, c, sigma_ppal_trial.x , sigma_ppal_trial.z); /* shear-tension function */
+        if (theTensionCutoff == YES) {
+            specDecomp(sigma_trial, &n1, &n2, &n3, &sigma_ppal_trial); /* eig_values.x > eig_values.y > eig_values.z   */
+            double ST_fnc = get_ShearTensionLimits (phi, c, sigma_ppal_trial.x , sigma_ppal_trial.z); /* shear-tension function */
 
-			if ( (ST_fnc > 0) && ( sigma_ppal_trial.x > 0 ) ) {
-				/* Perform tension-cutoff  */
-				TensionCutoff_Return( kappa, mu, phi, c, sigma_ppal_trial, &sigma_ppal );
+            if ( (ST_fnc > 0) && ( sigma_ppal_trial.x > 0 ) ) {
+                /* Perform tension-cutoff  */
+                TensionCutoff_Return( kappa, mu, phi, c, sigma_ppal_trial, &sigma_ppal );
 
-				/* get updated stress tensor "sigma" */
-				stressRecomp = specRecomp(sigma_ppal, n1, n2, n3);
-				*sigma  = subtrac_tensors(stressRecomp,sigma0);
+                /* get updated stress tensor "sigma" */
+                stressRecomp = specRecomp(sigma_ppal, n1, n2, n3);
+                *sigma  = subtrac_tensors(stressRecomp,sigma0);
 
-				estrain = elastic_strains (*sigma, mu, kappa);
-				*epl  = subtrac_tensors ( e_n, estrain );
+                estrain = elastic_strains (*sigma, mu, kappa);
+                *epl  = subtrac_tensors ( e_n, estrain );
 
-				/* updated invariants*/
-				*fs = sigma_ppal.x;
+                /* updated invariants*/
+                *fs = sigma_ppal.x;
 
-				*ep_bar = 0.0; /* Todo: should think in a correct way to compute it when the tension cutoff option is on  */
-				return;
+                *ep_bar = 0.0; /* Todo: should think in a correct way to compute it when the tension cutoff option is on  */
+                return;
 
-			} else if ( (ST_fnc > 0) && ( sigma_ppal_trial.x <= 0 ) ) { /* This is an elastic state in the tension zone  */
-				*epl    = copy_tensor(ep);
-				*sigma  = copy_tensor(stresses); /* return stresses without self-weight  */
-				*ep_bar = ep_barn;
-				*fs     = sigma_ppal_trial.x;
-				return;
-			}
+            } else if ( (ST_fnc > 0) && ( sigma_ppal_trial.x <= 0 ) ) { /* This is an elastic state in the tension zone  */
+                *epl    = copy_tensor(ep);
+                *sigma  = copy_tensor(stresses); /* return stresses without self-weight  */
+                *ep_bar = ep_barn;
+                *fs     = sigma_ppal_trial.x;
+                return;
+            }
 
-			/* set the spectral decomposition flag to 1 to avoid double computation  */
-			// flagSpecDec = 1;
-		}
+            /* set the spectral decomposition flag to 1 to avoid double computation  */
+            // flagSpecDec = 1;
+        }
 
-		Fs_pr = compute_yield_surface_stateII ( J3_pr, J2_pr, I1_pr, alpha, phi, sigma_trial) - compute_hardening(gamma,c,Sy,h,ep_barn,phi,psi0);
+        Fs_pr = compute_yield_surface_stateII ( J3_pr, J2_pr, I1_pr, alpha, phi, sigma_trial) - compute_hardening(gamma,c,Sy,h,ep_barn,phi,psi0);
 
-		if ( Fs_pr < 0.0 ) {
-			*epl    = copy_tensor(ep);
-			*sigma  = copy_tensor(stresses); /* return stresses without self-weight  */
-			*ep_bar = ep_barn;
-			*fs     = Fs_pr;
-			return;
-		}
+        if ( Fs_pr < 0.0 ) {
+            *epl    = copy_tensor(ep);
+            *sigma  = copy_tensor(stresses); /* return stresses without self-weight  */
+            *ep_bar = ep_barn;
+            *fs     = Fs_pr;
+            return;
+        }
 
-		/* Spectral decomposition */
-		if ( theTensionCutoff == NO )
-			specDecomp(sigma_trial, &n1, &n2, &n3, &sigma_ppal_trial); /* eig_values.x > eig_values.y > eig_values.z   */
+        /* Spectral decomposition */
+        if ( theTensionCutoff == NO )
+            specDecomp(sigma_trial, &n1, &n2, &n3, &sigma_ppal_trial); /* eig_values.x > eig_values.y > eig_values.z   */
 
-		/* Return to the main plane */
-		BOX85_l(ep_barn, sigma_ppal_trial, phi, dil, h, c, kappa, mu, &sigma_ppal, ep_bar); /* Return to the main plan */
+        /* Return to the main plane */
+        BOX85_l(ep_barn, sigma_ppal_trial, phi, dil, h, c, kappa, mu, &sigma_ppal, ep_bar); /* Return to the main plan */
 
-		/* Check assumption of returning to the main plan */
-		if ( ( sigma_ppal.x <= sigma_ppal.y ) || ( sigma_ppal.y <= sigma_ppal.z ) ) {
+        /* Check assumption of returning to the main plan */
+        if ( ( sigma_ppal.x <= sigma_ppal.y ) || ( sigma_ppal.y <= sigma_ppal.z ) ) {
 
-			if ( ( 1. - sin(dil) ) * sigma_ppal_trial.x - 2. * sigma_ppal_trial.y + ( 1. + sin(dil) ) * sigma_ppal_trial.z > 0 )
-				edge = 1; /*return to the right edge*/
-			else
-				edge = -1; /*return to the left edge*/
+            if ( ( 1. - sin(dil) ) * sigma_ppal_trial.x - 2. * sigma_ppal_trial.y + ( 1. + sin(dil) ) * sigma_ppal_trial.z > 0 )
+                edge = 1; /*return to the right edge*/
+            else
+                edge = -1; /*return to the left edge*/
 
-			BOX86_l(ep_barn, sigma_ppal_trial, phi, dil, h, c, kappa, mu, edge, &sigma_ppal, ep_bar);
+            BOX86_l(ep_barn, sigma_ppal_trial, phi, dil, h, c, kappa, mu, edge, &sigma_ppal, ep_bar);
 
-			cond1 = sigma_ppal.x - sigma_ppal.y;
-			cond2 = sigma_ppal.y - sigma_ppal.z;
-			double p_trial = ( sigma_ppal_trial.x + sigma_ppal_trial.y + sigma_ppal_trial.z )/3.0;
+            cond1 = sigma_ppal.x - sigma_ppal.y;
+            cond2 = sigma_ppal.y - sigma_ppal.z;
+            double p_trial = ( sigma_ppal_trial.x + sigma_ppal_trial.y + sigma_ppal_trial.z )/3.0;
 
-			if ( (cond1 <= 0.0 ) && ( fabs(cond1) >= Tol_sigma)  ) { /* return to the apex */
-				if (theTensionCutoff == YES) {
-					sigma_ppal.x = 0.0;
-					sigma_ppal.y = 0.0;
-					sigma_ppal.z = 0.0;
-					*ep_bar      = 0.0; /* Todo: should think in a correct way to compute it when the tension cutoff option is on  */
-				} else
-					BOX87_l(ep_barn, p_trial, phi, dil, h, c, kappa, &sigma_ppal, ep_bar);
-			} else if ( (cond2 <= 0.0) && (fabs(cond2) >= Tol_sigma) ){
-				if (theTensionCutoff == YES) {
-					sigma_ppal.x = 0.0;
-					sigma_ppal.y = 0.0;
-					sigma_ppal.z = 0.0;
-					*ep_bar      = 0.0; /* Todo: should think in a correct way to compute it when the tension cutoff option is on  */
-				} else
-					BOX87_l(ep_barn, p_trial, phi, dil, h, c, kappa, &sigma_ppal, ep_bar);
-			}
-		}
+            if ( (cond1 <= 0.0 ) && ( fabs(cond1) >= Tol_sigma)  ) { /* return to the apex */
+                if (theTensionCutoff == YES) {
+                    sigma_ppal.x = 0.0;
+                    sigma_ppal.y = 0.0;
+                    sigma_ppal.z = 0.0;
+                    *ep_bar      = 0.0; /* Todo: should think in a correct way to compute it when the tension cutoff option is on  */
+                } else
+                    BOX87_l(ep_barn, p_trial, phi, dil, h, c, kappa, &sigma_ppal, ep_bar);
+            } else if ( (cond2 <= 0.0) && (fabs(cond2) >= Tol_sigma) ){
+                if (theTensionCutoff == YES) {
+                    sigma_ppal.x = 0.0;
+                    sigma_ppal.y = 0.0;
+                    sigma_ppal.z = 0.0;
+                    *ep_bar      = 0.0; /* Todo: should think in a correct way to compute it when the tension cutoff option is on  */
+                } else
+                    BOX87_l(ep_barn, p_trial, phi, dil, h, c, kappa, &sigma_ppal, ep_bar);
+            }
+        }
 
-		/*		 Tension cutoff check
-		if ( (theTensionCutoff == YES) && ( sigma_ppal.x > 0 ) )  { Todo: Please check this one more time. Doriam
+        /*       Tension cutoff check
+        if ( (theTensionCutoff == YES) && ( sigma_ppal.x > 0 ) )  { Todo: Please check this one more time. Doriam
 
-			 Perform tension-cutoff
-			TensionCutoff_Return( kappa, mu, phi, c, sigma_ppal_trial, &sigma_ppal );
+             Perform tension-cutoff
+            TensionCutoff_Return( kappa, mu, phi, c, sigma_ppal_trial, &sigma_ppal );
 
-			 get updated stress tensor "sigma"
-			stressRecomp = specRecomp(sigma_ppal, n1, n2, n3);
-		 *sigma  = subtrac_tensors(stressRecomp,sigma0);
+             get updated stress tensor "sigma"
+            stressRecomp = specRecomp(sigma_ppal, n1, n2, n3);
+         *sigma  = subtrac_tensors(stressRecomp,sigma0);
 
-			estrain = elastic_strains (*sigma, mu, kappa);
-		 *epl  = subtrac_tensors ( e_n, estrain );
+            estrain = elastic_strains (*sigma, mu, kappa);
+         *epl  = subtrac_tensors ( e_n, estrain );
 
-			 updated invariants
-		 *fs = sigma_ppal.x;
-			return;
-		}
-		 Done tension cutoff check  */
+             updated invariants
+         *fs = sigma_ppal.x;
+            return;
+        }
+         Done tension cutoff check  */
 
-		/* get updated stress tensor "sigma" */
-		stressRecomp = specRecomp(sigma_ppal, n1, n2, n3);
-		*sigma  = subtrac_tensors(stressRecomp,sigma0);
+        /* get updated stress tensor "sigma" */
+        stressRecomp = specRecomp(sigma_ppal, n1, n2, n3);
+        *sigma  = subtrac_tensors(stressRecomp,sigma0);
 
-		estrain = elastic_strains (*sigma, mu, kappa);
-		*epl  = subtrac_tensors ( e_n, estrain );
+        estrain = elastic_strains (*sigma, mu, kappa);
+        *epl  = subtrac_tensors ( e_n, estrain );
 
-		/* updated invariants*/
-		double I1     = tensor_I1 ( stressRecomp );
-		double oct    = tensor_octahedral ( I1 );
-		tensor_t dev  = tensor_deviator ( stressRecomp, oct );
-		double J2     = tensor_J2 ( dev );
-		double J3     = tensor_J3 ( dev );
+        /* updated invariants*/
+        double I1     = tensor_I1 ( stressRecomp );
+        double oct    = tensor_octahedral ( I1 );
+        tensor_t dev  = tensor_deviator ( stressRecomp, oct );
+        double J2     = tensor_J2 ( dev );
+        double J3     = tensor_J3 ( dev );
 
-		if ( (theTensionCutoff == YES) && ( sigma_ppal.x >= 0 ) )
-			*fs = 0;
-		else
-			*fs = compute_yield_surface_stateII ( J3, J2, I1, alpha, phi, stressRecomp) - compute_hardening(gamma,c,Sy,h,*ep_bar,phi, psi0);
+        if ( (theTensionCutoff == YES) && ( sigma_ppal.x >= 0 ) )
+            *fs = 0;
+        else
+            *fs = compute_yield_surface_stateII ( J3, J2, I1, alpha, phi, stressRecomp) - compute_hardening(gamma,c,Sy,h,*ep_bar,phi, psi0);
 
-	}
+    }
 
 
 
-	//	if ( thePlasticityModel == RATE_DEPENDANT ) { /*TODO: Add implementation for rate dependant material model  */
-	//
-	//		/* Rate dependant material is considered as a Drucker-Prager material   */
-	//
-	//		double factor      = fs / constants.k;
-	//		double strainRate  = constants.strainrate;
-	//		double sensitivity = constants.sensitivity;
-	//		double oneOverM    = 1.0 / sensitivity;
-	//
-	//		dLambda =	strainRate * pow(factor, oneOverM);
-	//
-	//		epl->xx = ep.xx + dt * dLambda * dfds.xx;
-	//		epl->yy = ep.yy + dt * dLambda * dfds.yy;
-	//		epl->zz = ep.zz + dt * dLambda * dfds.zz;
-	//		epl->xy = ep.xy + dt * dLambda * dfds.xy;
-	//		epl->yz = ep.yz + dt * dLambda * dfds.yz;
-	//		epl->xz = ep.xz + dt * dLambda * dfds.xz;
-	//
-	//		estrain   = subtrac_tensors ( e_n, *epl );
-	//		*sigma    = point_stress ( estrain, constants.mu, constants.lambda );
-	//
-	//		*ep_bar   = ep_barn + gamma * dLambda;
-	//
-	//
-	//	}
+    //  if ( thePlasticityModel == RATE_DEPENDANT ) { /*TODO: Add implementation for rate dependant material model  */
+    //
+    //      /* Rate dependant material is considered as a Drucker-Prager material   */
+    //
+    //      double factor      = fs / constants.k;
+    //      double strainRate  = constants.strainrate;
+    //      double sensitivity = constants.sensitivity;
+    //      double oneOverM    = 1.0 / sensitivity;
+    //
+    //      dLambda =   strainRate * pow(factor, oneOverM);
+    //
+    //      epl->xx = ep.xx + dt * dLambda * dfds.xx;
+    //      epl->yy = ep.yy + dt * dLambda * dfds.yy;
+    //      epl->zz = ep.zz + dt * dLambda * dfds.zz;
+    //      epl->xy = ep.xy + dt * dLambda * dfds.xy;
+    //      epl->yz = ep.yz + dt * dLambda * dfds.yz;
+    //      epl->xz = ep.xz + dt * dLambda * dfds.xz;
+    //
+    //      estrain   = subtrac_tensors ( e_n, *epl );
+    //      *sigma    = point_stress ( estrain, constants.mu, constants.lambda );
+    //
+    //      *ep_bar   = ep_barn + gamma * dLambda;
+    //
+    //
+    //  }
 
 
 }
@@ -3474,24 +3669,24 @@ tensor_t compute_dfds (tensor_t dev, double J2, double beta) {
 }
 
 /*tensor_t compute_pstrain2 ( nlconstants_t constants, tensor_t pstrain1, tensor_t tstrain,
-							tensor_t dfds, double dLambda, double dt, double J2, double I1,
-							double J2_st, double I1_st, double po ) {
+                            tensor_t dfds, double dLambda, double dt, double J2, double I1,
+                            double J2_st, double I1_st, double po ) {
 
     tensor_t pstrain2;
     double kappa;
 
-	kappa  = ( constants.lambda + 2.0 * constants.mu / 3.0 );
+    kappa  = ( constants.lambda + 2.0 * constants.mu / 3.0 );
 
-	if ( dLambda == 0 )
-		return pstrain1;
+    if ( dLambda == 0 )
+        return pstrain1;
 
     if ( thePlasticityModel == RATE_DEPENDANT ) {
-    	pstrain2.xx = pstrain1.xx + dt * dLambda * dfds.xx;
-    	pstrain2.yy = pstrain1.yy + dt * dLambda * dfds.yy;
-    	pstrain2.zz = pstrain1.zz + dt * dLambda * dfds.zz;
-    	pstrain2.xy = pstrain1.xy + dt * dLambda * dfds.xy;
-    	pstrain2.yz = pstrain1.yz + dt * dLambda * dfds.yz;
-    	pstrain2.xz = pstrain1.xz + dt * dLambda * dfds.xz;
+        pstrain2.xx = pstrain1.xx + dt * dLambda * dfds.xx;
+        pstrain2.yy = pstrain1.yy + dt * dLambda * dfds.yy;
+        pstrain2.zz = pstrain1.zz + dt * dLambda * dfds.zz;
+        pstrain2.xy = pstrain1.xy + dt * dLambda * dfds.xy;
+        pstrain2.yz = pstrain1.yz + dt * dLambda * dfds.yz;
+        pstrain2.xz = pstrain1.xz + dt * dLambda * dfds.xz;
 
     } else if ( po >  0.0  ) {
 
@@ -3503,9 +3698,9 @@ tensor_t compute_dfds (tensor_t dev, double J2, double beta) {
         pstrain2.xz = tstrain.xz;
 
     } else {
-    	pstrain2.xx = pstrain1.xx +  dLambda * dfds.xx;
-    	pstrain2.yy = pstrain1.yy +  dLambda * dfds.yy;
-    	pstrain2.zz = pstrain1.zz +  dLambda * dfds.zz;
+        pstrain2.xx = pstrain1.xx +  dLambda * dfds.xx;
+        pstrain2.yy = pstrain1.yy +  dLambda * dfds.yy;
+        pstrain2.zz = pstrain1.zz +  dLambda * dfds.zz;
         pstrain2.xy = pstrain1.xy +  dLambda * dfds.xy;
         pstrain2.yz = pstrain1.yz +  dLambda * dfds.yz;
         pstrain2.xz = pstrain1.xz +  dLambda * dfds.xz;
@@ -3637,37 +3832,37 @@ void BOX85_l(double ep_bar_n,vect1_t sigma_ppal_trial,double Phi, double Psi, do
 /* Return mapping algorithm copied from:
    EA de Souza Neto, D Peric, D.O (2008). Computational methods for plasticity. Wiley */
 
-	double a, dGamma;
+    double a, dGamma;
 
-	sigma_ppal->x = 0.0;
-	sigma_ppal->y = 0.0;
-	sigma_ppal->z = 0.0;
+    sigma_ppal->x = 0.0;
+    sigma_ppal->y = 0.0;
+    sigma_ppal->z = 0.0;
 
-	a = ( 4. * G * ( 1. + 1./3. * sin(Psi) * sin(Phi) ) + 4. * K * sin(Phi) * sin(Psi) );
+    a = ( 4. * G * ( 1. + 1./3. * sin(Psi) * sin(Phi) ) + 4. * K * sin(Phi) * sin(Psi) );
 
-	dGamma = ( sigma_ppal_trial.x - sigma_ppal_trial.z + ( sigma_ppal_trial.x + sigma_ppal_trial.z ) * sin(Phi) - 2. * ( c0 + H * ep_bar_n ) * cos(Phi) ) /
-			 ( 4. * H * cos(Phi) * cos(Phi) +  a );
+    dGamma = ( sigma_ppal_trial.x - sigma_ppal_trial.z + ( sigma_ppal_trial.x + sigma_ppal_trial.z ) * sin(Phi) - 2. * ( c0 + H * ep_bar_n ) * cos(Phi) ) /
+             ( 4. * H * cos(Phi) * cos(Phi) +  a );
 
-	sigma_ppal->x = sigma_ppal_trial.x - ( 2. * G * ( 1. + 1./3. * sin(Psi) ) + 2. * K * sin(Psi) ) * dGamma;
+    sigma_ppal->x = sigma_ppal_trial.x - ( 2. * G * ( 1. + 1./3. * sin(Psi) ) + 2. * K * sin(Psi) ) * dGamma;
 
-	sigma_ppal->y = sigma_ppal_trial.y + ( 4./3. * G - 2. * K ) * sin(Psi) * dGamma;
+    sigma_ppal->y = sigma_ppal_trial.y + ( 4./3. * G - 2. * K ) * sin(Psi) * dGamma;
 
-	sigma_ppal->z = sigma_ppal_trial.z + ( 2. * G * ( 1. - 1./3. * sin(Psi) ) - 2. * K * sin(Psi) ) * dGamma;
+    sigma_ppal->z = sigma_ppal_trial.z + ( 2. * G * ( 1. - 1./3. * sin(Psi) ) - 2. * K * sin(Psi) ) * dGamma;
 
-	*ep_bar_n1 = ep_bar_n + 2.0 * cos(Phi) * dGamma;
+    *ep_bar_n1 = ep_bar_n + 2.0 * cos(Phi) * dGamma;
 
 }
 
 void BOX86_l(double ep_bar_n,vect1_t sigma_ppal_trial,double Phi, double Psi, double H, double c0, double K, double G, double id, vect1_t *sigma_ppal, double *ep_bar_n1) {
 
-	/* Return mapping algorithm copied from:
-	   EA de Souza Neto, D Peric, D.O (2008). Computational methods for plasticity. Wiley */
+    /* Return mapping algorithm copied from:
+       EA de Souza Neto, D Peric, D.O (2008). Computational methods for plasticity. Wiley */
 
-	double aux, phi_a_bar, phi_b_bar, a, b, a11, b11, dGamma[2]={0}, sum_dGamma;
+    double aux, phi_a_bar, phi_b_bar, a, b, a11, b11, dGamma[2]={0}, sum_dGamma;
 
-	sigma_ppal->x = 0.0;
-	sigma_ppal->y = 0.0;
-	sigma_ppal->z = 0.0;
+    sigma_ppal->x = 0.0;
+    sigma_ppal->y = 0.0;
+    sigma_ppal->z = 0.0;
 
     aux = 2. * cos(Phi) * ( c0 + H * ep_bar_n );
 
@@ -3706,56 +3901,56 @@ void BOX86_l(double ep_bar_n,vect1_t sigma_ppal_trial,double Phi, double Psi, do
 
 void BOX87_l(double ep_bar_n,double p_trial,double Phi, double Psi, double H, double c0, double K, vect1_t *sigma_ppal, double *ep_bar_n1) {
 
-	/* Return mapping algorithm copied from:
-	   EA de Souza Neto, D Peric, D.O (2008). Computational methods for plasticity. Wiley */
-	double omega, dep_bar, cot_phi, p;
+    /* Return mapping algorithm copied from:
+       EA de Souza Neto, D Peric, D.O (2008). Computational methods for plasticity. Wiley */
+    double omega, dep_bar, cot_phi, p;
 
-	sigma_ppal->x = 0.0;
-	sigma_ppal->y = 0.0;
-	sigma_ppal->z = 0.0;
+    sigma_ppal->x = 0.0;
+    sigma_ppal->y = 0.0;
+    sigma_ppal->z = 0.0;
 
-	omega = sin(Psi)/cos(Phi);
-	cot_phi = cos(Phi) / sin (Phi);
+    omega = sin(Psi)/cos(Phi);
+    cot_phi = cos(Phi) / sin (Phi);
 
-	dep_bar = ( p_trial - ( c0 + H * ep_bar_n ) * cot_phi ) / ( H * cot_phi + omega * K); /*Here we deviate from the original formulation in
-	                                                                                        order be able to use zero dilatancy  */
-	*ep_bar_n1 = ep_bar_n + dep_bar;
-	p = p_trial - K * omega * dep_bar;
+    dep_bar = ( p_trial - ( c0 + H * ep_bar_n ) * cot_phi ) / ( H * cot_phi + omega * K); /*Here we deviate from the original formulation in
+                                                                                            order be able to use zero dilatancy  */
+    *ep_bar_n1 = ep_bar_n + dep_bar;
+    p = p_trial - K * omega * dep_bar;
 
-	sigma_ppal->x = p;
-	sigma_ppal->y = p;
-	sigma_ppal->z = p;
+    sigma_ppal->x = p;
+    sigma_ppal->y = p;
+    sigma_ppal->z = p;
 
 }
 
 tensor_t specRecomp(vect1_t eig_val, vect1_t n1, vect1_t n2, vect1_t n3) {
-	tensor_t stress = zero_tensor();
+    tensor_t stress = zero_tensor();
 
-	/* from first eigen_vector */
-	stress.xx += eig_val.x * ( n1.x * n1.x);
-	stress.yy += eig_val.x * ( n1.y * n1.y);
-	stress.zz += eig_val.x * ( n1.z * n1.z);
-	stress.xy += eig_val.x * ( n1.x * n1.y);
-	stress.xz += eig_val.x * ( n1.x * n1.z);
-	stress.yz += eig_val.x * ( n1.y * n1.z);
+    /* from first eigen_vector */
+    stress.xx += eig_val.x * ( n1.x * n1.x);
+    stress.yy += eig_val.x * ( n1.y * n1.y);
+    stress.zz += eig_val.x * ( n1.z * n1.z);
+    stress.xy += eig_val.x * ( n1.x * n1.y);
+    stress.xz += eig_val.x * ( n1.x * n1.z);
+    stress.yz += eig_val.x * ( n1.y * n1.z);
 
-	/* from 2nd eigen_vector */
-	stress.xx += eig_val.y * ( n2.x * n2.x);
-	stress.yy += eig_val.y * ( n2.y * n2.y);
-	stress.zz += eig_val.y * ( n2.z * n2.z);
-	stress.xy += eig_val.y * ( n2.x * n2.y);
-	stress.xz += eig_val.y * ( n2.x * n2.z);
-	stress.yz += eig_val.y * ( n2.y * n2.z);
+    /* from 2nd eigen_vector */
+    stress.xx += eig_val.y * ( n2.x * n2.x);
+    stress.yy += eig_val.y * ( n2.y * n2.y);
+    stress.zz += eig_val.y * ( n2.z * n2.z);
+    stress.xy += eig_val.y * ( n2.x * n2.y);
+    stress.xz += eig_val.y * ( n2.x * n2.z);
+    stress.yz += eig_val.y * ( n2.y * n2.z);
 
-	/* from 3rd eigen_vector */
-	stress.xx += eig_val.z * ( n3.x * n3.x);
-	stress.yy += eig_val.z * ( n3.y * n3.y);
-	stress.zz += eig_val.z * ( n3.z * n3.z);
-	stress.xy += eig_val.z * ( n3.x * n3.y);
-	stress.xz += eig_val.z * ( n3.x * n3.z);
-	stress.yz += eig_val.z * ( n3.y * n3.z);
+    /* from 3rd eigen_vector */
+    stress.xx += eig_val.z * ( n3.x * n3.x);
+    stress.yy += eig_val.z * ( n3.y * n3.y);
+    stress.zz += eig_val.z * ( n3.z * n3.z);
+    stress.xy += eig_val.z * ( n3.x * n3.y);
+    stress.xz += eig_val.z * ( n3.x * n3.z);
+    stress.yz += eig_val.z * ( n3.y * n3.z);
 
-	return stress;
+    return stress;
 
 }
 
@@ -3858,7 +4053,6 @@ void tred2(double V[3][3], double *d, double *e) {
     }
 
     // Accumulate transformations.
-
     for ( i = 0; i < n-1; i++) {
         V[n-1][i] = V[i][i];
         V[i][i] = 1.0;
@@ -4050,13 +4244,13 @@ void  specDecomp(tensor_t sigma, vect1_t *n1, vect1_t *n2, vect1_t *n3, vect1_t 
 double get_ShearTensionLimits (double phi, double coh, double S1, double S3) {
 /* Shear-tension limits defined as in FLAC3D User's manual version 5.01 pp 1-31   */
 
-	double Nphi    = ( 1 + sin(phi) )/( 1 - sin(phi) );
-	double alpha_p = sqrt( 1 + Nphi * Nphi )+ Nphi;
-	double Sp      = -2 * coh * sqrt(Nphi);
+    double Nphi    = ( 1 + sin(phi) )/( 1 - sin(phi) );
+    double alpha_p = sqrt( 1 + Nphi * Nphi )+ Nphi;
+    double Sp      = -2 * coh * sqrt(Nphi);
 
-	double h = S1 + alpha_p * ( S3 - Sp );
+    double h = S1 + alpha_p * ( S3 - Sp );
 
-	return h;
+    return h;
 
 }
 
@@ -4084,55 +4278,55 @@ if ( zone == 0 ) {
     Pl1 = Phi_pr[0];
     Pl2 = 0.0;
     for (i = 1; i < 5; i++) {
-    	if ( Phi_pr[i] > 0 ) {
-    		Pl2 = Phi_pr[i];
-    		pos=i;
-    		break;
-    	}
+        if ( Phi_pr[i] > 0 ) {
+            Pl2 = Phi_pr[i];
+            pos=i;
+            break;
+        }
     }
 
     if ( Pl2 != 0.0 ) {
-    	aa = alpha_1;
-    	bb = alpha_2;
+        aa = alpha_1;
+        bb = alpha_2;
 
-    	if ( ( pos == 2 ) || ( pos == 5 ) )
-    		bb=-bb;
+        if ( ( pos == 2 ) || ( pos == 5 ) )
+            bb=-bb;
 
-    	det = ( aa * aa - bb * bb );
+        det = ( aa * aa - bb * bb );
 
-    	DLam1 = (  aa * Pl1 - bb * Pl2 ) / det;
-    	DLam2 = ( -bb * Pl1 + aa * Pl2 ) / det;
+        DLam1 = (  aa * Pl1 - bb * Pl2 ) / det;
+        DLam2 = ( -bb * Pl1 + aa * Pl2 ) / det;
 
-    	switch ( pos ) {
-    	case ( 2 ):
-			sigma_TC2.x  = sigma_ppal_pr.x - ( alpha_1 * DLam1 - alpha_2 * DLam2  );
-    		sigma_TC2.y  = sigma_ppal_pr.y - ( alpha_2 * DLam1 - alpha_2 * DLam2  );
-    		sigma_TC2.z  = sigma_ppal_pr.z - ( alpha_2 * DLam1 - alpha_1 * DLam2  );
-    		break;
+        switch ( pos ) {
+        case ( 2 ):
+            sigma_TC2.x  = sigma_ppal_pr.x - ( alpha_1 * DLam1 - alpha_2 * DLam2  );
+            sigma_TC2.y  = sigma_ppal_pr.y - ( alpha_2 * DLam1 - alpha_2 * DLam2  );
+            sigma_TC2.z  = sigma_ppal_pr.z - ( alpha_2 * DLam1 - alpha_1 * DLam2  );
+            break;
 
-    	case ( 3 ):
-			sigma_TC2.x = sigma_ppal_pr.x - ( alpha_1 * DLam1 + alpha_2 * DLam2  );
-    		sigma_TC2.y = sigma_ppal_pr.y - ( alpha_2 * DLam1 + alpha_1 * DLam2  );
-    		sigma_TC2.z = sigma_ppal_pr.z - ( alpha_2 * DLam1 + alpha_2 * DLam2  );
-    		break;
+        case ( 3 ):
+            sigma_TC2.x = sigma_ppal_pr.x - ( alpha_1 * DLam1 + alpha_2 * DLam2  );
+            sigma_TC2.y = sigma_ppal_pr.y - ( alpha_2 * DLam1 + alpha_1 * DLam2  );
+            sigma_TC2.z = sigma_ppal_pr.z - ( alpha_2 * DLam1 + alpha_2 * DLam2  );
+            break;
 
-    	case ( 4 ):
-			sigma_TC2.x = sigma_ppal_pr.x - ( alpha_1 * DLam1 + alpha_2 * DLam2  );
-    		sigma_TC2.y = sigma_ppal_pr.y - ( alpha_2 * DLam1 + alpha_2 * DLam2  );
-    		sigma_TC2.z = sigma_ppal_pr.z - ( alpha_2 * DLam1 + alpha_1 * DLam2  );
-    		break;
+        case ( 4 ):
+            sigma_TC2.x = sigma_ppal_pr.x - ( alpha_1 * DLam1 + alpha_2 * DLam2  );
+            sigma_TC2.y = sigma_ppal_pr.y - ( alpha_2 * DLam1 + alpha_2 * DLam2  );
+            sigma_TC2.z = sigma_ppal_pr.z - ( alpha_2 * DLam1 + alpha_1 * DLam2  );
+            break;
 
-    	case ( 5 ):
-			sigma_TC2.x = sigma_ppal_pr.x - ( alpha_1 * DLam1 - alpha_2 * DLam2  );
-    		sigma_TC2.y = sigma_ppal_pr.y - ( alpha_2 * DLam1 - alpha_1 * DLam2  );
-    		sigma_TC2.z = sigma_ppal_pr.z - ( alpha_2 * DLam1 - alpha_2 * DLam2  );
-    		break;
-    	}
+        case ( 5 ):
+            sigma_TC2.x = sigma_ppal_pr.x - ( alpha_1 * DLam1 - alpha_2 * DLam2  );
+            sigma_TC2.y = sigma_ppal_pr.y - ( alpha_2 * DLam1 - alpha_1 * DLam2  );
+            sigma_TC2.z = sigma_ppal_pr.z - ( alpha_2 * DLam1 - alpha_2 * DLam2  );
+            break;
+        }
 
     } else {
-    	sigma_TC2.x = sigma_ppal_pr.x - Pl1;
-    	sigma_TC2.y = sigma_ppal_pr.y - ( alpha_2 * Pl1 / alpha_1 );
-    	sigma_TC2.z = sigma_ppal_pr.z - ( alpha_2 * Pl1 / alpha_1 );
+        sigma_TC2.x = sigma_ppal_pr.x - Pl1;
+        sigma_TC2.y = sigma_ppal_pr.y - ( alpha_2 * Pl1 / alpha_1 );
+        sigma_TC2.z = sigma_ppal_pr.z - ( alpha_2 * Pl1 / alpha_1 );
     }
 
     /* Check active zones for sigma tension cut 2 "sigma_TC2"  */
@@ -4144,26 +4338,26 @@ if ( zone == 0 ) {
         SigmaUP->z = sigma_TC2.z;
 
         if( SigmaUP->z < S_p )
-        	SigmaUP->z = S_p;
+            SigmaUP->z = S_p;
 
         if(SigmaUP->y < S_p)
-        	SigmaUP->y = S_p;
+            SigmaUP->y = S_p;
     }
 
     return;
 
 }
 
-	SigmaUP->x = sigma_TC1.x;
-	SigmaUP->y = sigma_TC1.y;
-	SigmaUP->z = sigma_TC1.z;
+    SigmaUP->x = sigma_TC1.x;
+    SigmaUP->y = sigma_TC1.y;
+    SigmaUP->z = sigma_TC1.z;
 }
 
 
 int CornerZones( vect1_t Sigma, double S_p, vect1_t* SigmaUP, double Phi_pr[5]) {
 
-	double Tol;
-	int i, cnt=0, zone;
+    double Tol;
+    int i, cnt=0, zone;
 
 Phi_pr[0] = Sigma.x;
 Phi_pr[1] = S_p - Sigma.z;
@@ -4175,40 +4369,40 @@ Tol=-1.0e-10;
 
 /* sanity check. Cannot exist more that 3 active surfaces */
 for (i = 0; i < 5; i++) {
-	if ( Phi_pr[i] > 0 )
-		++cnt;
+    if ( Phi_pr[i] > 0 )
+        ++cnt;
 }
 if (cnt > 3) {
-	fprintf(stderr, "Error: %d: No more that 3 active surfaces can coexist ",cnt);
-	MPI_Abort(MPI_COMM_WORLD,ERROR);
-	exit(1);
+    fprintf(stderr, "Error: %d: No more that 3 active surfaces can coexist ",cnt);
+    MPI_Abort(MPI_COMM_WORLD,ERROR);
+    exit(1);
 }
 
 if ( ( Phi_pr[2] > Tol ) && ( Phi_pr[3] > Tol ) ) {
-	SigmaUP->x = 0.0;
-	SigmaUP->y = 0.0;
-	SigmaUP->z = 0.0;
-	zone=1;
+    SigmaUP->x = 0.0;
+    SigmaUP->y = 0.0;
+    SigmaUP->z = 0.0;
+    zone=1;
 } else if ( ( Phi_pr[3] > Tol ) && ( Phi_pr[4] > Tol ) ) {
-	SigmaUP->x = 0.0;
-	SigmaUP->y = S_p;
-	SigmaUP->z = 0.0;
-	zone=3;
+    SigmaUP->x = 0.0;
+    SigmaUP->y = S_p;
+    SigmaUP->z = 0.0;
+    zone=3;
 } else if ( ( Phi_pr[1] > Tol ) && ( Phi_pr[4] > Tol ) ) {
-	SigmaUP->x = 0.0;
-	SigmaUP->y = S_p;
-	SigmaUP->z = S_p;
-	zone=5;
+    SigmaUP->x = 0.0;
+    SigmaUP->y = S_p;
+    SigmaUP->z = S_p;
+    zone=5;
 } else if ( ( Phi_pr[1] > Tol ) && ( Phi_pr[2] > Tol) ) {
-	SigmaUP->x = 0.0;
-	SigmaUP->y = 0.0;
-	SigmaUP->z = S_p;
-	zone=7;
+    SigmaUP->x = 0.0;
+    SigmaUP->y = 0.0;
+    SigmaUP->z = S_p;
+    zone=7;
 } else {
-	SigmaUP->x = 0.0;
-	SigmaUP->y = 0.0;
-	SigmaUP->z = 0.0;
-	zone=0;
+    SigmaUP->x = 0.0;
+    SigmaUP->y = 0.0;
+    SigmaUP->z = 0.0;
+    zone=0;
 }
 
 return zone;
@@ -4526,15 +4720,16 @@ void compute_addforce_nl (mesh_t     *myMesh,
                           mysolver_t *mySolver,
                           double      theDeltaTSquared)
 {
-
     int       i, j;
     int32_t   eindex;
     int32_t   nl_eindex;
     fvector_t localForce[8];
-
+    nlconstants_t *enlcons;
 
     fvector_t localForceDamp[8];
     fvector_t curDisp[8];
+
+    double b_over_dt = theStiffDamp / ( theStiffDampFreq * PI * sqrt(theDeltaTSquared) ); // stiffness damping added to improve stability
 
     /* Loop on the number of elements */
     for (nl_eindex = 0; nl_eindex < myNonlinElementsCount; nl_eindex++) {
@@ -4555,6 +4750,8 @@ void compute_addforce_nl (mesh_t     *myMesh,
         elemp = &myMesh->elemTable[eindex];
         edata = (edata_t *)elemp->data;
         ep    = &mySolver->eTable[eindex] ;
+        enlcons = myNonlinSolver->constants + nl_eindex;
+
 
         h    = (double)edata->edgesize;
         h3   = h * h * h;
@@ -4567,61 +4764,167 @@ void compute_addforce_nl (mesh_t     *myMesh,
 
         stresses = myNonlinSolver->stresses[nl_eindex];
 
+
         /* Clean memory for the local force vector */
         memset(localForce, 0, 8 * sizeof(fvector_t));
 
-        /* Loop over the 8 element nodes:
-         * Calculates the forces on each vertex */
-        for (i = 0; i < 8; i++) {
+        if ( enlcons->isTopoNonlin == 0 ) {
+            /* Loop over the 8 element nodes:
+             * Calculates the forces on each vertex */
+            for (i = 0; i < 8; i++) {
 
-            fvector_t *toForce;
+                fvector_t *toForce;
 
-            /* Points the loop force to the element force */
-            toForce = &localForce[i];
+                /* Points the loop force to the element force */
+                toForce = &localForce[i];
 
-            /* Loop over the 8 quadrature points */
-            for (j = 0; j < 8; j++) {
+                /* Loop over the 8 quadrature points */
+                for (j = 0; j < 8; j++) {
 
-                double dx, dy, dz;
+                    double dx, dy, dz;
 
-                compute_qp_dxi (&dx, &dy, &dz, i, j, h);
+                    compute_qp_dxi (&dx, &dy, &dz, i, j, h);
 
-                /* Gauss integration: Sum(DeltaPsi * Sigma * wi * Ji) */
+                    /* Gauss integration: Sum(DeltaPsi * Sigma * wi * Ji) */
 
-                toForce->f[0] += ( ( dx * stresses.qp[j].xx )
-                                 + ( dy * stresses.qp[j].xy )
-                                 + ( dz * stresses.qp[j].xz ) ) * WiJi;
+                    toForce->f[0] += ( ( dx * stresses.qp[j].xx )
+                            + ( dy * stresses.qp[j].xy )
+                            + ( dz * stresses.qp[j].xz ) ) * WiJi;
 
-                toForce->f[1] += ( ( dy * stresses.qp[j].yy )
-                                 + ( dx * stresses.qp[j].xy )
-                                 + ( dz * stresses.qp[j].yz ) ) * WiJi;
+                    toForce->f[1] += ( ( dy * stresses.qp[j].yy )
+                            + ( dx * stresses.qp[j].xy )
+                            + ( dz * stresses.qp[j].yz ) ) * WiJi;
 
-                toForce->f[2] += ( ( dz * stresses.qp[j].zz )
-                                 + ( dy * stresses.qp[j].yz )
-                                 + ( dx * stresses.qp[j].xz ) ) * WiJi;
+                    toForce->f[2] += ( ( dz * stresses.qp[j].zz )
+                            + ( dy * stresses.qp[j].yz )
+                            + ( dx * stresses.qp[j].xz ) ) * WiJi;
 
-            } /* quadrature points */
+                } /* quadrature points */
 
-        } /* element nodes */
+            } /* element nodes */
 
-        /* Loop over the 8 element nodes:
-         * Add the contribution calculated above to the node
-         * forces carried from the source and stiffness.
-         */
-        for (i = 0; i < 8; i++) {
+            /* Loop over the 8 element nodes:
+             * Add the contribution calculated above to the node
+             * forces carried from the source and stiffness.
+             */
+            for (i = 0; i < 8; i++) {
 
-            int32_t    lnid;
-            fvector_t *nodalForce;
+                int32_t    lnid;
+                fvector_t *nodalForce;
 
-            lnid = elemp->lnid[i];
+                lnid = elemp->lnid[i];
 
-            nodalForce = mySolver->force + lnid;
+                nodalForce = mySolver->force + lnid;
 
-            nodalForce->f[0] -= localForce[i].f[0] * theDeltaTSquared;
-            nodalForce->f[1] -= localForce[i].f[1] * theDeltaTSquared;
-            nodalForce->f[2] -= localForce[i].f[2] * theDeltaTSquared;
+                nodalForce->f[0] -= localForce[i].f[0] * theDeltaTSquared;
+                nodalForce->f[1] -= localForce[i].f[1] * theDeltaTSquared;
+                nodalForce->f[2] -= localForce[i].f[2] * theDeltaTSquared;
 
-        } /* element nodes */
+            } /* element nodes */
+
+            /* =-=-==-=-=-=-=-=-=-=-=-=-=-=-= */
+            /* =-=-=-=- Add damping -=-=-=-=- */
+            /* =-=-==-=-=-=-=-=-=-=-=-=-=-=-= */
+            if ( b_over_dt != 0 ) {
+                memset( localForceDamp, 0, 8 * sizeof(fvector_t) );
+
+
+                for (i = 0; i < 8; i++) {
+                    int32_t    lnid = elemp->lnid[i];
+                    fvector_t* tm1Disp = mySolver->tm1 + lnid;
+                    fvector_t* tm2Disp = mySolver->tm2 + lnid;
+
+                    curDisp[i].f[0] = ( tm1Disp->f[0] - tm2Disp->f[0] ) * b_over_dt;
+                    curDisp[i].f[1] = ( tm1Disp->f[1] - tm2Disp->f[1] ) * b_over_dt;
+                    curDisp[i].f[2] = ( tm1Disp->f[2] - tm2Disp->f[2] ) * b_over_dt;
+                }
+
+                /* Coefficients for new stiffness matrix calculation */
+                if (vector_is_zero( curDisp ) != 0) {
+
+                    double first_coeff  = -0.5625 * (ep->c2 + 2 * ep->c1);
+                    double second_coeff = -0.5625 * (ep->c2);
+                    double third_coeff  = -0.5625 * (ep->c1);
+
+                    double atu[24];
+                    double firstVec[24];
+
+                    aTransposeU( curDisp, atu );
+                    firstVector( atu, firstVec, first_coeff, second_coeff, third_coeff );
+                    au( localForceDamp, firstVec );
+
+                    for (i = 0; i < 8; i++) {
+
+                        int32_t lnid          = elemp->lnid[i];
+                        fvector_t* nodalForce = mySolver->force + lnid;
+
+                        nodalForce->f[0] += localForceDamp[i].f[0];
+                        nodalForce->f[1] += localForceDamp[i].f[1];
+                        nodalForce->f[2] += localForceDamp[i].f[2];
+                    }
+                }
+            }
+
+        } else { // it has to be a topononlin element
+
+            memset(localForce, 0, 8 * sizeof(fvector_t));
+
+            TetraForces_from_stresses( localForce, enlcons->tetraVol, edata,
+                                            enlcons->topoPart ,  stresses );
+
+            /* Loop over the 8 element nodes:
+             * Add the contribution calculated above to the node
+             * forces carried from the source and stiffness.
+             */
+            for (i = 0; i < 8; i++) {
+
+                int32_t    lnid;
+                fvector_t *nodalForce;
+
+                lnid = elemp->lnid[i];
+
+                nodalForce = mySolver->force + lnid;
+
+                nodalForce->f[0] -= localForce[i].f[0] * theDeltaTSquared;
+                nodalForce->f[1] -= localForce[i].f[1] * theDeltaTSquared;
+                nodalForce->f[2] -= localForce[i].f[2] * theDeltaTSquared;
+
+            } /* element nodes */
+
+            /* =-=-==-=-=-=-=-=-=-=-=-=-=-=-= */
+            /* =-=-=-=- Add damping -=-=-=-=- */
+            /* =-=-==-=-=-=-=-=-=-=-=-=-=-=-= */
+            if ( b_over_dt != 0 ) {
+                memset( localForceDamp, 0, 8 * sizeof(fvector_t) );
+
+                for (i = 0; i < 8; i++) {
+                    int32_t    lnid = elemp->lnid[i];
+                    fvector_t* tm1Disp = mySolver->tm1 + lnid;
+                    fvector_t* tm2Disp = mySolver->tm2 + lnid;
+
+                    curDisp[i].f[0] = ( tm1Disp->f[0] - tm2Disp->f[0] ) * b_over_dt;
+                    curDisp[i].f[1] = ( tm1Disp->f[1] - tm2Disp->f[1] ) * b_over_dt;
+                    curDisp[i].f[2] = ( tm1Disp->f[2] - tm2Disp->f[2] ) * b_over_dt;
+                }
+
+                if ( vector_is_zero( curDisp ) != 0 ) {
+                    TetraForces( curDisp, localForceDamp, ec.tetraVol, edata, mu, lambda, ec.topoPart );
+
+                    for (i = 0; i < 8; i++) {
+
+                        int32_t lnid          = elemp->lnid[i];
+                        fvector_t* nodalForce = mySolver->force + lnid;
+
+                        nodalForce->f[0] -= localForceDamp[i].f[0];
+                        nodalForce->f[1] -= localForceDamp[i].f[1];
+                        nodalForce->f[2] -= localForceDamp[i].f[2];
+                    }
+                }
+            }
+        }
+        /* =-=-==-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= */
+        /* =-=-==-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= */
+        /* =-=-==-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= */
 
         /* =-=-==-=-=-=-=-=-=-=-=-=-=-=-= */
         /* =-=-=-=- Add damping -=-=-=-=- */
@@ -4635,7 +4938,7 @@ void compute_addforce_nl (mesh_t     *myMesh,
         for (i = 0; i < 8; i++) {
             int32_t    lnid = elemp->lnid[i];
             fvector_t* tm1Disp = mySolver->tm1 + lnid;
-   	        fvector_t* tm2Disp = mySolver->tm2 + lnid;
+            fvector_t* tm2Disp = mySolver->tm2 + lnid;
 
             curDisp[i].f[0] = ( tm1Disp->f[0] - tm2Disp->f[0] ) * b_over_dt;
             curDisp[i].f[1] = ( tm1Disp->f[1] - tm2Disp->f[1] ) * b_over_dt;
@@ -4677,6 +4980,434 @@ void compute_addforce_nl (mesh_t     *myMesh,
     return;
 }
 
+void TetraForces_from_stresses( fvector_t* resVec, double tetraVol[5], edata_t *edata,
+                                int cube_part, qptensors_t stresses )
+{
+    int k=0;
+    double h = edata->edgesize, fce_cte;
+    int32_t N0, N1, N2, N3;
+
+    /*  distribution for the first and third quadrants */
+    if ( cube_part == 1 )
+    {
+        for ( k = 0; k < 5; k++ ) { /* for each tetrahedron */
+
+            fce_cte =  h * h / 6.0 * tetraVol[k];
+
+            if ( tetraVol[k] != 0 ) {
+
+                switch ( k ) {
+
+                case ( 0 ):
+                N0 = 0;
+                N1 = 2;
+                N2 = 1;
+                N3 = 4;
+
+                /*
+                [ - Sxx - Sxy - Sxz
+                [ - Sxy - Syy - Syz
+                [ - Sxz - Syz - Szz
+
+                [               Sxy
+                [               Syy
+                [               Syz
+
+                [               Sxx
+                [               Sxy
+                [               Sxz
+
+                [               Sxz
+                [               Syz
+                [               Szz */
+
+                resVec[N0].f[0] +=  ( -stresses.qp[k].xx - stresses.qp[k].xy - stresses.qp[k].xz ) * fce_cte;
+                resVec[N0].f[1] +=  ( -stresses.qp[k].xy - stresses.qp[k].yy - stresses.qp[k].yz ) * fce_cte;
+                resVec[N0].f[2] +=  ( -stresses.qp[k].xz - stresses.qp[k].yz - stresses.qp[k].zz ) * fce_cte;
+                /* ================ */
+                resVec[N1].f[0] +=  stresses.qp[k].xy * fce_cte;
+                resVec[N1].f[1] +=  stresses.qp[k].yy * fce_cte;
+                resVec[N1].f[2] +=  stresses.qp[k].yz * fce_cte;
+                /* ================ */
+                resVec[N2].f[0] +=  stresses.qp[k].xx * fce_cte;
+                resVec[N2].f[1] +=  stresses.qp[k].xy * fce_cte;
+                resVec[N2].f[2] +=  stresses.qp[k].xz * fce_cte;
+                /* ================ */
+                resVec[N3].f[0] +=  stresses.qp[k].xz * fce_cte;
+                resVec[N3].f[1] +=  stresses.qp[k].yz * fce_cte;
+                resVec[N3].f[2] +=  stresses.qp[k].zz * fce_cte;
+                break;
+
+                case ( 1 ):
+                N0 = 3;
+                N1 = 1;
+                N2 = 2;
+                N3 = 7;
+
+                /*   Sxx + Sxy - Sxz
+                     Sxy + Syy - Syz
+                     Sxz + Syz - Szz
+
+                    -Sxy
+                    -Syy
+                    -Syz
+
+                    -Sxx
+                    -Sxy
+                    -Sxz
+
+                     Sxz
+                     Syz
+                     Szz */
+
+                resVec[N0].f[0] +=  (  stresses.qp[k].xx + stresses.qp[k].xy - stresses.qp[k].xz ) * fce_cte;
+                resVec[N0].f[1] +=  (  stresses.qp[k].xy + stresses.qp[k].yy - stresses.qp[k].yz ) * fce_cte;
+                resVec[N0].f[2] +=  (  stresses.qp[k].xz + stresses.qp[k].yz - stresses.qp[k].zz ) * fce_cte;
+                /* ================ */
+                resVec[N1].f[0] +=  -stresses.qp[k].xy * fce_cte;
+                resVec[N1].f[1] +=  -stresses.qp[k].yy * fce_cte;
+                resVec[N1].f[2] +=  -stresses.qp[k].yz * fce_cte;
+                /* ================ */
+                resVec[N2].f[0] +=  -stresses.qp[k].xx * fce_cte;
+                resVec[N2].f[1] +=  -stresses.qp[k].xy * fce_cte;
+                resVec[N2].f[2] +=  -stresses.qp[k].xz * fce_cte;
+                /* ================ */
+                resVec[N3].f[0] +=  stresses.qp[k].xz * fce_cte;
+                resVec[N3].f[1] +=  stresses.qp[k].yz * fce_cte;
+                resVec[N3].f[2] +=  stresses.qp[k].zz * fce_cte;
+                break;
+
+                case ( 2 ):
+                N0 = 6;
+                N1 = 4;
+                N2 = 7;
+                N3 = 2;
+
+                /*   Sxy - Sxx + Sxz
+                     Syy - Sxy + Syz
+                     Syz - Sxz + Szz
+
+                                -Sxy
+                                -Syy
+                                -Syz
+
+                                 Sxx
+                                 Sxy
+                                 Sxz
+
+                                -Sxz
+                                -Syz
+                                -Szz */
+
+
+                resVec[N0].f[0] +=  (  stresses.qp[k].xy - stresses.qp[k].xx + stresses.qp[k].xz ) * fce_cte;
+                resVec[N0].f[1] +=  (  stresses.qp[k].yy - stresses.qp[k].xy + stresses.qp[k].yz ) * fce_cte;
+                resVec[N0].f[2] +=  (  stresses.qp[k].yz - stresses.qp[k].xz + stresses.qp[k].zz ) * fce_cte;
+                /* ================ */
+                resVec[N1].f[0] +=   -stresses.qp[k].xy * fce_cte;
+                resVec[N1].f[1] +=   -stresses.qp[k].yy * fce_cte;
+                resVec[N1].f[2] +=   -stresses.qp[k].yz * fce_cte;
+                /* ================ */
+                resVec[N2].f[0] +=   stresses.qp[k].xx * fce_cte;
+                resVec[N2].f[1] +=   stresses.qp[k].xy * fce_cte;
+                resVec[N2].f[2] +=   stresses.qp[k].xz * fce_cte;
+                /* ================ */
+                resVec[N3].f[0] +=  -stresses.qp[k].xz * fce_cte;
+                resVec[N3].f[1] +=  -stresses.qp[k].yz * fce_cte;
+                resVec[N3].f[2] +=  -stresses.qp[k].zz * fce_cte;
+                break;
+
+                case ( 3 ):
+                N0 = 5;
+                N1 = 7;
+                N2 = 4;
+                N3 = 1;
+
+             /*      Sxx - Sxy + Sxz
+                     Sxy - Syy + Syz
+                     Sxz - Syz + Szz
+
+                                 Sxy
+                                 Syy
+                                 Syz
+
+                                -Sxx
+                                -Sxy
+                                -Sxz
+
+                                -Sxz
+                                -Syz
+                                -Szz */
+
+                resVec[N0].f[0] +=  ( stresses.qp[k].xx - stresses.qp[k].xy + stresses.qp[k].xz ) * fce_cte;
+                resVec[N0].f[1] +=  ( stresses.qp[k].xy - stresses.qp[k].yy + stresses.qp[k].yz ) * fce_cte;
+                resVec[N0].f[2] +=  ( stresses.qp[k].xz - stresses.qp[k].yz + stresses.qp[k].zz ) * fce_cte;
+                /* ================ */
+                resVec[N1].f[0] +=    stresses.qp[k].xy * fce_cte;
+                resVec[N1].f[1] +=    stresses.qp[k].yy * fce_cte;
+                resVec[N1].f[2] +=    stresses.qp[k].yz * fce_cte;
+                /* ================ */
+                resVec[N2].f[0] +=   -stresses.qp[k].xx * fce_cte;
+                resVec[N2].f[1] +=   -stresses.qp[k].xy * fce_cte;
+                resVec[N2].f[2] +=   -stresses.qp[k].xz * fce_cte;
+                /* ================ */
+                resVec[N3].f[0] +=  -stresses.qp[k].xz * fce_cte;
+                resVec[N3].f[1] +=  -stresses.qp[k].yz * fce_cte;
+                resVec[N3].f[2] +=  -stresses.qp[k].zz * fce_cte;
+                break;
+
+                case ( 4 ):
+                N0 = 2;
+                N1 = 4;
+                N2 = 7;
+                N3 = 1;
+
+                /*   Sxy - Sxx - Sxz]
+                     Syy - Sxy - Syz]
+                     Syz - Sxz - Szz]
+
+                     Sxz - Sxy - Sxx]
+                     Syz - Syy - Sxy]
+                     Szz - Syz - Sxz]
+
+                     Sxx + Sxy + Sxz]
+                     Sxy + Syy + Syz]
+                     Sxz + Syz + Szz]
+
+                     Sxx - Sxy - Sxz]
+                     Sxy - Syy - Syz]
+                     Sxz - Syz - Szz] */
+
+                resVec[N0].f[0] +=  (  stresses.qp[k].xy - stresses.qp[k].xx - stresses.qp[k].xz ) * fce_cte;
+                resVec[N0].f[1] +=  (  stresses.qp[k].yy - stresses.qp[k].xy - stresses.qp[k].yz ) * fce_cte;
+                resVec[N0].f[2] +=  (  stresses.qp[k].yz - stresses.qp[k].xz - stresses.qp[k].zz ) * fce_cte;
+                /* ================ */
+                resVec[N1].f[0] +=  (  stresses.qp[k].xz - stresses.qp[k].xy - stresses.qp[k].xx ) * fce_cte;
+                resVec[N1].f[1] +=  (  stresses.qp[k].yz - stresses.qp[k].yy - stresses.qp[k].xy ) * fce_cte;
+                resVec[N1].f[2] +=  (  stresses.qp[k].zz - stresses.qp[k].yz - stresses.qp[k].xz ) * fce_cte;
+                /* ================ */
+                resVec[N2].f[0] +=  (  stresses.qp[k].xx + stresses.qp[k].xy + stresses.qp[k].xz ) * fce_cte;
+                resVec[N2].f[1] +=  (  stresses.qp[k].xy + stresses.qp[k].yy + stresses.qp[k].yz ) * fce_cte;
+                resVec[N2].f[2] +=  (  stresses.qp[k].xz + stresses.qp[k].yz + stresses.qp[k].zz ) * fce_cte;
+                /* ================ */
+                resVec[N3].f[0] +=  (  stresses.qp[k].xx - stresses.qp[k].xy - stresses.qp[k].xz ) * fce_cte;
+                resVec[N3].f[1] +=  (  stresses.qp[k].xy - stresses.qp[k].yy - stresses.qp[k].yz ) * fce_cte;
+                resVec[N3].f[2] +=  (  stresses.qp[k].xz - stresses.qp[k].yz - stresses.qp[k].zz ) * fce_cte;
+                break;
+                }
+            }
+        }
+    }  else  {
+        /*  distribution for the second partition */
+        for ( k = 0; k < 5; k++ ) { /* for each tetrahedron */
+
+            fce_cte =  h * h / 6.0 * tetraVol[k];
+
+            if ( tetraVol[k] != 0 ) {
+
+                switch ( k ) {
+
+                case ( 0 ):
+                N0 = 0;
+                N1 = 3;
+                N2 = 1;
+                N3 = 5;
+
+                /*  [            -Sxx
+                    [            -Sxy
+                    [            -Sxz
+
+                    [             Sxy
+                    [             Syy
+                    [             Syz
+
+                    [ Sxx - Sxy - Sxz
+                    [ Sxy - Syy - Syz
+                    [ Sxz - Syz - Szz
+
+                    [             Sxz
+                    [             Syz
+                    [             Szz*/
+
+                resVec[N0].f[0] +=  -stresses.qp[k].xx * fce_cte;
+                resVec[N0].f[1] +=  -stresses.qp[k].xy * fce_cte;
+                resVec[N0].f[2] +=  -stresses.qp[k].xz * fce_cte;
+                /* ================ */
+                resVec[N1].f[0] +=   stresses.qp[k].xy * fce_cte;
+                resVec[N1].f[1] +=   stresses.qp[k].yy * fce_cte;
+                resVec[N1].f[2] +=   stresses.qp[k].yz * fce_cte;
+                /* ================ */
+                resVec[N2].f[0] +=  (  stresses.qp[k].xx - stresses.qp[k].xy - stresses.qp[k].xz ) * fce_cte;
+                resVec[N2].f[1] +=  (  stresses.qp[k].xy - stresses.qp[k].yy - stresses.qp[k].yz ) * fce_cte;
+                resVec[N2].f[2] +=  (  stresses.qp[k].xz - stresses.qp[k].yz - stresses.qp[k].zz ) * fce_cte;
+                /* ================ */
+                resVec[N3].f[0] +=   stresses.qp[k].xz * fce_cte;
+                resVec[N3].f[1] +=   stresses.qp[k].yz * fce_cte;
+                resVec[N3].f[2] +=   stresses.qp[k].zz * fce_cte;
+                break;
+
+                case ( 1 ):
+                N0 = 0;
+                N1 = 2;
+                N2 = 3;
+                N3 = 6;
+
+                /*          -Sxy
+                            -Syy
+                            -Syz
+
+                 Sxy - Sxx - Sxz
+                 Syy - Sxy - Syz
+                 Syz - Sxz - Szz
+
+                             Sxx
+                             Sxy
+                             Sxz
+
+                             Sxz
+                             Syz
+                             Szz */
+
+                resVec[N0].f[0] +=   -stresses.qp[k].xy * fce_cte;
+                resVec[N0].f[1] +=   -stresses.qp[k].yy * fce_cte;
+                resVec[N0].f[2] +=   -stresses.qp[k].yz * fce_cte;
+                /* ================ */
+                resVec[N1].f[0] +=  (  stresses.qp[k].xy - stresses.qp[k].xx - stresses.qp[k].xz ) * fce_cte;
+                resVec[N1].f[1] +=  (  stresses.qp[k].yy - stresses.qp[k].xy - stresses.qp[k].yz ) * fce_cte;
+                resVec[N1].f[2] +=  (  stresses.qp[k].yz - stresses.qp[k].xz - stresses.qp[k].zz ) * fce_cte;
+                /* ================ */
+                resVec[N2].f[0] +=   stresses.qp[k].xx * fce_cte;
+                resVec[N2].f[1] +=   stresses.qp[k].xy * fce_cte;
+                resVec[N2].f[2] +=   stresses.qp[k].xz * fce_cte;
+                /* ================ */
+                resVec[N3].f[0] +=   stresses.qp[k].xz * fce_cte;
+                resVec[N3].f[1] +=   stresses.qp[k].yz * fce_cte;
+                resVec[N3].f[2] +=   stresses.qp[k].zz * fce_cte;
+                break;
+
+                case ( 2 ):
+                N0 = 4;
+                N1 = 5;
+                N2 = 6;
+                N3 = 0;
+
+                /*   Sxz - Sxy - Sxx
+                     Syz - Syy - Sxy
+                     Szz - Syz - Sxz
+
+                                 Sxx
+                                 Sxy
+                                 Sxz
+
+                                 Sxy
+                                 Syy
+                                 Syz
+
+                                -Sxz
+                                -Syz
+                                -Szz*/
+
+                resVec[N0].f[0] +=  ( stresses.qp[k].xz - stresses.qp[k].xy - stresses.qp[k].xx ) * fce_cte;
+                resVec[N0].f[1] +=  ( stresses.qp[k].yz - stresses.qp[k].yy - stresses.qp[k].xy ) * fce_cte;
+                resVec[N0].f[2] +=  ( stresses.qp[k].zz - stresses.qp[k].yz - stresses.qp[k].xz ) * fce_cte;
+                /* ================ */
+                resVec[N1].f[0] +=  stresses.qp[k].xx * fce_cte;
+                resVec[N1].f[1] +=  stresses.qp[k].xy * fce_cte;
+                resVec[N1].f[2] +=  stresses.qp[k].xz * fce_cte;
+                /* ================ */
+                resVec[N2].f[0] +=  stresses.qp[k].xy * fce_cte;
+                resVec[N2].f[1] +=  stresses.qp[k].yy * fce_cte;
+                resVec[N2].f[2] +=  stresses.qp[k].yz * fce_cte;
+                /* ================ */
+                resVec[N3].f[0] +=  -stresses.qp[k].xz * fce_cte;
+                resVec[N3].f[1] +=  -stresses.qp[k].yz * fce_cte;
+                resVec[N3].f[2] +=  -stresses.qp[k].zz * fce_cte;
+                break;
+
+                case ( 3 ):
+                N0 = 6;
+                N1 = 5;
+                N2 = 7;
+                N3 = 3;
+
+                /*          -Sxx
+                            -Sxy
+                            -Sxz
+
+                            -Sxy
+                            -Syy
+                            -Syz
+
+                 Sxx + Sxy + Sxz
+                 Sxy + Syy + Syz
+                 Sxz + Syz + Szz
+
+                            -Sxz
+                            -Syz
+                            -Szz */
+
+                resVec[N0].f[0] += -stresses.qp[k].xx * fce_cte;
+                resVec[N0].f[1] += -stresses.qp[k].xy * fce_cte;
+                resVec[N0].f[2] += -stresses.qp[k].xz * fce_cte;
+                /* ================ */
+                resVec[N1].f[0] += -stresses.qp[k].xy * fce_cte;
+                resVec[N1].f[1] += -stresses.qp[k].yy * fce_cte;
+                resVec[N1].f[2] += -stresses.qp[k].yz * fce_cte;
+                /* ================ */
+                resVec[N2].f[0] +=  (  stresses.qp[k].xx + stresses.qp[k].xy + stresses.qp[k].xz ) * fce_cte;
+                resVec[N2].f[1] +=  (  stresses.qp[k].xy + stresses.qp[k].yy + stresses.qp[k].yz ) * fce_cte;
+                resVec[N2].f[2] +=  (  stresses.qp[k].xz + stresses.qp[k].yz + stresses.qp[k].zz ) * fce_cte;
+                /* ================ */
+                resVec[N3].f[0] += -stresses.qp[k].xz * fce_cte;
+                resVec[N3].f[1] += -stresses.qp[k].yz * fce_cte;
+                resVec[N3].f[2] += -stresses.qp[k].zz * fce_cte;
+                break;
+
+                case ( 4 ):
+                N0 = 0;
+                N1 = 6;
+                N2 = 3;
+                N3 = 5;
+                /*
+                 - Sxx - Sxy - Sxz]
+                 - Sxy - Syy - Syz]
+                 - Sxz - Syz - Szz]
+
+                   Sxy - Sxx + Sxz]
+                   Syy - Sxy + Syz]
+                   Syz - Sxz + Szz]
+
+                   Sxx + Sxy - Sxz]
+                   Sxy + Syy - Syz]
+                   Sxz + Syz - Szz]
+
+                   Sxx - Sxy + Sxz]
+                   Sxy - Syy + Syz]
+                   Sxz - Syz + Szz] */
+
+                resVec[N0].f[0] +=  ( -stresses.qp[k].xx - stresses.qp[k].xy - stresses.qp[k].xz ) * fce_cte;
+                resVec[N0].f[1] +=  ( -stresses.qp[k].xy - stresses.qp[k].yy - stresses.qp[k].yz ) * fce_cte;
+                resVec[N0].f[2] +=  ( -stresses.qp[k].xz - stresses.qp[k].yz - stresses.qp[k].zz ) * fce_cte;
+                /* ================ */
+                resVec[N1].f[0] +=  (  stresses.qp[k].xy - stresses.qp[k].xx + stresses.qp[k].xz ) * fce_cte;
+                resVec[N1].f[1] +=  (  stresses.qp[k].yy - stresses.qp[k].xy + stresses.qp[k].yz ) * fce_cte;
+                resVec[N1].f[2] +=  (  stresses.qp[k].yz - stresses.qp[k].xz + stresses.qp[k].zz ) * fce_cte;
+                /* ================ */
+                resVec[N2].f[0] +=  (  stresses.qp[k].xx + stresses.qp[k].xy - stresses.qp[k].xz ) * fce_cte;
+                resVec[N2].f[1] +=  (  stresses.qp[k].xy + stresses.qp[k].yy - stresses.qp[k].yz ) * fce_cte;
+                resVec[N2].f[2] +=  (  stresses.qp[k].xz + stresses.qp[k].yz - stresses.qp[k].zz ) * fce_cte;
+                /* ================ */
+                resVec[N3].f[0] +=  (  stresses.qp[k].xx - stresses.qp[k].xy + stresses.qp[k].xz ) * fce_cte;
+                resVec[N3].f[1] +=  (  stresses.qp[k].xy - stresses.qp[k].yy + stresses.qp[k].yz ) * fce_cte;
+                resVec[N3].f[2] +=  (  stresses.qp[k].xz - stresses.qp[k].yz + stresses.qp[k].zz ) * fce_cte;
+                break;
+
+                }
+            }
+        }
+    }
+}
+
 /*
  * compute_nonlinear_state: Compute the necessary quantities to determine
  *                             if an element has undergone plastic deformation.
@@ -4697,122 +5428,136 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
                                double      theDeltaT,
                                int         step )
 {
-	/* In general, j-index refers to the quadrature point in a loop (0 to 7 for
-	 * eight points), and i-index refers to the tensor component (0 to 5), with
-	 * the following order xx[0], yy[1], zz[2], xy[3], yz[4], xz[5]. i-index is
-	 * also some times used for the number of nodes (8, 0 to 7).
-	 */
+    /* In general, j-index refers to the quadrature point in a loop (0 to 7 for
+     * eight points), and i-index refers to the tensor component (0 to 5), with
+     * the following order xx[0], yy[1], zz[2], xy[3], yz[4], xz[5]. i-index is
+     * also some times used for the number of nodes (8, 0 to 7).
+     */
 
-	int     i;
-	int32_t eindex, nl_eindex;
+    int     i;
+    int32_t eindex, nl_eindex;
 
 
-	/* Loop over the number of local elements */
-	for (nl_eindex = 0; nl_eindex < myNonlinElementsCount; nl_eindex++) {
+    /* Loop over the number of local elements */
+    for (nl_eindex = 0; nl_eindex < myNonlinElementsCount; nl_eindex++) {
 
-		elem_t        *elemp;
-		edata_t       *edata;
-		nlconstants_t *enlcons;
+        elem_t        *elemp;
+        edata_t       *edata;
+        nlconstants_t *enlcons;
 
-		double         h;          /* Element edge-size in meters   */
-		double         mu, lambda; /* Elasticity material constants */
-		double         XI, QC;
-		fvector_t      u[8];
-		qptensors_t   *stresses, *tstrains, *tstrains1, *pstrains1, *pstrains2, *alphastress1, *alphastress2, *Sref;
-		qpvectors_t   *epstr1, *epstr2,   *psi_n,   *lounlo_n,   *Sv_n,   *Sv_max, *kappa;
+        double         h;          /* Element edge-size in meters   */
+        double         mu, lambda; /* Elasticity material constants */
+        double         XI, QC;
+        double         ngp;
 
-		/* Capture data from the element and mesh */
-		eindex = myNonlinElementsMapping[nl_eindex];
+        fvector_t      u[8];
+        qptensors_t   *stresses, *tstrains, *tstrains1, *pstrains1, *pstrains2, *alphastress1, *alphastress2, *Sref;
+        qpvectors_t   *epstr1, *epstr2,   *psi_n,   *lounlo_n,   *Sv_n,   *Sv_max, *kappa;
 
-		elemp = &myMesh->elemTable[eindex];
-		edata = (edata_t *)elemp->data;
-		h     = edata->edgesize;
+        /* Capture data from the element and mesh */
+        eindex = myNonlinElementsMapping[nl_eindex];
 
-		/* Capture data from the nonlinear element structure */
+        elemp = &myMesh->elemTable[eindex];
+        edata = (edata_t *)elemp->data;
+        h     = edata->edgesize;
 
-		enlcons = myNonlinSolver->constants + nl_eindex;
+        /* Capture data from the nonlinear element structure */
 
-		mu     = enlcons->mu;
-		lambda = enlcons->lambda;
+        enlcons = myNonlinSolver->constants + nl_eindex;
 
-		/* Capture the current state in the element */
-		tstrains     = myNonlinSolver->strains      + nl_eindex;
-		tstrains1     = myNonlinSolver->strains1    + nl_eindex;
-		stresses     = myNonlinSolver->stresses     + nl_eindex;
-		pstrains1    = myNonlinSolver->pstrains1    + nl_eindex;   /* Previous plastic tensor  */
-		pstrains2    = myNonlinSolver->pstrains2    + nl_eindex;   /* Current  plastic tensor  */
-		alphastress1 = myNonlinSolver->alphastress1 + nl_eindex;   /* Previous backstress tensor  */
-		alphastress2 = myNonlinSolver->alphastress2 + nl_eindex;   /* Current  backstress tensor  */
-		epstr1       = myNonlinSolver->ep1          + nl_eindex;
-		epstr2       = myNonlinSolver->ep2          + nl_eindex;
+        mu     = enlcons->mu;
+        lambda = enlcons->lambda;
 
-		psi_n        = myNonlinSolver->psi_n        + nl_eindex;
-		lounlo_n     = myNonlinSolver->LoUnlo_n     + nl_eindex;
-		Sv_n         = myNonlinSolver->Sv_n         + nl_eindex;
-		Sv_max       = myNonlinSolver->Sv_max       + nl_eindex;
-		kappa        = myNonlinSolver->kappa        + nl_eindex;
-		Sref         = myNonlinSolver->Sref         + nl_eindex;
+        /* Capture the current state in the element */
+        tstrains     = myNonlinSolver->strains      + nl_eindex;
+        tstrains1     = myNonlinSolver->strains1    + nl_eindex;
+        stresses     = myNonlinSolver->stresses     + nl_eindex;
+        pstrains1    = myNonlinSolver->pstrains1    + nl_eindex;   /* Previous plastic tensor  */
+        pstrains2    = myNonlinSolver->pstrains2    + nl_eindex;   /* Current  plastic tensor  */
+        alphastress1 = myNonlinSolver->alphastress1 + nl_eindex;   /* Previous backstress tensor  */
+        alphastress2 = myNonlinSolver->alphastress2 + nl_eindex;   /* Current  backstress tensor  */
+        epstr1       = myNonlinSolver->ep1          + nl_eindex;
+        epstr2       = myNonlinSolver->ep2          + nl_eindex;
 
-		/* initialize kappa */
-		if ( ( theMaterialModel == VONMISES_BAE  ||  theMaterialModel == VONMISES_BAH || theMaterialModel == VONMISES_GQH ) && ( step == 0 ) ){
-			for (i = 0; i < 8; i++) {
-				kappa->qv[i] = 1E+06;
-			}
-		}
+        psi_n        = myNonlinSolver->psi_n        + nl_eindex;
+        lounlo_n     = myNonlinSolver->LoUnlo_n     + nl_eindex;
+        Sv_n         = myNonlinSolver->Sv_n         + nl_eindex;
+        Sv_max       = myNonlinSolver->Sv_max       + nl_eindex;
+        kappa        = myNonlinSolver->kappa        + nl_eindex;
+        Sref         = myNonlinSolver->Sref         + nl_eindex;
 
-		/* Capture displacements */
-		if ( get_displacements(mySolver, elemp, u) == 0 ) {
-			/* If all displacements are zero go for next element */
-			continue;
-		}
+        /* initialize kappa */
+        if ( ( theMaterialModel == VONMISES_BAE  ||  theMaterialModel == VONMISES_BAH || theMaterialModel == VONMISES_GQH ) && ( step == 0 ) ){
+            for (i = 0; i < 8; i++) {
+                kappa->qv[i] = 1E+06;
+            }
+        }
 
-		/* Loop over the quadrature points */
-		for (i = 0; i < 8; i++) {
 
-			tensor_t  sigma0;
+        /* Capture displacements */
+        if ( get_displacements(mySolver, elemp, u) == 0 ) {
+            /* If all displacements are zero go for next element */
+            continue;
+        }
 
-			/* Quadrature point local coordinates */
-			double lx = xi[0][i] * qc ;
-			double ly = xi[1][i] * qc ;
-			double lz = xi[2][i] * qc ;
+        if ( enlcons->isTopoNonlin == 1 )
+            ngp = 5;
+        else
+            ngp = 8;
 
-			tstrains1->qp[i]    = copy_tensor ( tstrains->qp[i] ); // get elastic strains at t-1
-			/* Calculate total strains */
-			tstrains->qp[i] = point_strain(u, lx, ly, lz, h);
+        /* Loop over the quadrature points or the five tetrahedarl elements*/
+        for (i = 0; i < ngp; i++) {
 
-			/* strain and backstress predictor  */
-	        pstrains1->qp[i]    = copy_tensor ( pstrains2->qp[i] );     /* The strain predictor assumes that the current plastic strains equal those from the previous step   */
-	        alphastress1->qp[i] = copy_tensor ( alphastress2->qp[i] );
+            tensor_t  sigma0;
+            tstrains1->qp[i]    = copy_tensor ( tstrains->qp[i] ); // get elastic strains at t-1
 
-			/* Calculate stresses */
-			if ( ( theMaterialModel == LINEAR ) || ( step <= theGeostaticFinalStep ) ){
-				stresses->qp[i]  = point_stress ( tstrains->qp[i], mu, lambda );
-				continue;
-			} else {
+            if ( ngp == 8 ) {
+                /* Quadrature point local coordinates */
+                double lx = xi[0][i] * qc ;
+                double ly = xi[1][i] * qc ;
+                double lz = xi[2][i] * qc ;
 
-				if ( theApproxGeoState == YES )
-					sigma0 = ApproxGravity_tensor(enlcons->sigmaZ_st, enlcons->phi, h, lz, edata->rho);
-				else
-					sigma0 = zero_tensor();
+                /* Calculate total strains */
+                tstrains->qp[i] = point_strain(u, lx, ly, lz, h);
+            } else {
+                //compute strains of i_th tetrahedron
+                tstrains->qp[i] = point_strain_tetrah ( u, h, i, enlcons->topoPart  );
+            }
 
-				int flagTolSubSteps=0, flagNoSubSteps=0;
-				double ErrBA=0;
+            /* strain and backstress predictor  */
+            pstrains1->qp[i]    = copy_tensor ( pstrains2->qp[i] );     /* The strain predictor assumes that the current plastic strains equal those from the previous step   */
+            alphastress1->qp[i] = copy_tensor ( alphastress2->qp[i] );
 
-/*				double po=90;
-				if (i==2 && eindex == 38816 && ( step == 248 || step == 249 ) ) {
-					po=89;
-				}*/
+            /* Calculate stresses */
+            if ( ( theMaterialModel == LINEAR ) || ( step <= theGeostaticFinalStep ) ){
+                stresses->qp[i]  = point_stress ( tstrains->qp[i], mu, lambda );
+                continue;
+            } else {
 
-				material_update ( *enlcons,           tstrains->qp[i],      tstrains1->qp[i],   pstrains1->qp[i],  alphastress1->qp[i], epstr1->qv[i],   sigma0,        theDeltaT,
-						          &pstrains2->qp[i],  &alphastress2->qp[i], &stresses->qp[i],   &epstr2->qv[i],    &enlcons->fs[i],     &psi_n->qv[i],
-						          &lounlo_n->qv[i], &Sv_n->qv[i], &Sv_max->qv[i], &kappa->qv[i], &Sref->qp[i], &flagTolSubSteps, &flagNoSubSteps, &ErrBA);
 
-				if ( ( theMaterialModel != LINEAR || theMaterialModel != VONMISES_EP || theMaterialModel != DRUCKERPRAGER || theMaterialModel != MOHR_COULOMB) )
-					enlcons->fs[i] = ErrBA;
+/*                if ( theApproxGeoState == YES )
+                    sigma0 = ApproxGravity_tensor(enlcons->sigmaZ_st, enlcons->phi, h, lz, edata->rho);
+                else
+                    sigma0 = zero_tensor();*/
 
-			}
-		} /* for all quadrature points */
-	} /* for all nonlinear elements */
+                int flagTolSubSteps=0, flagNoSubSteps=0;
+                double ErrBA=0;
+
+/*              double po=90;
+                if (i==2 && eindex == 38816 && ( step == 248 || step == 249 ) ) {
+                    po=89;
+                }*/
+
+                material_update ( *enlcons,           tstrains->qp[i],      tstrains1->qp[i],   pstrains1->qp[i],  alphastress1->qp[i], epstr1->qv[i],   sigma0,        theDeltaT,
+                                  &pstrains2->qp[i],  &alphastress2->qp[i], &stresses->qp[i],   &epstr2->qv[i],    &enlcons->fs[i],     &psi_n->qv[i],
+                                  &lounlo_n->qv[i], &Sv_n->qv[i], &Sv_max->qv[i], &kappa->qv[i], &Sref->qp[i], &flagTolSubSteps, &flagNoSubSteps, &ErrBA);
+
+                if ( ( theMaterialModel != LINEAR || theMaterialModel != VONMISES_EP || theMaterialModel != DRUCKERPRAGER || theMaterialModel != MOHR_COULOMB) )
+                    enlcons->fs[i] = ErrBA;
+
+            }
+        } /* for all quadrature points */
+    } /* for all nonlinear elements */
 }
 
 /* -------------------------------------------------------------------------- */
@@ -5097,70 +5842,70 @@ void print_nonlinear_stations(mesh_t     *myMesh,
     int32_t mappingIndex;
 
     for ( iStation = 0; iStation < myNumberOfNonlinStations; iStation++ ) {
-    	tensor_t       *stress, *tstrain, tstress;
-    	qptensors_t    *stressF, *tstrainF;
-    	qpvectors_t    *kappaF;
-    	double         bStrain = 0., bStress = 0., Fy, h, kappa;
-    	tensor_t       sigma0;
+        tensor_t       *stress, *tstrain, tstress;
+        qptensors_t    *stressF, *tstrainF;
+        qpvectors_t    *kappaF;
+        double         bStrain = 0., bStress = 0., Fy, h, kappa;
+        tensor_t       sigma0;
 
-    	elem_t         *elemp;
-		edata_t        *edata;
-    	nlconstants_t  *enlcons;
+        elem_t         *elemp;
+        edata_t        *edata;
+        nlconstants_t  *enlcons;
 
-    	nl_eindex    = myStationsElementIndices[iStation];
-    	eindex       = myNonlinElementsMapping[nl_eindex];
-    	mappingIndex = myNonlinStationsMapping[iStation];
-    	enlcons      = myNonlinSolver->constants + nl_eindex;
+        nl_eindex    = myStationsElementIndices[iStation];
+        eindex       = myNonlinElementsMapping[nl_eindex];
+        mappingIndex = myNonlinStationsMapping[iStation];
+        enlcons      = myNonlinSolver->constants + nl_eindex;
 
-		elemp = &myMesh->elemTable[eindex];
-		edata = (edata_t *)elemp->data;
-		h     = edata->edgesize;
+        elemp = &myMesh->elemTable[eindex];
+        edata = (edata_t *)elemp->data;
+        h     = edata->edgesize;
 
-		/* compute the self-weight stresses at the first Gauss point*/
-		double lz = -0.577350269189;
-		if ( theApproxGeoState == YES )
-			sigma0 = ApproxGravity_tensor(enlcons->sigmaZ_st, enlcons->phi, h, lz, edata->rho);
-		else
-			sigma0 = zero_tensor();
+        /* compute the self-weight stresses at the first Gauss point*/
+        double lz = -0.577350269189;
+        if ( theApproxGeoState == YES )
+            sigma0 = ApproxGravity_tensor(enlcons->sigmaZ_st, enlcons->phi, h, lz, edata->rho);
+        else
+            sigma0 = zero_tensor();
 
-    	/* Capture data from the nonlinear element structure
-    	 * corresponding to the first Gauss point*/
-    	tstrainF   = myNonlinSolver->strains   + nl_eindex;
-    	stressF    = myNonlinSolver->stresses  + nl_eindex;
-    	kappaF     = myNonlinSolver->kappa     + nl_eindex;
+        /* Capture data from the nonlinear element structure
+         * corresponding to the first Gauss point*/
+        tstrainF   = myNonlinSolver->strains   + nl_eindex;
+        stressF    = myNonlinSolver->stresses  + nl_eindex;
+        kappaF     = myNonlinSolver->kappa     + nl_eindex;
 
-    	stress      = &(stressF->qp[4]);            /* relative stresses of the first Gauss point */
-    	tstress     = add_tensors(*stress,sigma0); /* compute the total stress tensor */
+        stress      = &(stressF->qp[4]);            /* relative stresses of the first Gauss point */
+        tstress     = add_tensors(*stress,sigma0); /* compute the total stress tensor */
 
-    	tstrain    = &(tstrainF->qp[4]);
-    	kappa      =  kappaF->qv[4];
+        tstrain    = &(tstrainF->qp[4]);
+        kappa      =  kappaF->qv[4];
 
-    	Fy         = (myNonlinSolver->constants   + nl_eindex)->fs[4];
+        Fy         = (myNonlinSolver->constants   + nl_eindex)->fs[4];
 
-    	bStrain = tstrain->xx + tstrain->yy + tstrain->zz;
-    	bStress = tstress.xx + tstress.yy + tstress.zz;
+        bStrain = tstrain->xx + tstrain->yy + tstrain->zz;
+        bStress = tstress.xx + tstress.yy + tstress.zz;
 
-    	if (step % rate == 0) {
-    		fprintf( myStations[mappingIndex].fpoutputfile,
+        if (step % rate == 0) {
+            fprintf( myStations[mappingIndex].fpoutputfile,
 
-    				" % 8e % 8e"
-    				" % 8e % 8e"
-    				" % 8e % 8e"
-    				" % 8e % 8e"
-    				" % 8e % 8e"
-    				" % 8e % 8e"
-    				" % 8e % 8e"
-    				" % 8e % 8e",
+                    " % 8e % 8e"
+                    " % 8e % 8e"
+                    " % 8e % 8e"
+                    " % 8e % 8e"
+                    " % 8e % 8e"
+                    " % 8e % 8e"
+                    " % 8e % 8e"
+                    " % 8e % 8e",
 
-    				tstrain->xx, tstress.xx, // 11 12
-    				tstrain->yy, tstress.yy, // 13 14
-    				tstrain->zz, tstress.zz, // 15 16
-    				bStrain,     bStress,    // 17 18
-    				tstrain->xy, tstress.xy, // 19 20
-    				tstrain->yz, tstress.yz, // 21 22
-    				tstrain->xz, tstress.xz,
-    				Fy, kappa); // 23 24
-    	}
+                    tstrain->xx, tstress.xx, // 11 12
+                    tstrain->yy, tstress.yy, // 13 14
+                    tstrain->zz, tstress.zz, // 15 16
+                    bStrain,     bStress,    // 17 18
+                    tstrain->xy, tstress.xy, // 19 20
+                    tstrain->yz, tstress.yz, // 21 22
+                    tstrain->xz, tstress.xz,
+                    Fy, kappa); // 23 24
+        }
     } /* for all my stations */
 
 }

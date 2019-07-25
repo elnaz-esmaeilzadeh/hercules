@@ -19,6 +19,10 @@
 #ifndef TOPOGRAPHY_H_
 #define TOPOGRAPHY_H_
 
+#include "nonlinear.h"
+#include "octor.h"
+#include "cvm.h"
+
 
 /* -------------------------------------------------------------------------- */
 /*                        Structures and definitions                          */
@@ -35,6 +39,8 @@ typedef struct topoconstants_t {
     double       rho;
     double       h;
     double       tetraVol[5];
+    int          isTopoNonlin;
+    int          cube_part;
 
 } topoconstants_t;
 
@@ -51,9 +57,9 @@ typedef enum {
 
 typedef struct topostation_t {
 
-	int32_t  TopoStation;
-    int32_t  nodes_to_interpolate[4];
-    double   local_coord[3];
+	int32_t   TopoStation;
+    int32_t   nodes_to_interpolate[4];
+    double    local_coord[3];
 
 } topostation_t;
 
@@ -65,6 +71,7 @@ etreetype_t get_theetree_type ();
 topometh_t get_topo_meth();
 
 int    topo_correctproperties ( edata_t *edata );
+int    isTopoElement (mesh_t *myMesh, int32_t eindex, int32_t topoNonlin_flag);
 
 int    topo_toexpand            ( octant_t *leaf, double    ticksize, edata_t  *edata, double VsFactor );
 void   topo_init                ( int32_t myID, const char *parametersin );
@@ -72,9 +79,12 @@ void   topo_solver_init         ( int32_t  myID, mesh_t *myMesh );
 void   toponodes_mass           ( int32_t eindex, double nodes_mass[8], double M, double xo, double yo, double zo);
 void   compute_addforce_topo    ( mesh_t *myMesh, mysolver_t *mySolver, double theDeltaTSquared );
 void   TetraForces              ( fvector_t* un, fvector_t* resVec, double tetraVol[5], edata_t *edata,
-		                          double mu, double lambda, double xo, double yo, double zo  );
+		                          double mu, double lambda, int cube_part );
 void   compute_addforce_topoEffective    ( mesh_t *myMesh, mysolver_t *mySolver, double theDeltaTSquared );
-void   compute_tetra_localcoord ( vector3D_t point, elem_t *elemp, int32_t *localNode, double *localCoord, double xo, double yo, double zo, double h );
+void   compute_tetra_localcoord ( vector3D_t point, elem_t *elemp, int32_t *localNode,
+		                          double *localCoord, double xo, double yo, double zo,
+		                          double h, int cube_part );
+
 void   topography_stations_init ( mesh_t    *myMesh, station_t *myStations, int32_t    myNumberOfStations);
 int    compute_tetra_displ      (double *dis_x, double *dis_y, double *dis_z,
 						 	 	 double *vel_x, double *vel_y, double *vel_z,
@@ -88,6 +98,29 @@ int    topo_crossings           ( double xo, double yo, double zo, double esize 
 int8_t    topo_maxLevel();
 
 int find_topoAirOct              ( tick_t xTick, tick_t yTick, tick_t zTick,  double  ticksize );
+int layer_prop                   ( double east_m, double north_m, double depth_m, cvmpayload_t* payload, double ticksize, double theFact );
+int layer_Correctprop                   ( double east_m, double north_m, double depth_m, cvmpayload_t* payload );
+topometh_t get_topo_meth() ;
+
+
+/* ERASE LATER THESE FUNCTIONS, ARE JUST FOR A QUICK CHECKING*/
+void topo_DRM_init ( mesh_t *myMesh, mysolver_t *mySolver);
+
+void compute_addforce_topoDRM ( mesh_t     *myMesh,
+                                mysolver_t *mySolver,
+                                double      theDeltaT,
+                                int         step,
+                                fmatrix_t (*theK1)[8], fmatrix_t (*theK2)[8]);
+
+void topo_stats(int32_t myID, int32_t theGroupSize) ;
+void topo_print_stats(int32_t *topoElementsCount,
+                           int32_t *topoStationsCount,
+                           int32_t *topoNonlinElementsCount,
+                           int32_t  theGroupSize) ;
+
+noyesflag_t    	get_topo_nonlin_flag();
+int    			get_cube_partition(int32_t eindex);
+void   			get_tetraProps(int32_t eindex, double tetrVols[5], int *topoPart ) ;
 
 
 #endif /* TOPOGRAPHY_H_ */
