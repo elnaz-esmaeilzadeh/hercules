@@ -7482,12 +7482,6 @@ mesh_correct_properties( etree_t* cvm )
     points[0] = 0.005;
     points[1] = 0.5;
     points[2] = 0.995;
-   /* points[3] = 0.275;
-    points[4] = 0.725;
-    points[5] = 0.1625;
-    points[6] = 0.385;
-    points[7] = 0.6125;
-    points[8] = 0.86; */
 
     /* iterate over mesh elements */
     for (eindex = 0; eindex < Global.myMesh->lenum; eindex++) {
