@@ -2525,6 +2525,64 @@ return H ;
 }
 
 
+double getH_MKZmodel (nlconstants_t el_cnt, double kappa, double gamma_baro) {
+
+	double  gamma_bar, tao_bar, Eo, beta = el_cnt.beta_MKZ, s=el_cnt.s_MKZ, Jac, H;
+	int     cnt=0, cnt_max=200;
+
+	tao_bar   = 1.0/(1.0 + kappa);
+	gamma_bar = gamma_baro;
+
+	if ( theMaterialModel==VONMISES_MKZ ) {
+
+		tao_bar = tao_bar / el_cnt.phi_MKZ;
+		Eo      = gamma_bar - tao_bar * ( 1.0 + beta * pow(gamma_bar,s) );
+
+		while ( fabs(Eo) > 1E-10 ) {
+			Jac       = 1.0 - tao_bar * beta * s * pow(gamma_bar,s - 1.0) ;
+			gamma_bar = gamma_bar - Eo/Jac;
+
+			Eo        = gamma_bar - tao_bar * ( 1.0 + beta * pow(gamma_bar,s) );
+			cnt++;
+			if (cnt == cnt_max)
+				break;
+		}
+	}
+
+	H = evalHardFnc( el_cnt,  gamma_bar);
+
+	return H ;
+
+}
+
+double get_gammabar (nlconstants_t el_cnt, double kappa, gamma_baro) {
+
+	double  gamma_bar, tao_bar, Eo, beta = el_cnt.beta_MKZ, s=el_cnt.s_MKZ, Jac;
+	int     cnt=0, cnt_max=200;
+
+	tao_bar   = 1.0/(1.0 + kappa);
+	gamma_bar = gamma_baro;
+
+	if ( theMaterialModel==VONMISES_MKZ ) {
+
+		tao_bar = tao_bar / el_cnt.phi_MKZ;
+		Eo      = gamma_bar - tao_bar * ( 1.0 + beta * pow(gamma_bar,s) );
+
+		while ( fabs(Eo) > 1E-10 ) {
+			Jac       = 1.0 - tao_bar * beta * s * pow(gamma_bar,s - 1.0) ;
+			gamma_bar = gamma_bar - Eo/Jac;
+
+			Eo        = gamma_bar - tao_bar * ( 1.0 + beta * pow(gamma_bar,s) );
+			cnt++;
+			if (cnt == cnt_max)
+				break;
+		}
+	}
+
+	return gamma_bar ;
+
+}
+
 double getHard_Pegassus (nlconstants_t el_cnt, double kappa) {
 
     double H = 0.0, tao_bar, k0 = 0.0, k1 = 1.0, k2,  f0, f1, f2, tmp;
