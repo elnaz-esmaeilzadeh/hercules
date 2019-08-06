@@ -4846,16 +4846,16 @@ void compute_addforce_nl (mesh_t     *myMesh,
                     /* Gauss integration: Sum(DeltaPsi * Sigma * wi * Ji) */
 
                     toForce->f[0] += ( ( dx * stresses.qp[j].xx )
-                            + ( dy * stresses.qp[j].xy )
-                            + ( dz * stresses.qp[j].xz ) ) * WiJi;
+                                     + ( dy * stresses.qp[j].xy )
+                                     + ( dz * stresses.qp[j].xz ) ) * WiJi;
 
                     toForce->f[1] += ( ( dy * stresses.qp[j].yy )
-                            + ( dx * stresses.qp[j].xy )
-                            + ( dz * stresses.qp[j].yz ) ) * WiJi;
+                                     + ( dx * stresses.qp[j].xy )
+                                     + ( dz * stresses.qp[j].yz ) ) * WiJi;
 
                     toForce->f[2] += ( ( dz * stresses.qp[j].zz )
-                            + ( dy * stresses.qp[j].yz )
-                            + ( dx * stresses.qp[j].xz ) ) * WiJi;
+                                     + ( dy * stresses.qp[j].yz )
+                                     + ( dx * stresses.qp[j].xz ) ) * WiJi;
 
                 } /* quadrature points */
 
@@ -4980,59 +4980,6 @@ void compute_addforce_nl (mesh_t     *myMesh,
                 }
             }
         }
-        /* =-=-==-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= */
-        /* =-=-==-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= */
-        /* =-=-==-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= */
-
-        /* =-=-==-=-=-=-=-=-=-=-=-=-=-=-= */
-        /* =-=-=-=- Add damping -=-=-=-=- */
-        /* =-=-==-=-=-=-=-=-=-=-=-=-=-=-= */
-
-        memset( localForceDamp, 0, 8 * sizeof(fvector_t) );
-
-        //double b_over_dt = ep->c3 / ep->c1;
-        double b_over_dt = theStiffDamp / ( theStiffDampFreq * PI * sqrt(theDeltaTSquared) ); // Added stiffness damping to improve stability
-
-        for (i = 0; i < 8; i++) {
-            int32_t    lnid = elemp->lnid[i];
-            fvector_t* tm1Disp = mySolver->tm1 + lnid;
-            fvector_t* tm2Disp = mySolver->tm2 + lnid;
-
-            curDisp[i].f[0] = ( tm1Disp->f[0] - tm2Disp->f[0] ) * b_over_dt;
-            curDisp[i].f[1] = ( tm1Disp->f[1] - tm2Disp->f[1] ) * b_over_dt;
-            curDisp[i].f[2] = ( tm1Disp->f[2] - tm2Disp->f[2] ) * b_over_dt;
-        }
-
-        /* Coefficients for new stiffness matrix calculation */
-        if (vector_is_zero( curDisp ) != 0) {
-
-            double first_coeff  = -0.5625 * (ep->c2 + 2 * ep->c1);
-            double second_coeff = -0.5625 * (ep->c2);
-            double third_coeff  = -0.5625 * (ep->c1);
-
-            double atu[24];
-            double firstVec[24];
-
-            aTransposeU( curDisp, atu );
-            firstVector( atu, firstVec, first_coeff, second_coeff, third_coeff );
-            au( localForceDamp, firstVec );
-        }
-
-        for (i = 0; i < 8; i++) {
-
-            int32_t lnid          = elemp->lnid[i];
-            fvector_t* nodalForce = mySolver->force + lnid;
-
-            nodalForce->f[0] += localForceDamp[i].f[0];
-            nodalForce->f[1] += localForceDamp[i].f[1];
-            nodalForce->f[2] += localForceDamp[i].f[2];
-
-        }
-
-        /* =-=-==-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= */
-        /* =-=-==-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= */
-        /* =-=-==-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= */
-
     } /* all elements */
 
     return;
