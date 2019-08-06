@@ -46,6 +46,7 @@
 
 static int superflag = 0;
 
+/*
 #define ERROR1      -1
 #define ERROR2      -2
 #define ERROR3      -3
@@ -55,6 +56,7 @@ static int superflag = 0;
 #define ERROR7      -7
 #define ERROR8      -8
 #define ERROR9      -9
+*/
 
 /* -------------------------------------------------------------------------- */
 /*                             Global Variables                               */
@@ -1948,11 +1950,13 @@ double compute_hardening ( double gamma, double c, double Sy, double h, double e
 /*===============================================================*/
 /*===============================================================*/
 /*   Material update function for material models based on (1994) Borja & Amies approach    */
+/*
+
 void MatUpd_vMGeneral ( nlconstants_t el_cnt, double *kappa,
                         tensor_t e_n, tensor_t e_n1, tensor_t *sigma_ref, tensor_t *sigma,
                         int *FlagTolSubSteps, int *FlagNoSubSteps, double *ErrMax ) {
 
-/*   INPUTS:
+   INPUTS:
     * el_cnt            : Material constants
 
     * e_n               : Total strain tensor.
@@ -1963,7 +1967,7 @@ void MatUpd_vMGeneral ( nlconstants_t el_cnt, double *kappa,
     * OUTPUTS:
     * sigma         : Updated stress tensor
     * kappa         : Updated hardening variable
-    * Sref          : Updated reference deviator stress tensor          */
+    * Sref          : Updated reference deviator stress tensor
 
     double   Dt=1.0, T=0.0, Dtmin, Dt_sup, kappa_n, load_unload, Den1, Den2, kappa_up,
              ErrB, ErrS, xi, xi_sup, kappa_o, K,
@@ -1974,15 +1978,15 @@ void MatUpd_vMGeneral ( nlconstants_t el_cnt, double *kappa,
     Dtmin = Dt/theNoSubsteps;
     K     = Lambda + 2.0 * G / 3.0;
 
-    /* At  this point *sigma and *kappa have the information at t-1 */
+     At  this point *sigma and *kappa have the information at t-1
     kappa_n = *kappa;
     sigma_n = copy_tensor(*sigma);
 
-    /* deviatoric stress at t-1. At  this point *sigma has the information at t-1  */
+     deviatoric stress at t-1. At  this point *sigma has the information at t-1
     tensor_t Sdev_n1   = tensor_deviator( *sigma, tensor_octahedral ( tensor_I1 ( *sigma ) ) );
 
 
-    /* total strain increment and deviatoric strain increment */
+     total strain increment and deviatoric strain increment
     tensor_t De       = subtrac_tensors ( e_n, e_n1 );
     double   De_vol   = tensor_I1 ( De );
     tensor_t De_dev   = tensor_deviator( De, tensor_octahedral ( De_vol ) );
@@ -2000,7 +2004,7 @@ void MatUpd_vMGeneral ( nlconstants_t el_cnt, double *kappa,
         if ( *kappa != 0.0 ) {
             *sigma_ref = copy_tensor( Sdev_n1 );
 
-            /* get sigma_n deviatoric */
+             get sigma_n deviatoric
             //double H_n      = getHardening( el_cnt, *kappa);
             //double xi1      = 2.0 * G / ( 1.0 + 3.0 * G / H_n );
             tensor_t DSdev  = scaled_tensor( De_dev, xi1 );
@@ -2033,7 +2037,7 @@ void MatUpd_vMGeneral ( nlconstants_t el_cnt, double *kappa,
                 Dt     = MAX( xi * Dt, Dtmin );
                 Dt     = MIN( Dt, 1 - T );
 
-                /*  compute state for xi_sup (xi_sup is an extrapolated value of xi)  */
+                  compute state for xi_sup (xi_sup is an extrapolated value of xi)
                 if ( Dt_sup > Dt ) {
                     EvalSubStep (  el_cnt, sigma_n, De, De_dev,  De_vol, Dt_sup,  sigma_ref,  &sigma_up, kappa_n, &kappa_up, &ErrB, &ErrS );
                 }
@@ -2062,13 +2066,13 @@ void MatUpd_vMGeneral ( nlconstants_t el_cnt, double *kappa,
                 //MPI_Abort(MPI_COMM_WORLD, ERROR2);
                 //exit(1);
 
-              /*  if (ErrB > *ErrMax) {
+                if (ErrB > *ErrMax) {
                     *ErrMax = ErrB;
                     step_Emax = i;
-                }  */
+                }
           //  }
 
-            /* Update initial values  */
+             Update initial values
             sigma_n = copy_tensor(sigma_up);
             kappa_n = kappa_up;
             Sdev    = tensor_deviator( sigma_n, tensor_octahedral ( tensor_I1 ( sigma_n ) ) );
@@ -2118,6 +2122,7 @@ void MatUpd_vMGeneral ( nlconstants_t el_cnt, double *kappa,
     }
 
 }
+*/
 
 
 /*===============================================================*/
@@ -2199,6 +2204,7 @@ void MatUpd_vMGeneralII ( nlconstants_t el_cnt, double *kappa,
 
 
 
+/*
 void EvalSubStep (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t De_dev, double De_vol,
                   double Dt, tensor_t *sigma_ref, tensor_t *sigma_up, double kappa_n,
                   double *kappa_up, double *ErrB, double *ErrS) {
@@ -2211,7 +2217,7 @@ void EvalSubStep (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t
     De_dev  = scaled_tensor(De_dev,Dt);
     De_vol  = De_vol * Dt;
 
-    /* get sigma_n deviatoric */
+     get sigma_n deviatoric
     Sdev_0   = tensor_deviator( sigma_n, tensor_octahedral ( tensor_I1 ( sigma_n ) ) );
     H_n      = getHardening( el_cnt, kappa_n );
     xi1      = 2.0 * G / ( 1.0 + 3.0 * G / H_n );
@@ -2221,7 +2227,7 @@ void EvalSubStep (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t
     Dsigma1  = add_tensors( isotropic_tensor(K * De_vol), Sdev1 );
     kappa1   = get_kappa( el_cnt, Sdev1, *sigma_ref, kappa_n );
 
-    /* get second set of values */
+     get second set of values
     H_n2     = getHardening( el_cnt, kappa1 );
     xi2      = 2.0 * G / ( 1.0 + 3.0 * G / H_n2 );
 
@@ -2234,7 +2240,7 @@ void EvalSubStep (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t
                                add_tensors( scaled_tensor(DSdev1,0.5), scaled_tensor(DSdev2,0.5) ) );
     *kappa_up = (kappa1+kappa2)/2;
 
-    /* compute errors */
+     compute errors
     //Dss       =  subtrac_tensors(Dsigma2,Dsigma1);
     //*ErrS     =  sqrt(2.0 *  tensor_J2 ( Dss ) ) / sqrt(2.0 *  tensor_J2 ( *sigma_up ) );
 
@@ -2250,6 +2256,7 @@ void EvalSubStep (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t
     *ErrB         = fabs( sqrt( ddot_tensors(S1,S1) ) - R ) / R;
 
 }
+*/
 
 void Euler2steps (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De_dev, double De_vol,
                   double Dt, tensor_t sigma_ref, tensor_t *sigma_up, double kappa_n,
@@ -2329,7 +2336,7 @@ void Euler2steps (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De_dev, doub
 }
 
 
-void update_stress (nlconstants_t el_cnt, tensor_t  sigma_n, double kappa_n, tensor_t De_dev, double De_vol,
+/*void update_stress (nlconstants_t el_cnt, tensor_t  sigma_n, double kappa_n, tensor_t De_dev, double De_vol,
                     tensor_t sigma_ref, tensor_t *sigma_up, double *kappa_up, double *ErrB, double *ErrS) {
 
     tensor_t Sdev_n, DSdev, S_up, r_up;
@@ -2354,28 +2361,28 @@ void update_stress (nlconstants_t el_cnt, tensor_t  sigma_n, double kappa_n, ten
 
     R         = Su * sqrt(8.0/3.0);
     *ErrB     = fabs( sqrt( ddot_tensors(r_up,r_up) ) - R );
-}
+}*/
 
 
 
-double get_BS_value (nlconstants_t el_cnt, tensor_t  Sdev_n, tensor_t De_dev, tensor_t sigma_ref, double kappa ) {
+/*double get_BS_value (nlconstants_t el_cnt, tensor_t  Sdev_n, tensor_t De_dev, tensor_t sigma_ref, double kappa ) {
 
     tensor_t DSdev1, Sdev1, r1;
     double   H_k, xi_k, Su=el_cnt.c, G=el_cnt.mu;
 
-    /* get variables at the beginning of the increment */
+     get variables at the beginning of the increment
     //Sdev_n   = tensor_deviator( sigma_n, tensor_octahedral ( tensor_I1 ( sigma_n ) ) );
     H_k      = getHardening( el_cnt, kappa );
     xi_k     = 2.0 * G / ( 1.0 + 3.0 * G / H_k );
 
-    /* get first order estimates */
+     get first order estimates
     DSdev1   = scaled_tensor( De_dev,xi_k );
     Sdev1    = add_tensors( Sdev_n, DSdev1 );
     r1       = add_tensors ( Sdev1, scaled_tensor( subtrac_tensors( Sdev1, sigma_ref ), kappa ) );
 
     return ( sqrt( ddot_tensors(r1,r1) ) - Su * sqrt(8.0/3.0)  );
 
-}
+}*/
 
 
 void substepping (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De_dev, double De_vol,
@@ -2882,11 +2889,6 @@ double Pegasus(double beta, nlconstants_t el_cnt) {
 
     }
 
-
-
-    //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=
-
-
     cnt1=1;
 
     k2 = k1 - f1 * ( k1 - k0 ) / ( f1 - f0 );
@@ -2940,7 +2942,7 @@ double Pegasus(double beta, nlconstants_t el_cnt) {
 
 }
 
-
+/*
 void ImplicitExponential (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De,
                   tensor_t Sigma_ref, tensor_t *sigma_up, double kappa_n,
                   double *kappa_up, double *ErrB) {
@@ -2959,7 +2961,7 @@ void ImplicitExponential (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De,
     H_n    =  getHardening( el_cnt, kappa_n );
     psi_n  =  2.0 * G / ( 1.0 + 3.0 * G / H_n );
 
-    /* get sigma_n deviatoric */
+     get sigma_n deviatoric
     Sdev_n = tensor_deviator( sigma_n, tensor_octahedral ( tensor_I1 ( sigma_n ) ) );
     //SmSo   = subtrac_tensors(Sdev_n, *Sigma_ref);
     Sigma      = add_tensors( Sdev_n, scaled_tensor(De_dev,psi_n));
@@ -3019,8 +3021,9 @@ void ImplicitExponential (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De,
     *kappa_up = kappa_n;
     *ErrB     = error;
 
-}
+}*/
 
+/*
 
 double get_kappa_Pegasus( nlconstants_t el_cnt, tensor_t  Sdev_n, tensor_t sigma_ref, tensor_t De_dev, double k0, double k1 ) {
     // (1973) King, R. An Improved Pegasus method for root finding
@@ -3131,6 +3134,7 @@ double get_kappa_Pegasus( nlconstants_t el_cnt, tensor_t  Sdev_n, tensor_t sigma
 
 }
 
+*/
 
 double get_kappaUnLoading_II( nlconstants_t el_cnt, tensor_t Sn, tensor_t De, double *Err, double *Psi ) {
 
