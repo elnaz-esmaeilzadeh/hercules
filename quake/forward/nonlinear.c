@@ -5496,12 +5496,15 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
         Sref         = myNonlinSolver->Sref         + nl_eindex;
 
         /* initialize kappa */
-        if ( ( theMaterialModel == VONMISES_BAE  ||  theMaterialModel == VONMISES_BAH || theMaterialModel == VONMISES_GQH ) && ( step == 0 ) ){
+        if ( ( theMaterialModel == VONMISES_BAE   ||
+        	   theMaterialModel == VONMISES_BAH   ||
+        	   theMaterialModel == VONMISES_GQH   ||
+        	   theMaterialModel == VONMISES_MKZ   ||
+        	   theMaterialModel == VONMISES_RO ) && ( step == 0 ) ){
             for (i = 0; i < 8; i++) {
                 kappa->qv[i] = 1E+06;
             }
         }
-
 
         /* Capture displacements */
         if ( get_displacements(mySolver, elemp, u) == 0 ) {
