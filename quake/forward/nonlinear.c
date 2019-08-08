@@ -2532,27 +2532,31 @@ return H ;
 }
 
 
-double getH_MKZmodel (nlconstants_t el_cnt, double kappa, double gamma_baro) {
+double getH_MKZmodel (nlconstants_t el_cnt, double kappa ) {
 
 	double  gamma_bar, tao_bar, Eo, beta = el_cnt.beta_MKZ, s=el_cnt.s_MKZ, Jac, H;
 	int     cnt=0, cnt_max=200;
 
-	tao_bar   = 1.0/(1.0 + kappa);
-	gamma_bar = gamma_baro;
+	tao_bar = 1.0 / (1.0 + kappa);
+	tao_bar = tao_bar / el_cnt.phi_MKZ;
 
-	if ( theMaterialModel==VONMISES_MKZ ) {
+	if ( tao_bar == 1.0 )
+		gamma_bar = 100;
+	else
+		gamma_bar = tao_bar / ( 1.0 - tao_bar );
 
-		tao_bar = tao_bar / el_cnt.phi_MKZ;
-		Eo      = gamma_bar - tao_bar * ( 1.0 + beta * pow(gamma_bar,s) );
+	Eo = gamma_bar - tao_bar * ( 1.0 + beta * pow(gamma_bar,s) );
 
-		while ( fabs(Eo) > 1E-10 ) {
-			Jac       = 1.0 - tao_bar * beta * s * pow(gamma_bar,s - 1.0) ;
-			gamma_bar = gamma_bar - Eo/Jac;
+	while ( fabs(Eo) > theBackboneErrorTol ) {
+		Jac       = 1.0 - tao_bar * beta * s * pow(gamma_bar,s - 1.0) ;
+		gamma_bar = gamma_bar - Eo/Jac;
 
-			Eo        = gamma_bar - tao_bar * ( 1.0 + beta * pow(gamma_bar,s) );
-			cnt++;
-			if (cnt == cnt_max)
-				break;
+		Eo        = gamma_bar - tao_bar * ( 1.0 + beta * pow(gamma_bar,s) );
+		cnt++;
+
+		if (cnt == cnt_max) {
+			H = getHard_Pegassus ( el_cnt,  kappa );
+			break;
 		}
 	}
 
@@ -2768,10 +2772,14 @@ double getHardening(nlconstants_t el_cnt, double kappa) {
                 double  eta = el_cnt.eta_RO, phi = el_cnt.phi_RO, alpha = el_cnt.alpha_RO;
                 H = 3.0 * G / ( alpha * eta  ) * pow( phi * (1.0 + kappa), (eta - 1.0) ) ;
             } else {
-                if ( theMaterialModel == VONMISES_GQH && el_cnt.thetaGQH[3]>=0.99 && el_cnt.thetaGQH[4]>=0.99)
+                if ( theMaterialModel == VONMISES_GQH && el_cnt.thetaGQH[3]>=0.99 && el_cnt.thetaGQH[4]>=0.99 )
                     H = getH_GQHmodel ( el_cnt,  kappa);
-                else
-                    H = getHard_Pegassus ( el_cnt,  kappa );
+                else {
+                	if ( theMaterialModel == VONMISES_MKZ )
+                		H = getH_MKZmodel ( el_cnt,  kappa );
+                	else
+                		H = getHard_Pegassus ( el_cnt,  kappa );
+                }
             }
         }
     }
