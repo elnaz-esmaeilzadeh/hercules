@@ -2566,7 +2566,7 @@ double getH_MKZmodel (nlconstants_t el_cnt, double kappa ) {
 
 }
 
-double get_gammabar (nlconstants_t el_cnt, double kappa, gamma_baro) {
+double get_gammabar (nlconstants_t el_cnt, double kappa, double gamma_baro ) {
 
 	double  gamma_bar, tao_bar, Eo, beta = el_cnt.beta_MKZ, s=el_cnt.s_MKZ, Jac;
 	int     cnt=0, cnt_max=200;
