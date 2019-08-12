@@ -231,4 +231,4 @@ FILE* source_open_forces_file( const char* flags );
 int source_get_local_loaded_nodes_count();
 
 double get_srfhdt();
-source_function_t get_sourceType();
+source_type_t get_sourceType();

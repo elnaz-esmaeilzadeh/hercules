@@ -262,7 +262,7 @@ double get_srfhdt() {
     return theSRFHdt;
 }
 
-source_function_t get_sourceType() {
+source_type_t get_sourceType() {
 	return theTypeOfSource;
 }
 
@@ -2417,7 +2417,11 @@ read_srfh_source ( FILE *fp, FILE *fpcoords, FILE *fparea, FILE *fpstrike,
 	  }
   }
 
-  theSRFHdt                      = theSourceDtArray[0];
+  if ( theNumberOfPointSources == 0 )
+    theSRFHdt = 1;
+  else
+    theSRFHdt = theSourceDtArray[0];
+
   theNumberOfSRFHSourceTimeSteps =  (int)(((theEndT - theStartT) / theSRFHdt)) + 10; // added ten aditional steps to avoid interpolation issues at theEndT
 
   theNumberOfTimeSteps = theNumberOfSRFHSourceTimeSteps; // rewrite the number of timesteps
