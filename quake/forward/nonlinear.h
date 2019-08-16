@@ -296,6 +296,7 @@ void   EvalSubStep           ( nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t
                                double *kappa_up, double *ErrB, double *ErrS);
 double getH_GQHmodel         (nlconstants_t el_cnt, double kappa);
 double Pegasus               (double beta, nlconstants_t el_cnt);
+double Pegasus2              (double beta, nlconstants_t el_cnt);
 double evalBackboneFn        (nlconstants_t el_cnt, double gamma_bar, double tao_bar);
 double evalHardFnc           (nlconstants_t el_cnt, double gamma_bar);
 double getHard_Pegassus      (nlconstants_t el_cnt, double kappa);
