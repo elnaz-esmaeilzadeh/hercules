@@ -2199,7 +2199,8 @@ void MatUpd_vMGeneralII ( nlconstants_t el_cnt, double *kappa,
 
     *kappa  = kappa_up;
     *sigma  = copy_tensor(sigma_up);
-    *ErrMax = MAX(ErrB,ErrS);
+    *ErrMax = euler_error;
+    //*ErrMax = MAX(ErrB,ErrS);
     //*ErrMax = ErrB;
 
 }
@@ -2548,10 +2549,10 @@ double getH_MKZmodel (nlconstants_t el_cnt, double kappa ) {
 	tao_bar = 1.0 / (1.0 + kappa);
 	tao_bar = tao_bar / el_cnt.phi_MKZ;
 
-	if ( tao_bar == 1.0 )
-		gamma_bar = 100;
+	if ( tao_bar <= 1.0 )
+		gamma_bar = fabs( tao_bar / ( 1.0 - tao_bar ) );
 	else
-		gamma_bar = tao_bar / ( 1.0 - tao_bar );
+		gamma_bar = 100;
 
 	Eo = gamma_bar - tao_bar * ( 1.0 + beta * pow(gamma_bar,s) );
 
@@ -5661,7 +5662,7 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
                 double ErrBA=0;
 
               double po=90;
-                if ( i==3 && eindex == 1866 &&  step == 295  ) {
+                if ( i==7 && eindex == 2519 &&  ( step == 345 || step == 346 )  ) {
                     po=89;
                 }
 
@@ -5669,8 +5670,11 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
                                   &pstrains2->qp[i],  &alphastress2->qp[i], &stresses->qp[i],   &epstr2->qv[i],    &enlcons->fs[i],     &psi_n->qv[i],
                                   &lounlo_n->qv[i], &Sv_n->qv[i], &Sv_max->qv[i], &kappa->qv[i], &Sref->qp[i], &flagTolSubSteps, &flagNoSubSteps, &ErrBA);
 
-                if ( ( theMaterialModel != LINEAR || theMaterialModel != VONMISES_EP || theMaterialModel != DRUCKERPRAGER || theMaterialModel != MOHR_COULOMB) )
+                if ( ( theMaterialModel != LINEAR || theMaterialModel != VONMISES_EP || theMaterialModel != DRUCKERPRAGER || theMaterialModel != MOHR_COULOMB) ) {
                     enlcons->fs[i] = ErrBA;
+                    if ( isnan(ErrBA) )
+                    	po = 90;
+                }
 
             }
         } /* for all quadrature points */
