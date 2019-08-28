@@ -161,6 +161,8 @@ typedef struct nlsolver_t {
                                                                          Hyperbolic.  H = 3mu * kappa^2 / (1+2*kappa)   */
 	qptensors_t   *Sref;          /* Reference stress */
 
+	qpvectors_t   *gamma;        /* One dimensional shear strain  */
+
 } nlsolver_t;
 
 /*typedef struct nlstation_t {
@@ -278,7 +280,7 @@ tensor_t compute_pstrain2            ( nlconstants_t constants, tensor_t pstrain
 
 void material_update ( nlconstants_t constants, tensor_t e_n, tensor_t e_n1, tensor_t ep, tensor_t eta_n, double ep_barn, tensor_t sigma0, double dt,
 		               tensor_t *epl, tensor_t *eta, tensor_t *sigma, double *ep_bar, double *fs, double *psi_n, double *loadunl_n, double *Tao_n,
-		               double *Tao_max, double *kp, tensor_t *sigma_ref,  int *flagTolSubSteps, int *flagNoSubSteps, double *ErrBA );
+		               double *Tao_max, double *kp, tensor_t *sigma_ref,  int *flagTolSubSteps, int *flagNoSubSteps, double *ErrBA, double *gamma1D );
 
 void MatUpd_vMFA (double J2_pr, tensor_t dev_pr, double psi, double c, tensor_t eta_n, tensor_t e_n1, double mu, double Lambda, double Sy,
 		tensor_t *epl, tensor_t ep, double *ep_bar, double ep_barn, tensor_t *eta, tensor_t *sigma, tensor_t stresses,
@@ -287,16 +289,16 @@ void MatUpd_vMFA (double J2_pr, tensor_t dev_pr, double psi, double c, tensor_t 
 
 void   MatUpd_vMGeneral      ( nlconstants_t el_cnt, double *kappa, tensor_t e_n, tensor_t e_n1,
 		                       tensor_t *sigma_ref, tensor_t *sigma, int *FlagSubSteps, int *FlagNoSubSteps, double *ErrMax);
-double getHardening          ( nlconstants_t el_cnt, double kappa);
+double getHardening          ( nlconstants_t el_cnt, double kappa, double gamma_n);
 double getDerHardening       ( nlconstants_t el_cnt, double kappa) ;
 double get_kappa             ( nlconstants_t el_cnt, tensor_t Sdev, tensor_t Sref, double kn );
-double get_kappaUnLoading_II ( nlconstants_t el_cnt, tensor_t Sn, tensor_t De, double *Err, double *Psi ) ;
+double get_kappaUnLoading_II ( nlconstants_t el_cnt, tensor_t Sn, tensor_t De, double *Err, double *Psi, double gamma_n ) ;
 void   EvalSubStep           ( nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t De_dev, double De_vol,
                                double Dt, tensor_t *sigma_ref, tensor_t *sigma_up, double kappa_n,
                                double *kappa_up, double *ErrB, double *ErrS);
 double getH_GQHmodel         (nlconstants_t el_cnt, double kappa);
 double Pegasus               (double beta, nlconstants_t el_cnt);
-double Pegasus2              (double beta, nlconstants_t el_cnt);
+double Pegasus2              (double beta, nlconstants_t el_cnt, double gamma_n);
 double evalBackboneFn        (nlconstants_t el_cnt, double gamma_bar, double tao_bar);
 double evalHardFnc           (nlconstants_t el_cnt, double gamma_bar);
 double getHard_Pegassus      (nlconstants_t el_cnt, double kappa);
@@ -304,11 +306,11 @@ double getHard_Pegassus      (nlconstants_t el_cnt, double kappa);
 
 void Euler2steps (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De_dev, double De_vol,
 		          double Dt, tensor_t sigma_ref, tensor_t *sigma_up, double kappa_n,
-		          double *kappa_up, double *ErrB, double *ErrS, double *euler_error, int nsteps);
+		          double *kappa_up, double *ErrB, double *ErrS, double *euler_error, int nsteps, double gamma_n);
 
 void substepping (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De_dev, double De_vol,
 		          tensor_t sigma_ref, tensor_t *sigma_up, double kappa_n,
-		          double *kappa_up, double *ErrB, double *ErrS, double *euler_error );
+		          double *kappa_up, double *ErrB, double *ErrS, double *euler_error, double gamma_n );
 
 
 double get_BS_value (nlconstants_t el_cnt, tensor_t  Sdev_n, tensor_t De_dev, tensor_t sigma_ref, double kappa );
@@ -321,7 +323,7 @@ void ImplicitExponential (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De,
 		          double *kappa_up, double *ErrB);
 
 void MatUpd_vMGeneralII ( nlconstants_t el_cnt, double *kappa,
-		                tensor_t e_n, tensor_t e_n1, tensor_t *sigma_ref, tensor_t *sigma, double *ErrMax );
+		                tensor_t e_n, tensor_t e_n1, tensor_t *sigma_ref, tensor_t *sigma, double *ErrMax, double *gamma1D  );
 
 
 tensor_t ApproxGravity_tensor(double Szz, double phi, double h, double lz, double rho);
@@ -331,8 +333,8 @@ int get_displacements ( mysolver_t *solver, elem_t *elemp, fvector_t *u );
 
 void get_h_m_from_G_Gmax(nlconstants_t el_cnt, double sigma0, double *mm, double *hh, double *Suu);
 
-double getH_MKZmodel (nlconstants_t el_cnt, double kappa );
-double get_gammabar (nlconstants_t el_cnt, double kappa, double gamma_baro );
+double getH_MKZmodel (nlconstants_t el_cnt, double kappa, double gamma_n );
+double get_gammaBackbone (nlconstants_t el_cnt, double kappa, double gamma_n );
 
 /* -------------------------------------------------------------------------- */
 /*                              Stability methods                             */

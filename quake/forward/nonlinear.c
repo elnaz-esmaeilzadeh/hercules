@@ -1026,6 +1026,8 @@ void nonlinear_solver_init(int32_t myID, mesh_t *myMesh, double depth) {
         (qpvectors_t *)calloc(myNonlinElementsCount, sizeof(qpvectors_t));
     myNonlinSolver->Sref =
         (qptensors_t *)calloc(myNonlinElementsCount, sizeof(qptensors_t));
+    myNonlinSolver->gamma =
+        (qpvectors_t *)calloc(myNonlinElementsCount, sizeof(qpvectors_t));
 
     if ( (myNonlinSolver->constants           == NULL) ||
          (myNonlinSolver->stresses            == NULL) ||
@@ -1042,7 +1044,8 @@ void nonlinear_solver_init(int32_t myID, mesh_t *myMesh, double depth) {
          (myNonlinSolver->Sv_n                == NULL) ||
          (myNonlinSolver->psi_n               == NULL) ||
          (myNonlinSolver->kappa               == NULL) ||
-         (myNonlinSolver->Sref                == NULL) ) {
+         (myNonlinSolver->Sref                == NULL) ||
+         (myNonlinSolver->gamma	              == NULL) ) {
 
         fprintf(stderr, "Thread %d: nonlinear_init: out of memory\n", myID);
         MPI_Abort(MPI_COMM_WORLD, ERROR);
@@ -2130,7 +2133,7 @@ void MatUpd_vMGeneral ( nlconstants_t el_cnt, double *kappa,
 /*   Material update function for material models based on (1994) Borja & Amies approach    */
 void MatUpd_vMGeneralII ( nlconstants_t el_cnt, double *kappa,
                           tensor_t e_n, tensor_t e_n1, tensor_t *sigma_ref,
-                          tensor_t *sigma, double *ErrMax ) {
+                          tensor_t *sigma, double *ErrMax, double *gamma1D ) {
 
 /*   INPUTS:
     * el_cnt            : Material constants
@@ -2145,16 +2148,17 @@ void MatUpd_vMGeneralII ( nlconstants_t el_cnt, double *kappa,
     * kappa         : Updated hardening variable
     * sigma_ref     : Updated reference deviator stress tensor          */
 
-    double   kappa_n, load_unload, Den1, Den2, kappa_up,
+    double   kappa_n, gamma_n, load_unload, Den1, Den2, kappa_up,
              ErrB, ErrS, K,
              G=el_cnt.mu, Lambda = el_cnt.lambda, xi1;
     tensor_t sigma_n, sigma_up, Num;
 
     K     = Lambda + 2.0 * G / 3.0;
 
-    /* At  this point *sigma and *kappa have the information at t-1 */
+    /* At  this point *sigma, *kappa, and gamma1D, have the information at t-1 */
     kappa_n = *kappa;
     sigma_n = copy_tensor(*sigma);
+    gamma_n = *gamma1D;
 
     /* deviatoric stress at t-1. At  this point *sigma has the information at t-1  */
     tensor_t Sdev_n1   = tensor_deviator( *sigma, tensor_octahedral ( tensor_I1 ( *sigma ) ) );
@@ -2172,7 +2176,7 @@ void MatUpd_vMGeneralII ( nlconstants_t el_cnt, double *kappa,
 
     if ( load_unload > 0 ) {
 
-        *kappa = get_kappaUnLoading_II(  el_cnt, Sdev_n1,  De_dev, ErrMax, &xi1 );
+        *kappa = get_kappaUnLoading_II(  el_cnt, Sdev_n1,  De_dev, ErrMax, &xi1, gamma_n );
 
         if ( *kappa != 0.0 ) {
 
@@ -2185,6 +2189,8 @@ void MatUpd_vMGeneralII ( nlconstants_t el_cnt, double *kappa,
             } else {
             	*sigma_ref = copy_tensor( Sdev_n1 );
             	*sigma          = add_tensors (  add_tensors( sigma_n, isotropic_tensor(K * De_vol) ),  DSdev  );
+
+            	*gamma1D = get_gammaBackbone ( el_cnt,  *kappa, gamma_n ) ;
             	return;
             }
         }
@@ -2195,11 +2201,15 @@ void MatUpd_vMGeneralII ( nlconstants_t el_cnt, double *kappa,
     //ImplicitExponential ( el_cnt,   sigma_n,  De, *sigma_ref,  &sigma_up, kappa_n, &kappa_up, &ErrB);
 
     double euler_error = 100;
-    substepping ( el_cnt,   sigma_n,  De_dev,  De_vol, *sigma_ref,  &sigma_up,  kappa_n,  &kappa_up,  &ErrB,  &ErrS,  &euler_error );
+    substepping ( el_cnt,   sigma_n,  De_dev,  De_vol, *sigma_ref,  &sigma_up,  kappa_n,  &kappa_up,  &ErrB,  &ErrS,  &euler_error, gamma_n );
 
     *kappa  = kappa_up;
     *sigma  = copy_tensor(sigma_up);
     *ErrMax = euler_error;
+
+    /* update gamma1D */
+    *gamma1D = get_gammaBackbone ( el_cnt,  *kappa, gamma_n ) ;
+
     //*ErrMax = MAX(ErrB,ErrS);
     //*ErrMax = ErrB;
 
@@ -2263,7 +2273,7 @@ void EvalSubStep (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De, tensor_t
 
 void Euler2steps (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De_dev, double De_vol,
                   double Dt, tensor_t sigma_ref, tensor_t *sigma_up, double kappa_n,
-                  double *kappa_up, double *ErrB, double *ErrS, double *euler_error, int nsteps) {
+                  double *kappa_up, double *ErrB, double *ErrS, double *euler_error, int nsteps, double gamma_n) {
 
     tensor_t Sdev_0, DSdev1, DSdev2, Sdev1, Sdev2, S_up, r_up, DSdev_diff, r2, r1, r_diff;
     double   H_n, xi_n, H1, H2, xi1, xi2, K, kappa1, kappa2, Su=el_cnt.c, Lambda=el_cnt.lambda, G=el_cnt.mu, xi_up, err_tmp,
@@ -2275,14 +2285,14 @@ void Euler2steps (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De_dev, doub
 
     /* get variables at the beginning of the increment */
     Sdev_0   = tensor_deviator( sigma_n, tensor_octahedral ( tensor_I1 ( sigma_n ) ) );
-    H_n      = getHardening( el_cnt, kappa_n );
+    H_n      = getHardening( el_cnt, kappa_n, gamma_n );
     xi_n     = 2.0 * G / ( 1.0 + 3.0 * G / H_n );
 
     /* get first order estimates */
     DSdev1   = scaled_tensor( De_dev,xi_n );
     Sdev1    = add_tensors( Sdev_0, DSdev1 );
     kappa1   = get_kappa( el_cnt, Sdev1, sigma_ref, kappa_n );
-    H1       = getHardening( el_cnt, kappa1 );
+    H1       = getHardening( el_cnt, kappa1, gamma_n );
     xi1      = 2.0 * G / ( 1.0 + 3.0 * G / H1 );
     //r1       = add_tensors ( Sdev1, scaled_tensor( subtrac_tensors( Sdev1, sigma_ref ), kappa1 ) );
 
@@ -2291,7 +2301,7 @@ void Euler2steps (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De_dev, doub
         DSdev2   = scaled_tensor( De_dev,xi1 );
         Sdev2    = add_tensors( Sdev_0, DSdev2 );
         kappa2   = get_kappa( el_cnt, Sdev2, sigma_ref, kappa_n );
-        H2       = getHardening( el_cnt, kappa2 );
+        H2       = getHardening( el_cnt, kappa2, gamma_n );
         xi2      = 2.0 * G / ( 1.0 + 3.0 * G / H2 );
         //r2       = add_tensors ( Sdev2, scaled_tensor( subtrac_tensors( Sdev2, sigma_ref ), kappa2 ) );
     }
@@ -2331,7 +2341,7 @@ void Euler2steps (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De_dev, doub
         r_up  = add_tensors ( Sdev1, scaled_tensor( subtrac_tensors( Sdev1, sigma_ref ), *kappa_up ) );
 
 
-    *ErrS  = xi_up * ( 1.0 + 3.0*G/getHardening( el_cnt, *kappa_up ) ) / G - 2.0 ;
+    *ErrS  = xi_up * ( 1.0 + 3.0*G/getHardening( el_cnt, *kappa_up, gamma_n ) ) - 2.0 * G;
 
     R  = Su * sqrt(8.0/3.0);
 
@@ -2394,13 +2404,13 @@ void Euler2steps (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De_dev, doub
 
 void substepping (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De_dev, double De_vol,
                   tensor_t sigma_ref, tensor_t *sigma_up, double kappa_n,
-                  double *kappa_up, double *ErrB, double *ErrS, double *euler_error ) {
+                  double *kappa_up, double *ErrB, double *ErrS, double *euler_error, double gamma_n ) {
 
 
     double   xi_sup=0.0, T=0.0, Dt_sup, xi, Dtmin = 1.0/theNoSubsteps, maxErrB=0, Dt=1.0;
     int      i, maxIter=75, cnt=0;
 
-    Euler2steps (  el_cnt, sigma_n, De_dev,  De_vol, Dt,  sigma_ref,  sigma_up, kappa_n, kappa_up, ErrB, ErrS, euler_error, 2 );
+    Euler2steps (  el_cnt, sigma_n, De_dev,  De_vol, Dt,  sigma_ref,  sigma_up, kappa_n, kappa_up, ErrB, ErrS, euler_error, 2, gamma_n );
 
     while ( *euler_error > theErrorTol && cnt < maxIter ) {
 
@@ -2411,11 +2421,11 @@ void substepping (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De_dev, doub
 
         /*  compute state for xi_sup (xi_sup is an extrapolated value of xi)  */
         if ( Dt_sup > Dt ) {
-            Euler2steps (  el_cnt, sigma_n, De_dev,  De_vol, Dt_sup,  sigma_ref,  sigma_up, kappa_n, kappa_up, ErrB, ErrS, euler_error, 2 );
+            Euler2steps (  el_cnt, sigma_n, De_dev,  De_vol, Dt_sup,  sigma_ref,  sigma_up, kappa_n, kappa_up, ErrB, ErrS, euler_error, 2, gamma_n );
             Dt        = Dt_sup;
             xi_sup    = MIN( 0.9 * sqrt( theErrorTol / *euler_error ), 1.1 );
         } else {
-            Euler2steps ( el_cnt, sigma_n, De_dev, De_vol, Dt, sigma_ref, sigma_up, kappa_n, kappa_up,  ErrB, ErrS, euler_error, 2 );
+            Euler2steps ( el_cnt, sigma_n, De_dev, De_vol, Dt, sigma_ref, sigma_up, kappa_n, kappa_up,  ErrB, ErrS, euler_error, 2, gamma_n );
             xi_sup = 0.0;  // forget previous xi_sup
         }
 
@@ -2446,7 +2456,7 @@ void substepping (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De_dev, doub
             Dtmin        = (1.0-T)/steps_rem;
 
             for (i = 0; i < steps_rem ; i++) {
-                Euler2steps ( el_cnt, sigma_n, De_dev, De_vol, Dtmin, sigma_ref, sigma_up, kappa_n, kappa_up,  ErrB, ErrS, euler_error, 1 );
+                Euler2steps ( el_cnt, sigma_n, De_dev, De_vol, Dtmin, sigma_ref, sigma_up, kappa_n, kappa_up,  ErrB, ErrS, euler_error, 1, gamma_n );
 
                 /* Update initial values  */
                 sigma_n = copy_tensor(*sigma_up);
@@ -2541,18 +2551,17 @@ return H ;
 }
 
 
-double getH_MKZmodel (nlconstants_t el_cnt, double kappa ) {
+double getH_MKZmodel (nlconstants_t el_cnt, double kappa, double gamma_n ) {
 
-	double  gamma_bar, tao_bar, Eo, beta = el_cnt.beta_MKZ, s=el_cnt.s_MKZ, Jac, H;
+	double  gamma_bar, tao_bar, Eo, Jac, H, gamma_ref,
+	        beta = el_cnt.beta_MKZ, s=el_cnt.s_MKZ,  Su = el_cnt.c, Gmax= el_cnt.mu;
 	int     cnt=0, cnt_max=200;
 
 	tao_bar = 1.0 / (1.0 + kappa);
 	tao_bar = tao_bar / el_cnt.phi_MKZ;
 
-	if ( tao_bar <= 1.0 )
-		gamma_bar = fabs( tao_bar / ( 1.0 - tao_bar ) );
-	else
-		gamma_bar = 100;
+	gamma_ref = 2.0 * Su / sqrt(3.0) * el_cnt.phi_MKZ / Gmax;
+	gamma_bar = gamma_n / gamma_ref;
 
 	Eo = gamma_bar - tao_bar * ( 1.0 + beta * pow(gamma_bar,s) );
 
@@ -2563,43 +2572,54 @@ double getH_MKZmodel (nlconstants_t el_cnt, double kappa ) {
 		Eo        = gamma_bar - tao_bar * ( 1.0 + beta * pow(gamma_bar,s) );
 		cnt++;
 
-		if (cnt == cnt_max) {
+		if ( ( cnt == cnt_max && gamma_bar < 0.0 ) || isnan(Eo) ) {
 			H = getHard_Pegassus ( el_cnt,  kappa );
-			break;
+			return H;
 		}
 	}
 
 	H = evalHardFnc( el_cnt,  gamma_bar);
 
+	//H = getHard_Pegassus ( el_cnt,  kappa );
 	return H ;
 
 }
 
-double get_gammabar (nlconstants_t el_cnt, double kappa, double gamma_baro ) {
+double get_gammaBackbone (nlconstants_t el_cnt, double kappa, double gamma_n ) {
 
-	double  gamma_bar, tao_bar, Eo, beta = el_cnt.beta_MKZ, s=el_cnt.s_MKZ, Jac;
+	double  gamma_bar, tao_bar, Eo, Jac, gamma_ref, gamma=0.0,
+	        beta = el_cnt.beta_MKZ, s=el_cnt.s_MKZ,  Su = el_cnt.c, Gmax= el_cnt.mu;
 	int     cnt=0, cnt_max=200;
 
-	tao_bar   = 1.0/(1.0 + kappa);
-	gamma_bar = gamma_baro;
+	if ( theMaterialModel == VONMISES_MKZ ) {
 
-	if ( theMaterialModel==VONMISES_MKZ ) {
-
+		tao_bar = 1.0 / (1.0 + kappa);
 		tao_bar = tao_bar / el_cnt.phi_MKZ;
-		Eo      = gamma_bar - tao_bar * ( 1.0 + beta * pow(gamma_bar,s) );
 
-		while ( fabs(Eo) > 1E-10 ) {
+		gamma_ref = 2.0 * Su / sqrt(3.0) * el_cnt.phi_MKZ / Gmax;
+		gamma_bar = gamma_n / gamma_ref;
+
+		Eo = gamma_bar - tao_bar * ( 1.0 + beta * pow(gamma_bar,s) );
+
+		while ( fabs(Eo) > theBackboneErrorTol ) {
 			Jac       = 1.0 - tao_bar * beta * s * pow(gamma_bar,s - 1.0) ;
 			gamma_bar = gamma_bar - Eo/Jac;
 
 			Eo        = gamma_bar - tao_bar * ( 1.0 + beta * pow(gamma_bar,s) );
 			cnt++;
-			if (cnt == cnt_max)
+
+			if (cnt == cnt_max) {
+				fprintf(stdout," could not compute gamma_bar for MKZ model \n");
 				break;
+			}
 		}
+
+		gamma = gamma_bar * gamma_ref;
+
 	}
 
-	return gamma_bar ;
+
+	return gamma ;
 
 }
 
@@ -2623,9 +2643,10 @@ double getHard_Pegassus (nlconstants_t el_cnt, double kappa) {
     // get initial range for k
     while ( f0 * f1 > 0 && cnt1 < cntMax ) {
         k0 = k1;
+        f0 = f1;
         k1 = 2.0 * k1;
 
-        f0 = evalBackboneFn( el_cnt, k0,  tao_bar);
+        //f0 = evalBackboneFn( el_cnt, k0,  tao_bar);
         f1 = evalBackboneFn( el_cnt, k1,  tao_bar);
         cnt1++;
     }
@@ -2759,7 +2780,7 @@ double evalBackboneFn(nlconstants_t el_cnt, double gamma_bar, double tao_bar) {
 
 
 /*  Plastic modulus */
-double getHardening(nlconstants_t el_cnt, double kappa) {
+double getHardening(nlconstants_t el_cnt, double kappa, double gamma_n) {
 
     double H = 0, psi=el_cnt.psi0, m=el_cnt.m, G=el_cnt.mu;
 
@@ -2785,7 +2806,7 @@ double getHardening(nlconstants_t el_cnt, double kappa) {
                     H = getH_GQHmodel ( el_cnt,  kappa);
                 else {
                 	if ( theMaterialModel == VONMISES_MKZ )
-                		H = getH_MKZmodel ( el_cnt,  kappa );
+                		H = getH_MKZmodel ( el_cnt,  kappa, gamma_n );
                 	else
                 		H = getHard_Pegassus ( el_cnt,  kappa );
                 }
@@ -2867,14 +2888,14 @@ double get_kappa( nlconstants_t el_cnt, tensor_t Sdev, tensor_t Sref, double kn 
 }
 
 
-double Pegasus2(double beta, nlconstants_t el_cnt) {
+double Pegasus2(double beta, nlconstants_t el_cnt, double gamma_n) {
     // (1973) King, R. An Improved Pegasus method for root finding
 
     double k0 = 1.0E-10, k1 = 0.0050, k2,  f0, f1, f2,  G=el_cnt.mu, tmp;
     int cnt1=1, cnt2=1, cntMax = 100;
 
-    f0 = ( 1.0 + k0 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k0);
-    f1 = ( 1.0 + k1 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k1);
+    f0 = ( 1.0 + k0 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k0, gamma_n);
+    f1 = ( 1.0 + k1 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k1, gamma_n);
 
     // get initial range for k
     while ( f0 * f1 > 0 && cnt1 < cntMax ) {
@@ -2882,7 +2903,7 @@ double Pegasus2(double beta, nlconstants_t el_cnt) {
         f0 = f1;
         k1 = 2.0 * k1;
 
-        f1 = ( 1.0 + k1 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k1);
+        f1 = ( 1.0 + k1 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k1, gamma_n);
         cnt1++;
     }
 
@@ -2892,7 +2913,7 @@ double Pegasus2(double beta, nlconstants_t el_cnt) {
     cnt1=1;
 
     k2 = k1 - f1 * ( k1 - k0 ) / ( f1 - f0 );
-    f2 = ( 1.0 + k2 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k2);
+    f2 = ( 1.0 + k2 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k2, gamma_n);
 
     while ( fabs(f2) > theErrorTol && cnt1 < cntMax ) {
 
@@ -2912,7 +2933,7 @@ double Pegasus2(double beta, nlconstants_t el_cnt) {
             f1 = f2;
 
             k2 = k1 - f1 * ( k1 - k0 ) / ( f1 - f0 );
-            f2 = ( 1.0 + k2 - beta ) - 3.0 * beta * G / getHardening(el_cnt, k2);
+            f2 = ( 1.0 + k2 - beta ) - 3.0 * beta * G / getHardening(el_cnt, k2, gamma_n);
 
             cnt2++;
         }
@@ -2929,7 +2950,7 @@ double Pegasus2(double beta, nlconstants_t el_cnt) {
         }
 
         k2 = k1 - f1 * ( k1 - k0 ) / ( f1 - f0 );
-        f2 = ( 1.0 + k2 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k2);
+        f2 = ( 1.0 + k2 - beta )  - 3.0 * beta * G / getHardening(el_cnt, k2, gamma_n);
 
         cnt1++;
 
@@ -2942,7 +2963,7 @@ double Pegasus2(double beta, nlconstants_t el_cnt) {
 
 }
 
-
+/*
 double Pegasus(double beta, nlconstants_t el_cnt) {
     // (1973) King, R. An Improved Pegasus method for root finding
 
@@ -3045,7 +3066,7 @@ double Pegasus(double beta, nlconstants_t el_cnt) {
 
     return k2;
 
-}
+}*/
 
 /*
 void ImplicitExponential (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De,
@@ -3241,7 +3262,7 @@ double get_kappa_Pegasus( nlconstants_t el_cnt, tensor_t  Sdev_n, tensor_t sigma
 
 */
 
-double get_kappaUnLoading_II( nlconstants_t el_cnt, tensor_t Sn, tensor_t De, double *Err, double *Psi ) {
+double get_kappaUnLoading_II( nlconstants_t el_cnt, tensor_t Sn, tensor_t De, double *Err, double *Psi, double gamma_n ) {
 
     double R, A, B, C, kappa1, kappa2, beta, phi=0, G=el_cnt.mu, Su=el_cnt.c, kn=0, kntest;
 
@@ -3283,8 +3304,8 @@ double get_kappaUnLoading_II( nlconstants_t el_cnt, tensor_t Sn, tensor_t De, do
         } else {
 
             //kn  = Pegasus( beta,  el_cnt);  // this is a check
-             kn   = Pegasus2( beta,  el_cnt);  // this is a check
-            *Err  = ( 1.0 + kn - beta ) - 3.0 * beta * G / getHardening(el_cnt, kn);
+             kn   = Pegasus2( beta,  el_cnt, gamma_n);  // this is a check
+            *Err  = ( 1.0 + kn - beta ) - 3.0 * beta * G / getHardening(el_cnt, kn, gamma_n);
             *Psi  = phi / ( 1.0 + kn );
 
             //if ( fabs(*Err) > theErrorTol  ) {
@@ -3500,7 +3521,7 @@ void MatUpd_vMFA (double J2_pr, tensor_t dev_pr, double psi, double Su, tensor_t
 
 void material_update ( nlconstants_t constants, tensor_t e_n, tensor_t e_n1, tensor_t ep, tensor_t eta_n,  double ep_barn, tensor_t sigma0, double dt,
         tensor_t *epl, tensor_t *eta, tensor_t *sigma, double *ep_bar, double *fs, double *psi_n, double *loadunl_n, double *Tao_n, double *Tao_max, double *kp, tensor_t *sigma_ref,
-        int *flagTolSubSteps, int *flagNoSubSteps, double *ErrBA) {
+        int *flagTolSubSteps, int *flagNoSubSteps, double *ErrBA, double *gamma1D) {
     /* INPUTS:
      * constants: Material constants
      * e_n      : Total strain tensor
@@ -3655,7 +3676,7 @@ void material_update ( nlconstants_t constants, tensor_t e_n, tensor_t e_n1, ten
 
     }  else if ( theMaterialModel != MOHR_COULOMB ) {
 
-        MatUpd_vMGeneralII ( constants, kp, e_n, e_n1,  sigma_ref, sigma,  ErrBA ) ;
+        MatUpd_vMGeneralII ( constants, kp, e_n, e_n1,  sigma_ref, sigma,  ErrBA, gamma1D ) ;
         //MatUpd_vMGeneral ( constants,  kp,  e_n,  e_n1, sigma_ref, sigma, flagTolSubSteps, flagNoSubSteps, ErrBA );
         return;
 
@@ -5567,7 +5588,7 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
 
         fvector_t      u[8];
         qptensors_t   *stresses, *tstrains, *tstrains1, *pstrains1, *pstrains2, *alphastress1, *alphastress2, *Sref;
-        qpvectors_t   *epstr1, *epstr2,   *psi_n,   *lounlo_n,   *Sv_n,   *Sv_max, *kappa;
+        qpvectors_t   *epstr1, *epstr2,   *psi_n,   *lounlo_n,   *Sv_n,   *Sv_max, *kappa, *gamma1D;
 
         /* Capture data from the element and mesh */
         eindex = myNonlinElementsMapping[nl_eindex];
@@ -5600,6 +5621,7 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
         Sv_max       = myNonlinSolver->Sv_max       + nl_eindex;
         kappa        = myNonlinSolver->kappa        + nl_eindex;
         Sref         = myNonlinSolver->Sref         + nl_eindex;
+        gamma1D      = myNonlinSolver->gamma        + nl_eindex;
 
         /* initialize kappa */
         if ( ( theMaterialModel == VONMISES_BAE   ||
@@ -5608,7 +5630,8 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
         	   theMaterialModel == VONMISES_MKZ   ||
         	   theMaterialModel == VONMISES_RO ) && ( step == 0 ) ){
             for (i = 0; i < 8; i++) {
-                kappa->qv[i] = 1E+06;
+                kappa->qv[i]   = 1.0E+06;
+                gamma1D->qv[i] = 1.0E-10;
             }
         }
 
@@ -5662,18 +5685,23 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
                 double ErrBA=0;
 
               double po=90;
-                if ( i==7 && eindex == 2519 &&  ( step == 345 || step == 346 )  ) {
+                if ( i== 3 && eindex == 1875 &&  ( step == 600 || step == 601 )  ) {
                     po=89;
                 }
 
                 material_update ( *enlcons,           tstrains->qp[i],      tstrains1->qp[i],   pstrains1->qp[i],  alphastress1->qp[i], epstr1->qv[i],   sigma0,        theDeltaT,
                                   &pstrains2->qp[i],  &alphastress2->qp[i], &stresses->qp[i],   &epstr2->qv[i],    &enlcons->fs[i],     &psi_n->qv[i],
-                                  &lounlo_n->qv[i], &Sv_n->qv[i], &Sv_max->qv[i], &kappa->qv[i], &Sref->qp[i], &flagTolSubSteps, &flagNoSubSteps, &ErrBA);
+                                  &lounlo_n->qv[i], &Sv_n->qv[i], &Sv_max->qv[i], &kappa->qv[i], &Sref->qp[i], &flagTolSubSteps, &flagNoSubSteps, &ErrBA, &gamma1D->qv[i]);
 
                 if ( ( theMaterialModel != LINEAR || theMaterialModel != VONMISES_EP || theMaterialModel != DRUCKERPRAGER || theMaterialModel != MOHR_COULOMB) ) {
                     enlcons->fs[i] = ErrBA;
-                    if ( isnan(ErrBA) )
+                    if ( isnan(ErrBA) ){
                     	po = 90;
+                    	fprintf(stderr,"found nan at gp=%d, element=%d, time=%f \n", i, eindex, step*theDeltaT );
+                        MPI_Abort(MPI_COMM_WORLD, ERROR);
+                        exit(1);
+                    }
+
                 }
 
             }
