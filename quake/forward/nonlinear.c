@@ -58,6 +58,17 @@ static int superflag = 0;
 #define ERROR9      -9
 */
 
+#define  GP10  gp10[10][2] = { { 0.1488743389816312108848260,  0.2955242247147528701738930} , \
+                               { 0.4333953941292471907992659,  0.2692667193099963550912269} , \
+                               { 0.6794095682990244062343274,  0.2190863625159820439955349} , \
+                               { 0.8650633666889845107320967,  0.1494513491505805931457763} , \
+                               { 0.9739065285171717200779640,  0.0666713443086881375935688} , \
+                               {-0.1488743389816312108848260,  0.2955242247147528701738930} , \
+                               {-0.4333953941292471907992659,  0.2692667193099963550912269} , \
+                               {-0.6794095682990244062343274,  0.2190863625159820439955349} , \
+                               {-0.8650633666889845107320967,  0.1494513491505805931457763} , \
+                               {-0.9739065285171717200779640,  0.0666713443086881375935688} }
+
 /* -------------------------------------------------------------------------- */
 /*                             Global Variables                               */
 /* -------------------------------------------------------------------------- */
@@ -1026,8 +1037,13 @@ void nonlinear_solver_init(int32_t myID, mesh_t *myMesh, double depth) {
         (qpvectors_t *)calloc(myNonlinElementsCount, sizeof(qpvectors_t));
     myNonlinSolver->Sref =
         (qptensors_t *)calloc(myNonlinElementsCount, sizeof(qptensors_t));
-    myNonlinSolver->gamma =
+    myNonlinSolver->gamma1d =
         (qpvectors_t *)calloc(myNonlinElementsCount, sizeof(qpvectors_t));
+    myNonlinSolver->tao1d =
+        (qpvectors_t *)calloc(myNonlinElementsCount, sizeof(qpvectors_t));
+    myNonlinSolver->GGmax =
+        (qpvectors_t *)calloc(myNonlinElementsCount, sizeof(qpvectors_t));
+
 
     if ( (myNonlinSolver->constants           == NULL) ||
          (myNonlinSolver->stresses            == NULL) ||
@@ -1045,8 +1061,9 @@ void nonlinear_solver_init(int32_t myID, mesh_t *myMesh, double depth) {
          (myNonlinSolver->psi_n               == NULL) ||
          (myNonlinSolver->kappa               == NULL) ||
          (myNonlinSolver->Sref                == NULL) ||
-         (myNonlinSolver->gamma	              == NULL) ) {
-
+         (myNonlinSolver->gamma1d	          == NULL) ||
+         (myNonlinSolver->tao1d               == NULL) ||
+         (myNonlinSolver->GGmax               == NULL) ) {
         fprintf(stderr, "Thread %d: nonlinear_init: out of memory\n", myID);
         MPI_Abort(MPI_COMM_WORLD, ERROR);
         exit(1);
@@ -2133,7 +2150,7 @@ void MatUpd_vMGeneral ( nlconstants_t el_cnt, double *kappa,
 /*   Material update function for material models based on (1994) Borja & Amies approach    */
 void MatUpd_vMGeneralII ( nlconstants_t el_cnt, double *kappa,
                           tensor_t e_n, tensor_t e_n1, tensor_t *sigma_ref,
-                          tensor_t *sigma, double *ErrMax, double *gamma1D ) {
+                          tensor_t *sigma, double *ErrMax, double *gamma1D, double *tao1D, double *GGmax1D ) {
 
 /*   INPUTS:
     * el_cnt            : Material constants
@@ -2190,7 +2207,7 @@ void MatUpd_vMGeneralII ( nlconstants_t el_cnt, double *kappa,
             	*sigma_ref = copy_tensor( Sdev_n1 );
             	*sigma          = add_tensors (  add_tensors( sigma_n, isotropic_tensor(K * De_vol) ),  DSdev  );
 
-            	*gamma1D = get_gammaBackbone ( el_cnt,  *kappa, gamma_n ) ;
+            	get_Backbonevalues ( el_cnt,  *kappa, gamma_n, gamma1D, tao1D, GGmax1D ) ;
             	return;
             }
         }
@@ -2208,7 +2225,7 @@ void MatUpd_vMGeneralII ( nlconstants_t el_cnt, double *kappa,
     *ErrMax = euler_error;
 
     /* update gamma1D */
-    *gamma1D = get_gammaBackbone ( el_cnt,  *kappa, gamma_n ) ;
+    get_Backbonevalues ( el_cnt,  *kappa, gamma_n, gamma1D, tao1D, GGmax1D ) ;
 
     //*ErrMax = MAX(ErrB,ErrS);
     //*ErrMax = ErrB;
@@ -2585,27 +2602,36 @@ double getH_MKZmodel (nlconstants_t el_cnt, double kappa, double gamma_n ) {
 
 }
 
-double get_gammaBackbone (nlconstants_t el_cnt, double kappa, double gamma_n ) {
+void get_Backbonevalues (nlconstants_t el_cnt, double kappa, double gamma_n, double *gammabackbone, double *taobackbone, double *GGmax  ) {
 
-	double  gamma_bar, tao_bar, Eo, Jac, gamma_ref, gamma=0.0,
-	        beta = el_cnt.beta_MKZ, s=el_cnt.s_MKZ,  Su = el_cnt.c, Gmax= el_cnt.mu;
-	int     cnt=0, cnt_max=200;
+	double  gamma_bar, tao_bar, Eo, Jac, gamma_ref, gamma=0.0, tao_max, m=el_cnt.m,
+	        beta, s,  Su = el_cnt.c, Gmax, xi, h, tao;
+
+	double  GP10, phi_r;
+	int     cnt=0, cnt_max=200, i, ngp = 10;
+
+	tao_max = 2.0 * Su / sqrt(3.0);
+	Gmax    = el_cnt.mu;
+
 
 	if ( theMaterialModel == VONMISES_MKZ ) {
 
 		tao_bar = 1.0 / (1.0 + kappa);
-		tao_bar = tao_bar / el_cnt.phi_MKZ;
+		phi_r   = el_cnt.phi_MKZ;
+		s       = el_cnt.s_MKZ;
+        beta    = el_cnt.beta_MKZ;
 
+		//tao_bar = tao_bar / el_cnt.phi_MKZ;
 		gamma_ref = 2.0 * Su / sqrt(3.0) * el_cnt.phi_MKZ / Gmax;
 		gamma_bar = gamma_n / gamma_ref;
 
-		Eo = gamma_bar - tao_bar * ( 1.0 + beta * pow(gamma_bar,s) );
+		Eo = gamma_bar - tao_bar / phi_r * ( 1.0 + beta * pow(gamma_bar,s) );
 
 		while ( fabs(Eo) > theBackboneErrorTol ) {
-			Jac       = 1.0 - tao_bar * beta * s * pow(gamma_bar,s - 1.0) ;
+			Jac       = 1.0 - tao_bar / phi_r * beta * s * pow(gamma_bar,s - 1.0) ;
 			gamma_bar = gamma_bar - Eo/Jac;
 
-			Eo        = gamma_bar - tao_bar * ( 1.0 + beta * pow(gamma_bar,s) );
+			Eo        = gamma_bar - tao_bar / phi_r * ( 1.0 + beta * pow(gamma_bar,s) );
 			cnt++;
 
 			if (cnt == cnt_max) {
@@ -2614,12 +2640,28 @@ double get_gammaBackbone (nlconstants_t el_cnt, double kappa, double gamma_n ) {
 			}
 		}
 
-		gamma = gamma_bar * gamma_ref;
+		*gammabackbone = gamma_bar * gamma_ref;
+		*taobackbone   = tao_bar * phi_r * tao_max;
+		*GGmax         = 1.0 / ( 1.0 + beta * pow(gamma_bar,s) );
+
+	} else if ( theMaterialModel == VONMISES_BAE ) {
+
+		tao = tao_max / ( 1.0 + kappa );
+		h   = el_cnt.psi0 * Gmax;
+
+		gamma = tao / Gmax;
+
+		for (i = 0; i < ngp; i++) {
+			xi     = tao/2.0 * ( gp10[i][0] + 1.0 );
+			gamma += 3.0 / h * pow ( ( xi / ( tao_max - xi )  ), m ) * gp10[i][1] * tao / 2.0;
+		}
+
+		*gammabackbone = gamma;
+		*taobackbone   = tao;
+		*GGmax         = tao / ( gamma * Gmax );
 
 	}
 
-
-	return gamma ;
 
 }
 
@@ -3521,7 +3563,7 @@ void MatUpd_vMFA (double J2_pr, tensor_t dev_pr, double psi, double Su, tensor_t
 
 void material_update ( nlconstants_t constants, tensor_t e_n, tensor_t e_n1, tensor_t ep, tensor_t eta_n,  double ep_barn, tensor_t sigma0, double dt,
         tensor_t *epl, tensor_t *eta, tensor_t *sigma, double *ep_bar, double *fs, double *psi_n, double *loadunl_n, double *Tao_n, double *Tao_max, double *kp, tensor_t *sigma_ref,
-        int *flagTolSubSteps, int *flagNoSubSteps, double *ErrBA, double *gamma1D) {
+        int *flagTolSubSteps, int *flagNoSubSteps, double *ErrBA, double *gamma1D, double *tao1D, double *GGmax1D ) {
     /* INPUTS:
      * constants: Material constants
      * e_n      : Total strain tensor
@@ -3676,7 +3718,7 @@ void material_update ( nlconstants_t constants, tensor_t e_n, tensor_t e_n1, ten
 
     }  else if ( theMaterialModel != MOHR_COULOMB ) {
 
-        MatUpd_vMGeneralII ( constants, kp, e_n, e_n1,  sigma_ref, sigma,  ErrBA, gamma1D ) ;
+        MatUpd_vMGeneralII ( constants, kp, e_n, e_n1,  sigma_ref, sigma,  ErrBA, gamma1D, tao1D, GGmax1D ) ;
         //MatUpd_vMGeneral ( constants,  kp,  e_n,  e_n1, sigma_ref, sigma, flagTolSubSteps, flagNoSubSteps, ErrBA );
         return;
 
@@ -5588,7 +5630,7 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
 
         fvector_t      u[8];
         qptensors_t   *stresses, *tstrains, *tstrains1, *pstrains1, *pstrains2, *alphastress1, *alphastress2, *Sref;
-        qpvectors_t   *epstr1, *epstr2,   *psi_n,   *lounlo_n,   *Sv_n,   *Sv_max, *kappa, *gamma1D;
+        qpvectors_t   *epstr1, *epstr2,   *psi_n,   *lounlo_n,   *Sv_n,   *Sv_max, *kappa, *gamma1D, *tao1D, *GGmax1D;
 
         /* Capture data from the element and mesh */
         eindex = myNonlinElementsMapping[nl_eindex];
@@ -5621,7 +5663,9 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
         Sv_max       = myNonlinSolver->Sv_max       + nl_eindex;
         kappa        = myNonlinSolver->kappa        + nl_eindex;
         Sref         = myNonlinSolver->Sref         + nl_eindex;
-        gamma1D      = myNonlinSolver->gamma        + nl_eindex;
+        gamma1D      = myNonlinSolver->gamma1d      + nl_eindex;
+        tao1D        = myNonlinSolver->tao1d        + nl_eindex;
+        GGmax1D      = myNonlinSolver->GGmax        + nl_eindex;
 
         /* initialize kappa */
         if ( ( theMaterialModel == VONMISES_BAE   ||
@@ -5632,6 +5676,7 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
             for (i = 0; i < 8; i++) {
                 kappa->qv[i]   = 1.0E+06;
                 gamma1D->qv[i] = 1.0E-10;
+                GGmax1D->qv[i] = 1.0;
             }
         }
 
@@ -5685,19 +5730,20 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
                 double ErrBA=0;
 
               double po=90;
-                if ( i== 3 && eindex == 1875 &&  ( step == 600 || step == 601 )  ) {
+                if ( i== 3 && eindex == 1875 &&  ( step == 420 || step == 421 )  ) {
                     po=89;
                 }
 
                 material_update ( *enlcons,           tstrains->qp[i],      tstrains1->qp[i],   pstrains1->qp[i],  alphastress1->qp[i], epstr1->qv[i],   sigma0,        theDeltaT,
                                   &pstrains2->qp[i],  &alphastress2->qp[i], &stresses->qp[i],   &epstr2->qv[i],    &enlcons->fs[i],     &psi_n->qv[i],
-                                  &lounlo_n->qv[i], &Sv_n->qv[i], &Sv_max->qv[i], &kappa->qv[i], &Sref->qp[i], &flagTolSubSteps, &flagNoSubSteps, &ErrBA, &gamma1D->qv[i]);
+                                  &lounlo_n->qv[i], &Sv_n->qv[i], &Sv_max->qv[i], &kappa->qv[i], &Sref->qp[i], &flagTolSubSteps, &flagNoSubSteps, &ErrBA,
+                                  &gamma1D->qv[i], &tao1D->qv[i], &GGmax1D->qv[i] );
 
                 if ( ( theMaterialModel != LINEAR || theMaterialModel != VONMISES_EP || theMaterialModel != DRUCKERPRAGER || theMaterialModel != MOHR_COULOMB) ) {
                     enlcons->fs[i] = ErrBA;
                     if ( isnan(ErrBA) ){
                     	po = 90;
-                    	fprintf(stderr,"found nan at gp=%d, element=%d, time=%f \n", i, eindex, step*theDeltaT );
+                    	fprintf(stderr,"found nan at gp=%d, element=%d, time=%f, step= %d \n", i, eindex, step*theDeltaT, step );
                         MPI_Abort(MPI_COMM_WORLD, ERROR);
                         exit(1);
                     }
@@ -5993,8 +6039,8 @@ void print_nonlinear_stations(mesh_t     *myMesh,
     for ( iStation = 0; iStation < myNumberOfNonlinStations; iStation++ ) {
         tensor_t       *stress, *tstrain, tstress;
         qptensors_t    *stressF, *tstrainF;
-        qpvectors_t    *kappaF;
-        double         bStrain = 0., bStress = 0., Fy, h, kappa;
+        qpvectors_t    *kappaF, *Gamma1D, *Tao1D, *GGmax1D;
+        double         bStrain = 0., bStress = 0., Fy, h, kappa, gamma1d, tao1d, ggmax1d;
         tensor_t       sigma0;
 
         elem_t         *elemp;
@@ -6023,11 +6069,19 @@ void print_nonlinear_stations(mesh_t     *myMesh,
         stressF    = myNonlinSolver->stresses  + nl_eindex;
         kappaF     = myNonlinSolver->kappa     + nl_eindex;
 
+        Gamma1D     = myNonlinSolver->gamma1d  + nl_eindex;
+        Tao1D       = myNonlinSolver->tao1d    + nl_eindex;
+        GGmax1D     = myNonlinSolver->GGmax    + nl_eindex;
+
         stress      = &(stressF->qp[4]);            /* relative stresses of the first Gauss point */
         tstress     = add_tensors(*stress,sigma0); /* compute the total stress tensor */
 
         tstrain    = &(tstrainF->qp[4]);
         kappa      =  kappaF->qv[4];
+
+        gamma1d    = Gamma1D->qv[4];
+        tao1d      = Tao1D->qv[4];
+        ggmax1d    = GGmax1D->qv[4];
 
         Fy         = (myNonlinSolver->constants   + nl_eindex)->fs[4];
 
@@ -6044,7 +6098,9 @@ void print_nonlinear_stations(mesh_t     *myMesh,
                     " % 8e % 8e"
                     " % 8e % 8e"
                     " % 8e % 8e"
-                    " % 8e % 8e",
+                    " % 8e % 8e"
+            		" % 8e % 8e"
+            		" % 8e ",
 
                     tstrain->xx, tstress.xx, // 11 12
                     tstrain->yy, tstress.yy, // 13 14
@@ -6052,8 +6108,11 @@ void print_nonlinear_stations(mesh_t     *myMesh,
                     bStrain,     bStress,    // 17 18
                     tstrain->xy, tstress.xy, // 19 20
                     tstrain->yz, tstress.yz, // 21 22
-                    tstrain->xz, tstress.xz,
-                    Fy, kappa); // 23 24
+                    tstrain->xz, tstress.xz, // 23 24
+                    Fy, kappa,               // 25 26
+                    gamma1d, tao1d,          // 27 28
+                    ggmax1d);                // 29
+
         }
     } /* for all my stations */
 
