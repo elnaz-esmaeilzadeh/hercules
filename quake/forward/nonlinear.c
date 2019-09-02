@@ -2335,8 +2335,16 @@ void Euler2steps (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De_dev, doub
         //r_diff     = subtrac_tensors ( r2, r1 );
         //Sdev_error = 0.50 * sqrt( ddot_tensors(DSdev_diff,DSdev_diff) / ddot_tensors(*sigma_up,*sigma_up) );
         //r_error    = 0.50 * sqrt( ddot_tensors(r_diff,r_diff) / ddot_tensors(r_up,r_up) );
-        kappa_err  = 0.50 * ( fabs(kappa1 - kappa2)/ (*kappa_up) );
-        xi_err     = 0.50 * ( fabs(xi1 - xi2)/ xi_up );
+
+        if (*kappa_up == 0.0)
+        	kappa_err = 0.0;
+        else
+        	kappa_err  = 0.50 * ( fabs(kappa1 - kappa2)/ (*kappa_up) );
+
+        if (xi_up == 0.0)
+        	xi_err = 0.0;
+        else
+        	xi_err = 0.50 * ( fabs(xi1 - xi2)/ xi_up );
 
         //err_tmp        = MAX(Sdev_error,r_error);
         //err_tmp        = MAX(err_tmp,kappa_err);
@@ -2358,7 +2366,7 @@ void Euler2steps (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De_dev, doub
         r_up  = add_tensors ( Sdev1, scaled_tensor( subtrac_tensors( Sdev1, sigma_ref ), *kappa_up ) );
 
 
-    *ErrS  = xi_up * ( 1.0 + 3.0*G/getHardening( el_cnt, *kappa_up, gamma_n ) ) - 2.0 * G;
+    *ErrS  = xi_up * ( 1.0 + 3.0*G/getHardening( el_cnt, *kappa_up, gamma_n ) ) / G - 2.0;
 
     R  = Su * sqrt(8.0/3.0);
 
@@ -2424,8 +2432,10 @@ void substepping (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De_dev, doub
                   double *kappa_up, double *ErrB, double *ErrS, double *euler_error, double gamma_n ) {
 
 
-    double   xi_sup=0.0, T=0.0, Dt_sup, xi, Dtmin = 1.0/theNoSubsteps, maxErrB=0, Dt=1.0;
+    double   xi_sup=0.0, T=0.0, Dt_sup, xi, Dtmin = 1.0/theNoSubsteps, maxErrB=0, Dt=1.0,
+    		 G = el_cnt.mu, R = el_cnt.c * sqrt(8.0/3.0), Lambda=el_cnt.lambda, K ;
     int      i, maxIter=75, cnt=0;
+
 
     Euler2steps (  el_cnt, sigma_n, De_dev,  De_vol, Dt,  sigma_ref,  sigma_up, kappa_n, kappa_up, ErrB, ErrS, euler_error, 2, gamma_n );
 
@@ -2466,25 +2476,44 @@ void substepping (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De_dev, doub
 
         cnt += 1;
 
-        if ( ( ( Dt == Dtmin ) && ( *euler_error > theErrorTol ) ) || cnt == maxIter ) { // one step explicit
+        if ( ( ( Dt == Dtmin ) && ( *euler_error > theErrorTol ) ) || cnt == maxIter ) {
 
-            int steps_rem = ceil((1.0-T)/Dtmin);
+        	if ( kappa_n < 1E-02  ) { // Dorian says: this point must be on the bounding surface.
 
-            Dtmin        = (1.0-T)/steps_rem;
+        		K                 = Lambda + 2.0 * G / 3.0;
 
-            for (i = 0; i < steps_rem ; i++) {
-                Euler2steps ( el_cnt, sigma_n, De_dev, De_vol, Dtmin, sigma_ref, sigma_up, kappa_n, kappa_up,  ErrB, ErrS, euler_error, 1, gamma_n );
+        		tensor_t Sdev_T   = tensor_deviator( sigma_n, tensor_octahedral ( tensor_I1 ( sigma_n ) ) );
+        		tensor_t Sdev_pr  = add_tensors( Sdev_T, scaled_tensor( De_dev , 2.0 * G * (1.0 - T) ) );
+        		tensor_t N_pr     = scaled_tensor(  Sdev_pr, 1.0 / ( sqrt( ddot_tensors(Sdev_pr,Sdev_pr) ) )  );
 
-                /* Update initial values  */
-                sigma_n = copy_tensor(*sigma_up);
-                kappa_n = *kappa_up;
-                maxErrB = MAX(maxErrB, *ErrB);
-                T += Dtmin;
+        		tensor_t P_T      =  isotropic_tensor( tensor_octahedral ( tensor_I1 ( sigma_n ) ) ) ;
+        		P_T               =  add_tensors( P_T, isotropic_tensor( K * (1.0 - T) * De_vol )  );
 
-            }
+        		*sigma_up         = add_tensors( P_T, scaled_tensor( N_pr, R ) );
+        		*kappa_up         = 0.0;
+        		*euler_error      = maxErrB;
+        		return;
+
+        	} else {
+
+        		/* one step explicit */
+        		int steps_rem = ceil((1.0-T)/Dtmin);
+
+        		Dtmin        = (1.0-T)/steps_rem;
+
+        		for (i = 0; i < steps_rem ; i++) {
+        			Euler2steps ( el_cnt, sigma_n, De_dev, De_vol, Dtmin, sigma_ref, sigma_up, kappa_n, kappa_up,  ErrB, ErrS, euler_error, 1, gamma_n );
+
+        			/* Update initial values  */
+        			sigma_n = copy_tensor(*sigma_up);
+        			kappa_n = *kappa_up;
+        			maxErrB = MAX(maxErrB, *ErrB);
+        			T += Dtmin;
+
+        		}
+        	}
             *euler_error = maxErrB;
             return;
-            //break;
         }
 
     }
@@ -2826,7 +2855,7 @@ double getHardening(nlconstants_t el_cnt, double kappa, double gamma_n) {
 
     double H = 0, psi=el_cnt.psi0, m=el_cnt.m, G=el_cnt.mu;
 
-    if ( kappa == 0.0 ) {
+    if ( kappa == 0.0 && theMaterialModel != VONMISES_MKZ  ) {
         return H;
     }
 
@@ -2916,7 +2945,7 @@ double get_kappa( nlconstants_t el_cnt, tensor_t Sdev, tensor_t Sref, double kn 
     /* =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-   */
 
     if ( kappa < 0.0 || ( B * B - 4.0 * A * ( C - R * R ) ) < 0.0 ) {
-        kappa = kn * 0.50 ;
+        kappa = kn  ;
         //fprintf(stdout," =*=*=*=* CHECK FOR UNSTABLE BEHAVIOR =*=*=*=* \n"
         //        "Cannot compute kappa. \n" );
         //MPI_Abort(MPI_COMM_WORLD, ERROR);
@@ -5730,7 +5759,7 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
                 double ErrBA=0;
 
               double po=90;
-                if ( i== 3 && eindex == 1875 &&  ( step == 420 || step == 421 )  ) {
+                if ( i== 0 && eindex == 2003 &&  ( step == 1160 || step == 1161  )  ) {
                     po=89;
                 }
 
@@ -5741,7 +5770,7 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
 
                 if ( ( theMaterialModel != LINEAR || theMaterialModel != VONMISES_EP || theMaterialModel != DRUCKERPRAGER || theMaterialModel != MOHR_COULOMB) ) {
                     enlcons->fs[i] = ErrBA;
-                    if ( isnan(ErrBA) ){
+                    if ( isnan(ErrBA) || ErrBA > theErrorTol ){
                     	po = 90;
                     	fprintf(stderr,"found nan at gp=%d, element=%d, time=%f, step= %d \n", i, eindex, step*theDeltaT, step );
                         MPI_Abort(MPI_COMM_WORLD, ERROR);
