@@ -2670,7 +2670,7 @@ void get_Backbonevalues (nlconstants_t el_cnt, double kappa, double gamma_n, dou
 		}
 
 		*gammabackbone = gamma_bar * gamma_ref;
-		*taobackbone   = tao_bar * phi_r * tao_max;
+		*taobackbone   = tao_bar * tao_max;
 		*GGmax         = 1.0 / ( 1.0 + beta * pow(gamma_bar,s) );
 
 	} else if ( theMaterialModel == VONMISES_BAE ) {
