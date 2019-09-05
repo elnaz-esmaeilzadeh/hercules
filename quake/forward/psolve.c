@@ -7498,6 +7498,9 @@ mesh_correct_properties( etree_t* cvm )
             }
         }
 
+        double po=56;
+        if (eindex==2148)
+        	po=89;
 
         if ( Param.includeBuildings == YES ) {
             if( bldgs_correctproperties( Global.myMesh, edata, lnid0) ) {
@@ -7562,21 +7565,20 @@ mesh_correct_properties( etree_t* cvm )
                     rho += g_props.rho;
                     ++cnt;
 
-                    /*
                     // get geostatic stress as 1d column
-                    /* double nlayers=10, depth_o = depth_m/nlayers, depth_k;
+                    double nlayers=100, depth_o = depth_m/nlayers, depth_k;
+                    int    k;
                     if (iNorth == 1 && iEast == 1 && iDepth ==1 ) {
 
                         for (k = 0; k < nlayers; k++) {
                             depth_k = depth_o * (k + 0.5);
                             res = cvm_query( Global.theCVMEp, east_m, north_m,
                                     depth_k, &g_props );
-                            s_0 += depth_o * (g_props.rho - 1000 ) * 9.81 * (1 + 2*0.5)/3;
-
+                            s_0 += depth_o * (g_props.rho - 1000.0 * 1.0  ) * 9.81 * ( 1.0 + 2.0 * 0.5 ) / 3.0;
                         }
 
                         edata->sigma_0 = s_0;
-                    } */
+                    }
                 }
             }
         }

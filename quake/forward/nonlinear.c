@@ -1079,9 +1079,13 @@ void nonlinear_solver_init(int32_t myID, mesh_t *myMesh, double depth) {
         edata_t    *edata;
         nlconstants_t *ecp;
         double      mu, lambda;
-        double      elementVs, elementVp;
+        double      elementVs, elementVp, PIn, tau_max, sigma_c, OCR;
 
         eindex = myNonlinElementsMapping[nl_eindex];
+
+        double po=90;
+        if (eindex == 2148)
+        	po=89;
 
         elemp = &myMesh->elemTable[eindex];
         edata = (edata_t *)elemp->data;
@@ -1209,11 +1213,33 @@ void nonlinear_solver_init(int32_t myID, mesh_t *myMesh, double depth) {
                 break;
 
             case VONMISES_MKZ:
-                ecp->c           = get_cohesion(elementVs);
+            	// Shi & Asimaki (2017) && Darendeli's table 8.7
+            	sigma_c = 1000 * 0.1060 * pow( edata->Vs, 1.470 ) ;  // preconsolidation ratio (Pa)
+            	OCR     = sigma_c/edata->sigma_0;                    // Overconsolidation ratio
 
-                ecp->beta_MKZ    = interpolate_property_value(elementVs, thePsi);
-                ecp->s_MKZ       = interpolate_property_value(elementVs, theM);
-                ecp->phi_MKZ     = interpolate_property_value(elementVs, thePhi_RO);
+            	if ( OCR > 4.0 )
+            		OCR = 4.0;
+
+            	if ( edata->Vs <= 200.0 )
+            		PIn = 10.0;
+            	else if ( edata->Vs > 200.0 &&  edata->Vs <= 360.0  )
+            		PIn = 5.0;
+            	else
+            		PIn = 0.0;
+
+            	tau_max            = 1.20 * ( 0.28 * pow( OCR , 0.80 ) * 1.50 * edata->sigma_0 ); // I'm assuming Ko=0.5
+
+            	ecp->gammaref_MKZ  = ( 3.52E-02 + 7.07E-04 * PIn * pow( OCR, 3.69E-01 ) ) * pow( edata->sigma_0 / 101325.0, 2.97E-01 ) / 100.0;
+
+                //ecp->c           = get_cohesion(elementVs);
+                //ecp->beta_MKZ    = interpolate_property_value(elementVs, thePsi);
+                //ecp->s_MKZ       = interpolate_property_value(elementVs, theM);
+                //ecp->phi_MKZ     = interpolate_property_value(elementVs, thePhi_RO);
+
+            	ecp->c             = sqrt(3.0) * tau_max / 2.0;
+            	ecp->beta_MKZ      = 1.0;
+                ecp->s_MKZ         = 9.50E-01;
+                ecp->phi_MKZ       = ecp->gammaref_MKZ * ecp->mu / tau_max;
 
                 break;
 
@@ -2651,7 +2677,8 @@ void get_Backbonevalues (nlconstants_t el_cnt, double kappa, double gamma_n, dou
         beta    = el_cnt.beta_MKZ;
 
 		//tao_bar = tao_bar / el_cnt.phi_MKZ;
-		gamma_ref = 2.0 * Su / sqrt(3.0) * el_cnt.phi_MKZ / Gmax;
+		//gamma_ref = 2.0 * Su / sqrt(3.0) * el_cnt.phi_MKZ / Gmax;
+		gamma_ref = el_cnt.gammaref_MKZ;
 		gamma_bar = gamma_n / gamma_ref;
 
 		Eo = gamma_bar - tao_bar / phi_r * ( 1.0 + beta * pow(gamma_bar,s) );
@@ -2670,7 +2697,7 @@ void get_Backbonevalues (nlconstants_t el_cnt, double kappa, double gamma_n, dou
 		}
 
 		*gammabackbone = gamma_bar * gamma_ref;
-		*taobackbone   = tao_bar * phi_r * tao_max;
+		*taobackbone   = tao_bar * tao_max;
 		*GGmax         = 1.0 / ( 1.0 + beta * pow(gamma_bar,s) );
 
 	} else if ( theMaterialModel == VONMISES_BAE ) {
@@ -5759,7 +5786,7 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
                 double ErrBA=0;
 
               double po=90;
-                if ( i== 0 && eindex == 2003 &&  ( step == 1160 || step == 1161  )  ) {
+                if ( i== 4 && eindex == 2148 &&  ( step == 800 || step == 1600  )  ) {
                     po=89;
                 }
 
