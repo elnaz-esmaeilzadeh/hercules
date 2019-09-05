@@ -3556,8 +3556,10 @@ static void solver_init()
         }
 
         /* the a,b coefficients */
-        a = zeta * Global.theABase;
-        b = zeta * Global.theBBase;
+        //a = zeta * Global.theABase;
+        //b = zeta * Global.theBBase;
+        a = 0.0;
+        b = 0.00063662;
 
         /* coefficients for term (b * deltaT * Ke_off * (Ut-1 - Ut)) */
         ep->c3 = b * Param.theDeltaT * edata->edgesize * mu / 9;
