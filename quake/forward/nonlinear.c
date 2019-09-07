@@ -2514,7 +2514,7 @@ void substepping (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De_dev, doub
 
         if ( ( ( Dt == Dtmin ) && ( *euler_error > theErrorTol ) ) || cnt == maxIter ) {
 
-        	//if ( kappa_n < 1E-02  ) { // Dorian says: this point must be on the bounding surface.
+        	if ( kappa_n < 1E-02  ) { // Dorian says: this point must be on the bounding surface.
 
         		K                 = Lambda + 2.0 * G / 3.0;
 
@@ -2530,26 +2530,26 @@ void substepping (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De_dev, doub
         		*euler_error      = maxErrB;
         		return;
 
-        	//} else {
+        	} else {
 
-        	//	/* one step explicit */
-        	//	int steps_rem = ceil((1.0-T)/Dtmin);
+        		/* one step explicit */
+        		int steps_rem = ceil((1.0-T)/Dtmin);
 
-        	//	Dtmin        = (1.0-T)/steps_rem;
+        		Dtmin        = (1.0-T)/steps_rem;
 
-        	//	for (i = 0; i < steps_rem ; i++) {
-        	//		Euler2steps ( el_cnt, sigma_n, De_dev, De_vol, Dtmin, sigma_ref, sigma_up, kappa_n, kappa_up,  ErrB, ErrS, euler_error, 1, gamma_n );
+        		for (i = 0; i < steps_rem ; i++) {
+        			Euler2steps ( el_cnt, sigma_n, De_dev, De_vol, Dtmin, sigma_ref, sigma_up, kappa_n, kappa_up,  ErrB, ErrS, euler_error, 1, gamma_n );
 
-        	//		/* Update initial values  */
-        	//		sigma_n = copy_tensor(*sigma_up);
-        	//		kappa_n = *kappa_up;
-        	//		maxErrB = MAX(maxErrB, *ErrB);
-        	//		T += Dtmin;
+        			/* Update initial values  */
+        			sigma_n = copy_tensor(*sigma_up);
+        			kappa_n = *kappa_up;
+        			maxErrB = MAX(maxErrB, *ErrB);
+        			T += Dtmin;
 
-        	//	}
-        //	}
-        //    *euler_error = maxErrB;
-        //    return;
+        		}
+        	}
+            *euler_error = maxErrB;
+            return;
         }
 
     }
