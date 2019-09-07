@@ -2514,13 +2514,14 @@ void substepping (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De_dev, doub
 
         if ( ( ( Dt == Dtmin ) && ( *euler_error > theErrorTol ) ) || cnt == maxIter ) {
 
-        	if ( kappa_n < 1E-02  ) { // Dorian says: this point must be on the bounding surface.
+    		tensor_t Sdev_T     = tensor_deviator( sigma_n, tensor_octahedral ( tensor_I1 ( sigma_n ) ) );
+    		tensor_t Sdev_pr    = add_tensors( Sdev_T, scaled_tensor( De_dev , 2.0 * G * (1.0 - T) ) );
+    		double   MagSdev_pr = sqrt( ddot_tensors(Sdev_pr,Sdev_pr) );
+
+        	if ( MagSdev_pr > R  ) { // Dorian says: this point must be on the bounding surface.
 
         		K                 = Lambda + 2.0 * G / 3.0;
-
-        		tensor_t Sdev_T   = tensor_deviator( sigma_n, tensor_octahedral ( tensor_I1 ( sigma_n ) ) );
-        		tensor_t Sdev_pr  = add_tensors( Sdev_T, scaled_tensor( De_dev , 2.0 * G * (1.0 - T) ) );
-        		tensor_t N_pr     = scaled_tensor(  Sdev_pr, 1.0 / ( sqrt( ddot_tensors(Sdev_pr,Sdev_pr) ) )  );
+        		tensor_t N_pr     = scaled_tensor(  Sdev_pr, 1.0 / MagSdev_pr  );
 
         		tensor_t P_T      =  isotropic_tensor( tensor_octahedral ( tensor_I1 ( sigma_n ) ) ) ;
         		P_T               =  add_tensors( P_T, isotropic_tensor( K * (1.0 - T) * De_vol )  );
