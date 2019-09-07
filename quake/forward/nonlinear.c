@@ -2470,7 +2470,7 @@ void substepping (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De_dev, doub
 
     double   xi_sup=0.0, T=0.0, Dt_sup, xi, Dtmin = 1.0/theNoSubsteps, maxErrB=0, Dt=1.0,
     		 G = el_cnt.mu, R = el_cnt.c * sqrt(8.0/3.0), Lambda=el_cnt.lambda, K ;
-    int      i, maxIter=75, cnt=0;
+    int      i, maxIter=250, cnt=0;
 
 
     Euler2steps (  el_cnt, sigma_n, De_dev,  De_vol, Dt,  sigma_ref,  sigma_up, kappa_n, kappa_up, ErrB, ErrS, euler_error, 2, gamma_n );
@@ -2514,7 +2514,7 @@ void substepping (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De_dev, doub
 
         if ( ( ( Dt == Dtmin ) && ( *euler_error > theErrorTol ) ) || cnt == maxIter ) {
 
-        	if ( kappa_n < 1E-02  ) { // Dorian says: this point must be on the bounding surface.
+        	//if ( kappa_n < 1E-02  ) { // Dorian says: this point must be on the bounding surface.
 
         		K                 = Lambda + 2.0 * G / 3.0;
 
@@ -2530,26 +2530,26 @@ void substepping (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De_dev, doub
         		*euler_error      = maxErrB;
         		return;
 
-        	} else {
+        	//} else {
 
-        		/* one step explicit */
-        		int steps_rem = ceil((1.0-T)/Dtmin);
+        	//	/* one step explicit */
+        	//	int steps_rem = ceil((1.0-T)/Dtmin);
 
-        		Dtmin        = (1.0-T)/steps_rem;
+        	//	Dtmin        = (1.0-T)/steps_rem;
 
-        		for (i = 0; i < steps_rem ; i++) {
-        			Euler2steps ( el_cnt, sigma_n, De_dev, De_vol, Dtmin, sigma_ref, sigma_up, kappa_n, kappa_up,  ErrB, ErrS, euler_error, 1, gamma_n );
+        	//	for (i = 0; i < steps_rem ; i++) {
+        	//		Euler2steps ( el_cnt, sigma_n, De_dev, De_vol, Dtmin, sigma_ref, sigma_up, kappa_n, kappa_up,  ErrB, ErrS, euler_error, 1, gamma_n );
 
-        			/* Update initial values  */
-        			sigma_n = copy_tensor(*sigma_up);
-        			kappa_n = *kappa_up;
-        			maxErrB = MAX(maxErrB, *ErrB);
-        			T += Dtmin;
+        	//		/* Update initial values  */
+        	//		sigma_n = copy_tensor(*sigma_up);
+        	//		kappa_n = *kappa_up;
+        	//		maxErrB = MAX(maxErrB, *ErrB);
+        	//		T += Dtmin;
 
-        		}
-        	}
-            *euler_error = maxErrB;
-            return;
+        	//	}
+        //	}
+        //    *euler_error = maxErrB;
+        //    return;
         }
 
     }
@@ -2705,6 +2705,9 @@ void get_Backbonevalues (nlconstants_t el_cnt, double kappa, double gamma_n, dou
 				break;
 			}
 		}
+
+		if ( gamma_bar < 0.0 )
+			gamma_bar = 0.0;
 
 		*gammabackbone = gamma_bar * gamma_ref;
 		*taobackbone   = tao_bar * tao_max;
@@ -5796,7 +5799,7 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
                 double ErrBA=0;
 
               double po=90;
-                if ( i== 4 && eindex == 2148 &&  ( step == 800 || step == 1600  )  ) {
+                if ( i == 1 && eindex == 1908 &&  ( step==455 || step == 456  )  ) {
                     po=89;
                 }
 
@@ -5809,7 +5812,7 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
                     enlcons->fs[i] = ErrBA;
                     if ( isnan(ErrBA) || ErrBA > theErrorTol ){
                     	po = 90;
-                    	fprintf(stderr,"found nan at gp=%d, element=%d, time=%f, step= %d \n", i, eindex, step*theDeltaT, step );
+                    	fprintf(stderr,"found nan at gp=%d, element=%d, time=%f, step= %d, Su=%f, GGmax=%f  \n", i, eindex, step*theDeltaT, step, enlcons->c, GGmax1D->qv[i] );
                         MPI_Abort(MPI_COMM_WORLD, ERROR);
                         exit(1);
                     }
