@@ -2500,7 +2500,7 @@ void substepping (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De_dev, doub
 
             T      += Dt;
 
-            if ( T == 1 ) {
+            if ( T == 1.0 ) {
                 return;
             }
 
@@ -2546,11 +2546,12 @@ void substepping (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De_dev, doub
         			kappa_n = *kappa_up;
         			maxErrB = MAX(maxErrB, *ErrB);
         			T += Dtmin;
-
         		}
-        	}
+
             *euler_error = maxErrB;
             return;
+
+        	}
         }
 
     }
