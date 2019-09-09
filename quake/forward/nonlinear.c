@@ -2598,7 +2598,7 @@ if (gamma_baro == 0) {
 Eo  = gamma_baro * ( 1.0 - tao_bar ) - tao_bar + tao_bar * tao_bar * theta;
 gamma_bar = gamma_baro;
 
-while ( fabs(Eo) > 1E-10 ) {
+while ( fabs(Eo) > theBackboneErrorTol ) {
     Jac       = (1.0 - tao_bar) + tao_bar * tao_bar * Dergamma;
     gamma_bar = gamma_bar - Eo/Jac;
 
@@ -2649,14 +2649,14 @@ double getH_MKZmodel (nlconstants_t el_cnt, double kappa, double gamma_n ) {
 
 	Eo = gamma_bar - tao_bar * ( 1.0 + beta * pow(gamma_bar,s) );
 
-	while ( fabs(Eo) > theBackboneErrorTol ) {
+	while ( fabs(Eo) > theBackboneErrorTol && cnt < cnt_max ) {
 		Jac       = 1.0 - tao_bar * beta * s * pow(gamma_bar,s - 1.0) ;
 		gamma_bar = gamma_bar - Eo/Jac;
 
 		Eo        = gamma_bar - tao_bar * ( 1.0 + beta * pow(gamma_bar,s) );
 		cnt++;
 
-		if ( ( cnt == cnt_max && gamma_bar < 0.0 ) || isnan(Eo) ) {
+		if ( ( gamma_bar < 0.0 ) || isnan(Eo) ) {
 			H = getHard_Pegassus ( el_cnt,  kappa );
 			return H;
 		}
