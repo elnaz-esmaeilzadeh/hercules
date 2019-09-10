@@ -2480,7 +2480,7 @@ void substepping (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De_dev, doub
         Dt_sup = MIN( xi_sup * Dt, 1-T );
         xi     = MAX( 0.9 * sqrt(theErrorTol / *euler_error ), 0.50 );
         Dt     = MAX( xi * Dt, Dtmin );
-        Dt     = MIN( Dt, 1 - T );
+        Dt     = MIN( Dt, 1.0 - T );
 
         /*  compute state for xi_sup (xi_sup is an extrapolated value of xi)  */
         if ( Dt_sup > Dt ) {
@@ -2703,7 +2703,8 @@ void get_Backbonevalues (nlconstants_t el_cnt, double kappa, double gamma_n, dou
 			cnt++;
 
 			if (cnt == cnt_max) {
-				fprintf(stdout," could not compute gamma_bar for MKZ model \n");
+			    gamma_bar = getBackbonevalues_Pegassus ( el_cnt,  kappa);
+				//fprintf(stdout," could not compute gamma_bar for MKZ model \n");
 				break;
 			}
 		}
@@ -2829,6 +2830,102 @@ double getHard_Pegassus (nlconstants_t el_cnt, double kappa) {
 
 
 }
+
+
+double getBackbonevalues_Pegassus (nlconstants_t el_cnt, double kappa) {
+
+    double H = 0.0, tao_bar, k0 = 0.0, k1 = 0.01, k2,  f0, f1, f2, tmp;
+    int    cnt1=1,   cnt2=1,   cntMax = 200;
+
+    if (kappa == 0.0)
+        return H;
+
+    tao_bar = 1.0 / ( 1.0 + kappa ) ;
+
+    if ( theMaterialModel==VONMISES_MKZ )
+        tao_bar = tao_bar / el_cnt.phi_MKZ;
+
+    // (1973) King, R. An Improved Pegasus method for root finding
+    f0 = evalBackboneFn( el_cnt, k0,  tao_bar);
+    f1 = evalBackboneFn( el_cnt, k1,  tao_bar);
+
+    // get initial range for k
+    while ( f0 * f1 > 0 && cnt1 < cntMax ) {
+        k0 = k1;
+        f0 = f1;
+        k1 = 2.0 * k1;
+
+        //f0 = evalBackboneFn( el_cnt, k0,  tao_bar);
+        f1 = evalBackboneFn( el_cnt, k1,  tao_bar);
+        cnt1++;
+    }
+
+    if (cnt1 == cntMax) {
+        fprintf(stdout,"Cannot obtain gamma_bar initial in getHard_Pegassus function: gamma_bar0=%f, gamma_bar1=%f. \n", k0, k1 );
+        //MPI_Abort(MPI_COMM_WORLD, ERROR6);
+        //exit(1);
+    }
+
+    cnt1=1;
+
+    k2 = k1 - f1 * ( k1 - k0 ) / ( f1 - f0 );
+    f2 = evalBackboneFn( el_cnt, k2,  tao_bar);
+
+    while ( fabs(f2)  > theBackboneErrorTol && cnt1 < cntMax ) {
+
+        // step 4
+        if ( f1 * f2 < 0 ) {
+            tmp = k0;
+            k0  = k1;
+            k1  = tmp;
+            tmp = f0;
+            f0  = f1;
+            f1  = tmp;
+        }
+
+        // step 5
+        while( f1 * f2 > 0 && cnt2 < cntMax) {
+            f0 = f0 * f1 / ( f1 + f2 );
+
+            k1 = k2;
+            f1 = f2;
+
+            k2 = k1 - f1 * ( k1 - k0 ) / ( f1 - f0 );
+            f2 = evalBackboneFn( el_cnt, k2,  tao_bar);
+
+            if ( fabs(f2)  < theBackboneErrorTol )
+                return k2;
+
+            cnt2++;
+        }
+
+        k0 = k1;
+        f0 = f1;
+
+        k1 = k2;
+        f1 = f2;
+
+        if ( k0 == k1 ) {
+            k2 = k1;
+            return k2;
+            break;
+        }
+
+        k2 = k1 - f1 * ( k1 - k0 ) / ( f1 - f0 );
+        f2 = evalBackboneFn( el_cnt, k2,  tao_bar);
+
+        cnt1++;
+
+    }
+
+    if ( cnt1 == cntMax || cnt2 == cntMax )
+        fprintf(stdout,"Increase the number of steps for root finding in Pegasus method for backbone solving. gamma_bar=%f, min_error=%f, ErroTol=%f \n", k2, fabs(f2), theErrorTol );
+
+    return k2;
+
+
+}
+
 
 
 // eqn (9) of Restrepo and Taborda (2018)
@@ -5710,6 +5807,8 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
         edata = (edata_t *)elemp->data;
         h     = edata->edgesize;
 
+        int32_t lnid0 = myMesh->elemTable[eindex].lnid[0];
+
         /* Capture data from the nonlinear element structure */
 
         enlcons = myNonlinSolver->constants + nl_eindex;
@@ -5814,7 +5913,8 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
                     enlcons->fs[i] = ErrBA;
                     if ( isnan(ErrBA) || ErrBA > theErrorTol ){
                     	po = 90;
-                    	fprintf(stderr,"found nan at gp=%d, element=%d, time=%f, step= %d, Su=%f, GGmax=%f  \n", i, eindex, step*theDeltaT, step, enlcons->c, GGmax1D->qv[i] );
+                    	fprintf(stderr,"found nan at gp=%d, element=%d, time=%f, step= %d, Su=%f, GGmax=%f, xo=%f, yo=%f, zo=%f  \n", i, eindex, step*theDeltaT, step, enlcons->c,
+                    	        GGmax1D->qv[i], myMesh->ticksize * myMesh->nodeTable[lnid0].x, myMesh->ticksize * myMesh->nodeTable[lnid0].y , myMesh->ticksize * myMesh->nodeTable[lnid0].z  );
                         MPI_Abort(MPI_COMM_WORLD, ERROR);
                         exit(1);
                     }

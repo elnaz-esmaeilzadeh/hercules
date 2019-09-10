@@ -340,6 +340,8 @@ void get_h_m_from_G_Gmax(nlconstants_t el_cnt, double sigma0, double *mm, double
 
 double getH_MKZmodel (nlconstants_t el_cnt, double kappa, double gamma_n );
 void get_Backbonevalues (nlconstants_t el_cnt, double kappa, double gamma_n, double *gammabackbone, double *taobackbone, double *GGmax  );
+double getBackbonevalues_Pegassus (nlconstants_t el_cnt, double kappa);
+
 
 /* -------------------------------------------------------------------------- */
 /*                              Stability methods                             */
