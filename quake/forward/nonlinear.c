@@ -78,6 +78,7 @@ static int32_t               thePropertiesCount;
 static materialmodel_t       theMaterialModel;
 static plasticitytype_t      thePlasticityModel;
 static noyesflag_t           theApproxGeoState  = NO;
+static noyesflag_t           theSurfaceGroundwaterTable  = NO;
 static noyesflag_t           theTensionCutoff   = NO;
 static double               *theVsLimits;
 static double               *theAlphaCohes;
@@ -121,6 +122,10 @@ static double totalWeight = 0;
 
 double get_geostatic_total_time() {
     return theGeostaticLoadingT + theGeostaticCushionT;
+}
+
+int assume_groundwatertable() {
+    return theSurfaceGroundwaterTable;
 }
 
 /*
@@ -470,7 +475,7 @@ void nonlinear_init( int32_t     myID,
                      double      theEndT )
 {
     double  double_message[6];
-    int     int_message[8];
+    int     int_message[9];
 
     /* Capturing data from file --- only done by PE0 */
     if (myID == 0) {
@@ -498,9 +503,10 @@ void nonlinear_init( int32_t     myID,
     int_message[5] = (int)theNonlinearFlag;
     int_message[6] = (int)theTensionCutoff;
     int_message[7] = (int)theNoSubsteps;
+    int_message[8] = (int)theSurfaceGroundwaterTable;
 
     MPI_Bcast(double_message, 6, MPI_DOUBLE, 0, comm_solver);
-    MPI_Bcast(int_message,    8, MPI_INT,    0, comm_solver);
+    MPI_Bcast(int_message,    9, MPI_INT,    0, comm_solver);
 
     theGeostaticLoadingT  = double_message[0];
     theGeostaticCushionT  = double_message[1];
@@ -509,14 +515,15 @@ void nonlinear_init( int32_t     myID,
     theStiffDamp          = double_message[4];
     theStiffDampFreq      = double_message[5];
 
-    theMaterialModel      = int_message[0];
-    thePropertiesCount    = int_message[1];
-    theGeostaticFinalStep = int_message[2];
-    thePlasticityModel    = int_message[3];
-    theApproxGeoState     = int_message[4];
-    theNonlinearFlag      = int_message[5];
-    theTensionCutoff      = int_message[6];
-    theNoSubsteps         = int_message[7];
+    theMaterialModel           = int_message[0];
+    thePropertiesCount         = int_message[1];
+    theGeostaticFinalStep      = int_message[2];
+    thePlasticityModel         = int_message[3];
+    theApproxGeoState          = int_message[4];
+    theNonlinearFlag           = int_message[5];
+    theTensionCutoff           = int_message[6];
+    theNoSubsteps              = int_message[7];
+    theSurfaceGroundwaterTable = int_message[8];
 
     /* allocate table of properties for all other PEs */
 
@@ -570,12 +577,12 @@ int32_t nonlinear_initparameters ( const char *parametersin,
     int      row;
     double   geostatic_loading_t, geostatic_cushion_t, errorTol, backbone_errorTol,
             *auxiliar, stff_dmp, stff_dmp_freq;
-    char     material_model[64],
+    char     material_model[64], surf_groundwatertable[64],
              plasticity_type[64], approx_geostatic_state[64], tension_cutoff[64];
 
     materialmodel_t      materialmodel;
     plasticitytype_t     plasticitytype;
-    noyesflag_t          approxgeostatic = -1;
+    noyesflag_t          approxgeostatic = -1, surf_groundwater_table = -1;
     noyesflag_t          tensioncutoff = -1;
 
     /* Opens numericalin file */
@@ -592,6 +599,7 @@ int32_t nonlinear_initparameters ( const char *parametersin,
          (parsetext(fp, "backbone_errTol",              'd', &backbone_errorTol      ) != 0) ||
          (parsetext(fp, "material_model",               's', &material_model         ) != 0) ||
          (parsetext(fp, "approximate_geostatic_state",  's', &approx_geostatic_state ) != 0) ||
+         (parsetext(fp, "surface_groundwatertable",     's', &surf_groundwatertable  ) != 0) ||
          (parsetext(fp, "material_plasticity_type",     's', &plasticity_type        ) != 0) ||
          (parsetext(fp, "material_properties_count",    'i', &properties_count       ) != 0) ||
          (parsetext(fp, "no_substeps",                  'i', &no_substeps            ) != 0) ||
@@ -672,6 +680,18 @@ int32_t nonlinear_initparameters ( const char *parametersin,
         return -1;
     }
 
+    if ( strcasecmp(surf_groundwatertable, "yes") == 0 ) {
+        surf_groundwater_table = YES;
+    } else if ( strcasecmp(surf_groundwatertable, "no") == 0 ) {
+    	surf_groundwater_table = NO;
+    } else {
+        fprintf(stderr,
+                ":Unknown response for considering "
+                "surface groundwater table (yes or no): %s\n",
+                surf_groundwatertable );
+        return -1;
+    }
+
     if ( ( (geostatic_loading_t > 0) || (geostatic_cushion_t > 0) ) &&
          ( approxgeostatic == YES ) ) {
         fprintf(stderr, "Approximate geostatic-state must be set to (no) when geostatic loading/cushion time > 0. %s\n",
@@ -698,19 +718,20 @@ int32_t nonlinear_initparameters ( const char *parametersin,
     }
 
     /* Initialize the static global variables */
-    theGeostaticLoadingT  = geostatic_loading_t;
-    theGeostaticCushionT  = geostatic_cushion_t;
-    theErrorTol           = errorTol;
-    theBackboneErrorTol   = backbone_errorTol;
-    theGeostaticFinalStep = (int)( (geostatic_loading_t + geostatic_cushion_t) / theDeltaT );
-    theMaterialModel      = materialmodel;
-    thePropertiesCount    = properties_count;
-    thePlasticityModel    = plasticitytype;
-    theApproxGeoState     = approxgeostatic;
-    theTensionCutoff      = tensioncutoff;
-    theNoSubsteps         = no_substeps;
-    theStiffDamp          = stff_dmp;
-    theStiffDampFreq      = stff_dmp_freq;
+    theGeostaticLoadingT       = geostatic_loading_t;
+    theGeostaticCushionT       = geostatic_cushion_t;
+    theErrorTol                = errorTol;
+    theBackboneErrorTol        = backbone_errorTol;
+    theGeostaticFinalStep      = (int)( (geostatic_loading_t + geostatic_cushion_t) / theDeltaT );
+    theMaterialModel           = materialmodel;
+    thePropertiesCount         = properties_count;
+    thePlasticityModel         = plasticitytype;
+    theApproxGeoState          = approxgeostatic;
+    theSurfaceGroundwaterTable = surf_groundwater_table;
+    theTensionCutoff           = tensioncutoff;
+    theNoSubsteps              = no_substeps;
+    theStiffDamp               = stff_dmp;
+    theStiffDampFreq           = stff_dmp_freq;
 
     auxiliar             = (double*)malloc( sizeof(double) * thePropertiesCount * 16 );
     theVsLimits          = (double*)malloc( sizeof(double) * thePropertiesCount );

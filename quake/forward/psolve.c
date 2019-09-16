@@ -7570,13 +7570,16 @@ mesh_correct_properties( etree_t* cvm )
                     // get geostatic stress as 1d column
                     double nlayers=100, depth_o = depth_m/nlayers, depth_k;
                     int    k;
-                    if (iNorth == 1 && iEast == 1 && iDepth ==1 ) {
+                    if (iNorth == 1 && iEast == 1 && iDepth ==1 && Param.includeNonlinearAnalysis == YES ) {
 
                         for (k = 0; k < nlayers; k++) {
                             depth_k = depth_o * (k + 0.5);
                             res = cvm_query( Global.theCVMEp, east_m, north_m,
                                     depth_k, &g_props );
-                            s_0 += depth_o * (g_props.rho - 1000.0 * 1.0  ) * 9.81 * ( 1.0 + 2.0 * 0.5 ) / 3.0;
+                            if ( assume_groundwatertable() )
+                            	s_0 += depth_o * (g_props.rho - 1000.0 ) * 9.81 * ( 1.0 + 2.0 * 0.5 ) / 3.0;
+                            else
+                            	s_0 += depth_o * g_props.rho * 9.81 * ( 1.0 + 2.0 * 0.5 ) / 3.0;
                         }
 
                         edata->sigma_0 = s_0;

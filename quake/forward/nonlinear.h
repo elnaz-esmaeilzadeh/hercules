@@ -191,6 +191,7 @@ typedef struct bottomelement_t {
 
 
 double get_geostatic_total_time();
+int    assume_groundwatertable();
 
 
 int isThisElementNonLinear(mesh_t *myMesh, int32_t eindex);
