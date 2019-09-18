@@ -70,7 +70,7 @@ int    BelongstoTopography    (mesh_t *myMesh, int32_t eindex);
 etreetype_t get_theetree_type ();
 topometh_t get_topo_meth();
 
-int    topo_correctproperties ( edata_t *edata );
+int            topo_correctproperties ( edata_t *edata );
 int    isTopoElement (mesh_t *myMesh, int32_t eindex, int32_t topoNonlin_flag);
 
 int    topo_toexpand            ( octant_t *leaf, double    ticksize, edata_t  *edata, double VsFactor );
@@ -118,9 +118,9 @@ void topo_print_stats(int32_t *topoElementsCount,
                            int32_t *topoNonlinElementsCount,
                            int32_t  theGroupSize) ;
 
-noyesflag_t    	get_topo_nonlin_flag();
-int    			get_cube_partition(int32_t eindex);
-void   			get_tetraProps(int32_t eindex, double tetrVols[5], int *topoPart ) ;
+int   get_topo_nonlin_flag();
+int   get_cube_partition(int32_t eindex);
+void  get_tetraProps(int32_t eindex, double tetrVols[5], int *topoPart ) ;
 
 
 #endif /* TOPOGRAPHY_H_ */

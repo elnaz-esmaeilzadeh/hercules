@@ -1130,6 +1130,26 @@ void nonlinear_solver_init(int32_t myID, mesh_t *myMesh, double depth) {
         if ( theApproxGeoState == YES )
             ecp->sigmaZ_st = edata->rho * 9.80 * ( zo + edata->edgesize / 2.0 );
 
+        // Shi & Asimaki (2017) && Darendeli's table 8.7
+    	sigma_c = 1000 * 0.1060 * pow( edata->Vs, 1.470 ) ;  // preconsolidation ratio (Pa)
+    	OCR     = sigma_c/edata->sigma_0;                    // Overconsolidation ratio
+
+    	if ( OCR > 4.0 )
+    		OCR = 4.0;
+
+    	if ( edata->Vs <= 200.0 )
+    		PIn = 10.0;
+    	else if ( edata->Vs > 200.0 &&  edata->Vs <= 360.0  )
+    		PIn = 5.0;
+    	else
+    		PIn = 0.0;
+
+    	tau_max            = 1.20 * ( 0.28 * pow( OCR , 0.80 ) * 1.50 * edata->sigma_0 ); // I'm assuming Ko=0.5
+
+    	if ( tau_max < 50000.0 )
+    		tau_max = 50000.0;
+
+
         /* Calculate the yield function constants */
         switch (theMaterialModel) {
 
@@ -1173,21 +1193,6 @@ void nonlinear_solver_init(int32_t myID, mesh_t *myMesh, double depth) {
 
             case VONMISES_BAE:
 
-            	sigma_c = 1000 * 0.1060 * pow( edata->Vs, 1.470 ) ;  // preconsolidation ratio (Pa)
-            	OCR     = sigma_c/edata->sigma_0;                    // Overconsolidation ratio
-
-            	if ( OCR > 4.0 )
-            		OCR = 4.0;
-
-            	if ( edata->Vs <= 200.0 )
-            		PIn = 10.0;
-            	else if ( edata->Vs > 200.0 &&  edata->Vs <= 360.0  )
-            		PIn = 5.0;
-            	else
-            		PIn = 0.0;
-
-            	tau_max            = 1.20 * ( 0.28 * pow( OCR , 0.80 ) * 1.50 * edata->sigma_0 ); // I'm assuming Ko=0.5
-
             	ecp->c             = sqrt(3.0) * tau_max / 2.0;
                 // ecp->c         = interpolate_property_value(elementVs, theAlphaCohes);
                 ecp->phi       = 0.0;
@@ -1198,14 +1203,18 @@ void nonlinear_solver_init(int32_t myID, mesh_t *myMesh, double depth) {
                 ecp->gamma     = 0.0;
 
                 ecp->Sstrain0  = 0.0;
-                ecp->m         = interpolate_property_value(elementVs, theM);
+                //ecp->m         = interpolate_property_value(elementVs, theM);
+                ecp->m         = 1.04;
 
                 ecp->h         = 0.0;
-                ecp->psi0      = interpolate_property_value(elementVs, thePsi);
+                //ecp->psi0      = interpolate_property_value(elementVs, thePsi);
+                ecp->psi0      = 0.001147 * ( zo + edata->edgesize / 2.0 );
+
+
                 break;
 
             case VONMISES_BAH:
-                ecp->c         = get_cohesion(elementVs);
+                ecp->c         = sqrt(3.0) * tau_max / 2.0;
                 ecp->phi       = 0.0;
                 ecp->dil_angle = 0.0;
 
@@ -1244,29 +1253,8 @@ void nonlinear_solver_init(int32_t myID, mesh_t *myMesh, double depth) {
                 break;
 
             case VONMISES_MKZ:
-            	// Shi & Asimaki (2017) && Darendeli's table 8.7
-            	sigma_c = 1000 * 0.1060 * pow( edata->Vs, 1.470 ) ;  // preconsolidation ratio (Pa)
-            	OCR     = sigma_c/edata->sigma_0;                    // Overconsolidation ratio
-
-            	if ( OCR > 4.0 )
-            		OCR = 4.0;
-
-            	if ( edata->Vs <= 200.0 )
-            		PIn = 10.0;
-            	else if ( edata->Vs > 200.0 &&  edata->Vs <= 360.0  )
-            		PIn = 5.0;
-            	else
-            		PIn = 0.0;
-
-            	tau_max            = 1.20 * ( 0.28 * pow( OCR , 0.80 ) * 1.50 * edata->sigma_0 ); // I'm assuming Ko=0.5
 
             	ecp->gammaref_MKZ  = ( 3.52E-02 + 7.07E-04 * PIn * pow( OCR, 3.69E-01 ) ) * pow( edata->sigma_0 / 101325.0, 2.97E-01 ) / 100.0;
-
-                //ecp->c           = get_cohesion(elementVs);
-                //ecp->beta_MKZ    = interpolate_property_value(elementVs, thePsi);
-                //ecp->s_MKZ       = interpolate_property_value(elementVs, theM);
-                //ecp->phi_MKZ     = interpolate_property_value(elementVs, thePhi_RO);
-
             	ecp->c             = sqrt(3.0) * tau_max / 2.0;
             	ecp->beta_MKZ      = 1.0;
                 ecp->s_MKZ         = 9.50E-01;
@@ -1282,7 +1270,6 @@ void nonlinear_solver_init(int32_t myID, mesh_t *myMesh, double depth) {
                 ecp->phi_RO      = interpolate_property_value(elementVs, thePhi_RO);
 
                 break;
-
 
             case VONMISES_EP:
                 ecp->c         = get_cohesion(elementVs);
@@ -1334,7 +1321,7 @@ void nonlinear_solver_init(int32_t myID, mesh_t *myMesh, double depth) {
         }
 
         // check and update topo-database if this is a toponolinear element
-        if ( (get_topo_nonlin_flag == YES) && ( isTopoElement ( myMesh, eindex, 1) ) ) {
+        if ( get_topo_nonlin_flag && isTopoElement ( myMesh, eindex, 1) ) {
             ecp->isTopoNonlin = 1; // Identify it as topononlinear
             get_tetraProps( eindex, ecp->tetraVol, &ecp->topoPart ); // get tetrahedral volumes and cube partition
         }
@@ -2422,12 +2409,13 @@ void Euler2steps (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De_dev, doub
     else
         r_up  = add_tensors ( Sdev1, scaled_tensor( subtrac_tensors( Sdev1, sigma_ref ), *kappa_up ) );
 
-
-    *ErrS  = xi_up * ( 1.0 + 3.0*G/getHardening( el_cnt, *kappa_up, gamma_n ) ) / G - 2.0;
-
-    R  = Su * sqrt(8.0/3.0);
-
-    *ErrB     = fabs( sqrt( ddot_tensors(r_up,r_up) ) - R );
+    if ( *kappa_up == 0.0 ) {
+    	*ErrS = 0.0;
+    	*ErrB = 10; // treat this point as if it were in the bounding surface
+    } else {
+    	*ErrS = xi_up * ( 1.0 + 3.0*G/getHardening( el_cnt, *kappa_up, gamma_n ) ) / G - 2.0;
+    	 R    = Su * sqrt(8.0/3.0);
+    	*ErrB = fabs( sqrt( ddot_tensors(r_up,r_up) ) - R ); }
 
     *euler_error       = MAX(*euler_error,*ErrB);
     *euler_error       = MAX(*euler_error,*ErrS);
@@ -2490,9 +2478,31 @@ void substepping (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De_dev, doub
 
 
     double   xi_sup=0.0, T=0.0, Dt_sup, xi, Dtmin = 1.0/theNoSubsteps, maxErrB=0, Dt=1.0,
-    		 G = el_cnt.mu, R = el_cnt.c * sqrt(8.0/3.0), Lambda=el_cnt.lambda, K ;
+    		 G = el_cnt.mu, R = el_cnt.c * sqrt(8.0/3.0), Lambda=el_cnt.lambda, K, MagSdev_pr ;
     int      i, maxIter=250, cnt=0;
 
+	tensor_t Sdev_T, Sdev_pr, N_pr, P_T;
+
+    if ( kappa_n == 0.0 ) { // Dorian says: this point is already on the bounding surface.
+		Sdev_T     = tensor_deviator( sigma_n, tensor_octahedral ( tensor_I1 ( sigma_n ) ) );
+		Sdev_pr    = add_tensors( Sdev_T, scaled_tensor( De_dev , 2.0 * G * (1.0 - T) ) );
+		MagSdev_pr = sqrt( ddot_tensors(Sdev_pr,Sdev_pr) );
+
+		fprintf (stdout,"popo \n");
+    	//if ( MagSdev_pr > R  ) {
+
+    		K        = Lambda + 2.0 * G / 3.0;
+    		N_pr     = scaled_tensor(  Sdev_pr, 1.0 / MagSdev_pr  );
+
+    		P_T      =  isotropic_tensor( tensor_octahedral ( tensor_I1 ( sigma_n ) ) ) ;
+    		P_T      =  add_tensors( P_T, isotropic_tensor( K * (1.0 - T) * De_vol )  );
+
+    		*sigma_up         = add_tensors( P_T, scaled_tensor( N_pr, R ) );
+    		*kappa_up         = 0.0;
+    		*euler_error      = maxErrB;
+    		return;
+    	//}
+    }
 
     Euler2steps (  el_cnt, sigma_n, De_dev,  De_vol, Dt,  sigma_ref,  sigma_up, kappa_n, kappa_up, ErrB, ErrS, euler_error, 2, gamma_n );
 
@@ -2539,7 +2549,7 @@ void substepping (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De_dev, doub
     		tensor_t Sdev_pr    = add_tensors( Sdev_T, scaled_tensor( De_dev , 2.0 * G * (1.0 - T) ) );
     		double   MagSdev_pr = sqrt( ddot_tensors(Sdev_pr,Sdev_pr) );
 
-        	if ( MagSdev_pr > R  ) { // Dorian says: this point must be on the bounding surface.
+        	if ( MagSdev_pr > R  ) { // Dorian says: this point must have reached the bounding surface.
 
         		K                 = Lambda + 2.0 * G / 3.0;
         		tensor_t N_pr     = scaled_tensor(  Sdev_pr, 1.0 / MagSdev_pr  );
@@ -2752,6 +2762,20 @@ void get_Backbonevalues (nlconstants_t el_cnt, double kappa, double gamma_n, dou
 		*gammabackbone = gamma;
 		*taobackbone   = tao;
 		*GGmax         = tao / ( gamma * Gmax );
+
+	} else if ( theMaterialModel == VONMISES_BAH ) {
+
+		tao_bar   = 1.0 / (1.0 + kappa);
+		gamma_ref = tao_max / Gmax;
+
+		if ( tao_bar == 1.0 )
+			gamma_bar = 0.10 / gamma_ref; // set max strain to 10%
+		else
+			gamma_bar = tao_bar / ( 1.0 - tao_bar);
+
+		*gammabackbone = gamma_bar * gamma_ref;
+		*taobackbone   = tao_bar * tao_max;
+		*GGmax         = 1.0 / ( 1.0 + gamma_bar );
 
 	}
 
@@ -5921,7 +5945,7 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
                 double ErrBA=0;
 
               double po=90;
-                if ( i == 1 && eindex == 1908 &&  ( step==455 || step == 456  )  ) {
+                if ( i == 4 && eindex == 1587 &&  ( step==586 || step == 587  )  ) {
                     po=89;
                 }
 
