@@ -1105,7 +1105,7 @@ void nonlinear_solver_init(int32_t myID, mesh_t *myMesh, double depth) {
         eindex = myNonlinElementsMapping[nl_eindex];
 
         double po=90;
-        if (eindex == 2148)
+        if (eindex == 1655)
         	po=89;
 
         elemp = &myMesh->elemTable[eindex];
@@ -2488,7 +2488,7 @@ void substepping (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De_dev, doub
 		Sdev_pr    = add_tensors( Sdev_T, scaled_tensor( De_dev , 2.0 * G * (1.0 - T) ) );
 		MagSdev_pr = sqrt( ddot_tensors(Sdev_pr,Sdev_pr) );
 
-		fprintf (stdout,"popo \n");
+		//fprintf (stdout,"popo \n");
     	//if ( MagSdev_pr > R  ) {
 
     		K        = Lambda + 2.0 * G / 3.0;
@@ -2499,7 +2499,7 @@ void substepping (nlconstants_t el_cnt, tensor_t  sigma_n, tensor_t De_dev, doub
 
     		*sigma_up         = add_tensors( P_T, scaled_tensor( N_pr, R ) );
     		*kappa_up         = 0.0;
-    		*euler_error      = maxErrB;
+    		*euler_error      = 0.0;
     		return;
     	//}
     }
@@ -5945,7 +5945,7 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
                 double ErrBA=0;
 
               double po=90;
-                if ( i == 4 && eindex == 1587 &&  ( step==586 || step == 587  )  ) {
+                if ( i == 7 && eindex == 1655 &&  ( step == 143  )  ) {
                     po=89;
                 }
 
@@ -5953,6 +5953,10 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
                                   &pstrains2->qp[i],  &alphastress2->qp[i], &stresses->qp[i],   &epstr2->qv[i],    &enlcons->fs[i],     &psi_n->qv[i],
                                   &lounlo_n->qv[i], &Sv_n->qv[i], &Sv_max->qv[i], &kappa->qv[i], &Sref->qp[i], &flagTolSubSteps, &flagNoSubSteps, &ErrBA,
                                   &gamma1D->qv[i], &tao1D->qv[i], &GGmax1D->qv[i] );
+
+
+                if ( ErrBA > 1.164152e-10 && ErrBA < 1.164154e-10 )
+                	po=89;
 
                 if ( ( theMaterialModel != LINEAR || theMaterialModel != VONMISES_EP || theMaterialModel != DRUCKERPRAGER || theMaterialModel != MOHR_COULOMB) ) {
                     enlcons->fs[i] = ErrBA;

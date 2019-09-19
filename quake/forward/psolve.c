@@ -7501,7 +7501,7 @@ mesh_correct_properties( etree_t* cvm )
         }
 
         double po=56;
-        if (eindex==2148)
+        if (eindex==1655)
         	po=89;
 
         if ( Param.includeBuildings == YES ) {
