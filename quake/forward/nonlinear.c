@@ -1144,7 +1144,7 @@ void nonlinear_solver_init(int32_t myID, mesh_t *myMesh, double depth) {
     	else
     		PIn = 0.0;
 
-    	tau_max            = 1.20 * ( 0.28 * pow( OCR , 0.80 ) * 1.50 * edata->sigma_0 ); // I'm assuming Ko=0.5
+    	tau_max            = 1.20 * ( 0.28 * pow( OCR , 0.80 ) * 2.0 / 3.0 * edata->sigma_0 ); // I'm assuming Ko=0.5
 
     	if ( tau_max < 50000.0 )
     		tau_max = 50000.0;
