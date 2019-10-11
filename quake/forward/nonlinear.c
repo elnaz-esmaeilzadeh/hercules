@@ -114,6 +114,14 @@ static int32_t               myBottomElementsCount = 0;
 static bottomelement_t      *myBottomElements;
 static int32_t               theNonlinearFlag = 0;
 
+
+static double              *myNonlinStations_esize;
+static double              *myNonlinStations_eVp;
+static double              *myNonlinStations_eVs;
+static double              *myNonlinStations_erho;
+static double              *myNonlinStations_esigma_o;
+
+
 static double totalWeight = 0;
 
 /* -------------------------------------------------------------------------- */
@@ -918,12 +926,13 @@ void nonlinear_print_stats(int32_t *nonlinElementsCount,
                            int32_t  theGroupSize)
 {
 
-    int pid;
+    int pid, i;
     global_id_t totalElements = 0;
     global_id_t totalStations = 0;
     global_id_t totalBottom   = 0;
 
     FILE *fp = hu_fopen( "stat-nonlin.txt", "w" );
+    FILE *fpst = hu_fopen( "nonlin-stations-data.txt", "w" );
 
     fputs( "\n"
            "# ---------------------------------------- \n"
@@ -961,6 +970,33 @@ void nonlinear_print_stats(int32_t *nonlinElementsCount,
              totalElements, totalStations, totalBottom );
 
     fflush( stdout );
+
+
+    //
+    //
+    //
+
+    fputs( "\n"
+           "# ---------------------------------------- \n"
+           "# Nonlinear stations info                  \n"
+           "# ---------------------------------------- \n"
+           "# Rank    Station    e_size    e_Vp    e_Vs    e_rho     e_sigma_o  \n"
+           "# ---------------------------------------- \n", fpst );
+
+    for ( pid = 0; pid < theGroupSize; pid++ ) {
+
+    	for ( i = 0;  i < nonlinStationsCount[pid]; i++ ) {
+
+    		fprintf( fpst, "%06d %d    %8.0f    %8.0f     %8.0f    %8.0f    %8.0f\n", pid, i,
+    				myNonlinStations_esize[i],
+    				myNonlinStations_eVp[i],
+    				myNonlinStations_eVs[i],
+    				myNonlinStations_erho[i],
+    				myNonlinStations_esigma_o[i]);
+    	}
+    }
+
+    hu_fclosep( &fpst );
 
 }
 
@@ -6162,9 +6198,18 @@ void nonlinear_stations_init(mesh_t    *myMesh,
 
     XMALLOC_VAR_N( myStationsElementIndices, int32_t, myNumberOfNonlinStations);
     XMALLOC_VAR_N( myNonlinStationsMapping, int32_t, myNumberOfNonlinStations);
- //   XMALLOC_VAR_N( myNonlinStations, nlstation_t, myNumberOfNonlinStations);
+
+    XMALLOC_VAR_N( myNonlinStations_esize, int32_t, myNumberOfNonlinStations);
+    XMALLOC_VAR_N( myNonlinStations_eVp, int32_t, myNumberOfNonlinStations);
+    XMALLOC_VAR_N( myNonlinStations_eVs, int32_t, myNumberOfNonlinStations);
+    XMALLOC_VAR_N( myNonlinStations_erho, int32_t, myNumberOfNonlinStations);
+    XMALLOC_VAR_N( myNonlinStations_esigma_o, int32_t, myNumberOfNonlinStations);
 
     int32_t nlStationsCount = 0;
+
+    elem_t     *elemp;
+    edata_t    *edata;
+
     for (iStation = 0; iStation < myNumberOfStations; iStation++) {
 
         for ( nl_eindex = 0; nl_eindex < myNonlinElementsCount; nl_eindex++ ) {
@@ -6212,8 +6257,16 @@ void nonlinear_stations_init(mesh_t    *myMesh,
                 myStationsElementIndices[nlStationsCount] = nl_eindex;
                 myNonlinStationsMapping[nlStationsCount] = iStation;
 
-                nlStationsCount++;
+                elemp = &myMesh->elemTable[eindex];
+                edata = (edata_t *)elemp->data;
 
+                myNonlinStations_esize[nlStationsCount]      = edata->edgesize;
+                myNonlinStations_eVp[nlStationsCount]        = edata->Vp;
+                myNonlinStations_eVs[nlStationsCount]        = edata->Vs;
+                myNonlinStations_erho[nlStationsCount]       = edata->rho;
+                myNonlinStations_esigma_o[nlStationsCount]   = edata->sigma_0;
+
+                nlStationsCount ++;
                 break;
             }
 
