@@ -7577,9 +7577,9 @@ mesh_correct_properties( etree_t* cvm )
                             res = cvm_query( Global.theCVMEp, east_m, north_m,
                                     depth_k, &g_props );
                             if ( assume_groundwatertable() )
-                            	s_0 += depth_o * (g_props.rho - 1000.0 ) * 9.81 * ( 1.0 + 2.0 * 0.5 ) / 3.0;
+                            	s_0 += depth_o * (g_props.rho - 1000.0 ) * 9.81 ;
                             else
-                            	s_0 += depth_o * g_props.rho * 9.81 * ( 1.0 + 2.0 * 0.5 ) / 3.0;
+                            	s_0 += depth_o * g_props.rho * 9.81 ;
                         }
 
                         edata->sigma_0 = s_0;

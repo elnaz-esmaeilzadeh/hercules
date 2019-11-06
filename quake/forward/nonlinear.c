@@ -1180,7 +1180,7 @@ void nonlinear_solver_init(int32_t myID, mesh_t *myMesh, double depth) {
     	else
     		PIn = 0.0;
 
-    	tau_max            = 1.20 * ( 0.28 * pow( OCR , 0.80 ) * 2.0 / 3.0 * edata->sigma_0 ); // I'm assuming Ko=0.5
+    	tau_max            = 1.20 * ( 0.28 * pow( OCR , 0.80 ) * edata->sigma_0 ); // tau_max depends on sigma vertical
 
     	if ( tau_max < 50000.0 )
     		tau_max = 50000.0;
@@ -1290,7 +1290,7 @@ void nonlinear_solver_init(int32_t myID, mesh_t *myMesh, double depth) {
 
             case VONMISES_MKZ:
 
-            	ecp->gammaref_MKZ  = ( 3.52E-02 + 7.07E-04 * PIn * pow( OCR, 3.69E-01 ) ) * pow( edata->sigma_0 / 101325.0, 2.97E-01 ) / 100.0;
+            	ecp->gammaref_MKZ  = ( 3.52E-02 + 7.07E-04 * PIn * pow( OCR, 3.69E-01 ) ) * pow( 2.0 / 3.0 * edata->sigma_0 / 101325.0, 2.97E-01 ) / 100.0; // Depends on the mean effective stress. The 2/3 term is because I'm assuming Ko=0.5
             	ecp->c             = sqrt(3.0) * tau_max / 2.0;
             	ecp->beta_MKZ      = 1.0;
                 ecp->s_MKZ         = 9.50E-01;
