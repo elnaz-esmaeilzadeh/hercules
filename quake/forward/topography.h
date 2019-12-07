@@ -122,5 +122,7 @@ noyesflag_t    	get_topo_nonlin_flag();
 int    			get_cube_partition(int32_t eindex);
 void   			get_tetraProps(int32_t eindex, double tetrVols[5], int *topoPart ) ;
 
+void get_airprops_topo( edata_t *edata );
+
 
 #endif /* TOPOGRAPHY_H_ */
