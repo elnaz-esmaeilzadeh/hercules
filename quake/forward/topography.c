@@ -271,7 +271,7 @@ void get_tetraProps(int32_t eindex, double tetrVols[5], int *topoPart ) {
 }
 
 //returns YES if  element belongs to topography
-int isTopoElement (mesh_t *myMesh, int32_t eindex, int32_t topoNonlin_flag) {
+noyesflag_t isTopoElement (mesh_t *myMesh, int32_t eindex, int32_t topoNonlin_flag) {
 
     int32_t topo_eindex;
     elem_t  *elemp;

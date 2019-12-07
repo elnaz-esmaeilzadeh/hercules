@@ -70,8 +70,8 @@ int    BelongstoTopography    (mesh_t *myMesh, int32_t eindex);
 etreetype_t get_theetree_type ();
 topometh_t get_topo_meth();
 
-int    topo_correctproperties ( edata_t *edata );
-int    isTopoElement (mesh_t *myMesh, int32_t eindex, int32_t topoNonlin_flag);
+int            topo_correctproperties ( edata_t *edata );
+noyesflag_t    isTopoElement (mesh_t *myMesh, int32_t eindex, int32_t topoNonlin_flag);
 
 int    topo_toexpand            ( octant_t *leaf, double    ticksize, edata_t  *edata, double VsFactor );
 void   topo_init                ( int32_t myID, const char *parametersin );

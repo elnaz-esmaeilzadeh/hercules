@@ -1277,7 +1277,7 @@ void nonlinear_solver_init(int32_t myID, mesh_t *myMesh, double depth) {
         }
 
         // check and update topo-database if this is a toponolinear element
-        if ( (get_topo_nonlin_flag == YES) && ( isTopoElement ( myMesh, eindex, 1) ) ) {
+        if ( get_topo_nonlin_flag && isTopoElement ( myMesh, eindex, 1) ) {
             ecp->isTopoNonlin = 1; // Identify it as topononlinear
             get_tetraProps( eindex, ecp->tetraVol, &ecp->topoPart ); // get tetrahedral volumes and cube partition
         }
