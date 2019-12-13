@@ -73,6 +73,7 @@ topometh_t get_topo_meth();
 int            topo_correctproperties ( edata_t *edata );
 noyesflag_t    isTopoElement (mesh_t *myMesh, int32_t eindex, int32_t topoNonlin_flag);
 
+
 int    topo_toexpand            ( octant_t *leaf, double    ticksize, edata_t  *edata, double VsFactor );
 void   topo_init                ( int32_t myID, const char *parametersin );
 void   topo_solver_init         ( int32_t  myID, mesh_t *myMesh );
@@ -119,8 +120,8 @@ void topo_print_stats(int32_t *topoElementsCount,
                            int32_t  theGroupSize) ;
 
 noyesflag_t    	get_topo_nonlin_flag();
-int    			get_cube_partition(int32_t eindex);
-void   			get_tetraProps(int32_t eindex, double tetrVols[5], int *topoPart ) ;
+int   get_cube_partition(int32_t eindex);
+void  get_tetraProps(int32_t eindex, double tetrVols[5], int *topoPart ) ;
 
 void get_airprops_topo( edata_t *edata );
 

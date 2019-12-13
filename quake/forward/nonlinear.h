@@ -115,6 +115,7 @@ typedef struct nlconstants_t {
     double beta_MKZ;      /* MKZ  parameters   */
     double s_MKZ;
     double phi_MKZ;
+    double gammaref_MKZ;
 
     double alpha_RO;      /* Ramberg-Osgood  parameters   */
     double eta_RO;
@@ -190,6 +191,7 @@ typedef struct bottomelement_t {
 
 
 double get_geostatic_total_time();
+int    assume_groundwatertable();
 
 
 int isThisElementNonLinear(mesh_t *myMesh, int32_t eindex);
@@ -339,6 +341,8 @@ void get_h_m_from_G_Gmax(nlconstants_t el_cnt, double sigma0, double *mm, double
 
 double getH_MKZmodel (nlconstants_t el_cnt, double kappa, double gamma_n );
 void get_Backbonevalues (nlconstants_t el_cnt, double kappa, double gamma_n, double *gammabackbone, double *taobackbone, double *GGmax  );
+double getBackbonevalues_Pegassus (nlconstants_t el_cnt, double kappa);
+
 
 /* -------------------------------------------------------------------------- */
 /*                              Stability methods                             */

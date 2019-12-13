@@ -934,9 +934,9 @@ void Incoming_inclinedPW ( fvector_t *myDisp, double xp, double yp, double zp, d
 
 	// propagation vectors
 	double c, f, e, A1, B1, t_inc, t_pref, t_sref, outcrop_fact;
-	double Ug_inc, Ug_pref, Ug_sref, rem_tinc, rem_tpref, rem_tsref;
+	double Ug_inc, Ug_pref, Ug_sref, rem_tinc;
 
-	int aux_tinc, aux_tpref, aux_tsref;
+	int aux_tinc;
 
 	double p_inc[3]  = {0.0}; // propagation vector of the incident wave
 	double p_pref[3] = {0.0}; // propagation vector of the reflected p-wave

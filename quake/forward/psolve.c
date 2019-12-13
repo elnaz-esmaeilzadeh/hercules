@@ -668,8 +668,7 @@ static int32_t parse_parameters( const char* numericalin )
               region_depth_shallow_m, region_length_east_m,
               region_length_north_m, region_depth_deep_m,
               startT, endT, deltaT, softening_factor,
-              threshold_damping, threshold_VpVs, freq_vel,
-              theHsVs, theHsVp, theHSrho;
+              threshold_damping, threshold_VpVs, freq_vel;
     char      type_of_damping[64],
               checkpoint_path[256],
               include_buildings[64],
@@ -7562,21 +7561,23 @@ mesh_correct_properties( etree_t* cvm )
                     rho += g_props.rho;
                     ++cnt;
 
-                    /*
                     // get geostatic stress as 1d column
-                    /* double nlayers=10, depth_o = depth_m/nlayers, depth_k;
-                    if (iNorth == 1 && iEast == 1 && iDepth ==1 ) {
+                    double nlayers=100, depth_o = depth_m/nlayers, depth_k;
+                    int    k;
+                    if (iNorth == 1 && iEast == 1 && iDepth ==1 && Param.includeNonlinearAnalysis == YES ) {
 
                         for (k = 0; k < nlayers; k++) {
                             depth_k = depth_o * (k + 0.5);
                             res = cvm_query( Global.theCVMEp, east_m, north_m,
                                     depth_k, &g_props );
-                            s_0 += depth_o * (g_props.rho - 1000 ) * 9.81 * (1 + 2*0.5)/3;
-
+                            if ( assume_groundwatertable() )
+                            	s_0 += depth_o * (g_props.rho - 1000.0 ) * 9.81 ;
+                            else
+                            	s_0 += depth_o * g_props.rho * 9.81 ;
                         }
 
                         edata->sigma_0 = s_0;
-                    } */
+                    }
                 }
             }
         }
