@@ -1531,7 +1531,7 @@ setrec( octant_t* leaf, double ticksize, void* data )
     edata->edgesize = ticksize * halfticks * 2;
 
     /* Check for buildings and proceed according to the buildings setrec */
-    if ( Param.includeBuildings == YES ) {
+    if ( ( Param.includeBuildings == YES ) && (Param.useProfile == NO) ) {
         if ( bldgs_setrec( leaf, ticksize, edata, Global.theCVMEp,Global.theXForMeshOrigin,Global.theYForMeshOrigin,Global.theZForMeshOrigin ) ) {
             return;
         }
@@ -1590,9 +1590,11 @@ setrec( octant_t* leaf, double ticksize, void* data )
 
         if ( belongs2hmgHalfspace( y_m, x_m, z_m ) )
             res = get_halfspaceproperties( &g_props );
-        else
+        else if (Param.useProfile == NO) {
             res = cvm_query( Global.theCVMEp, y_m, x_m, z_m, &g_props );
-
+        } else {
+            res = profile_query(z_m, &g_props);
+        }
 
         if (res != 0) {
             continue;
@@ -7616,31 +7618,55 @@ mesh_correct_properties( etree_t* cvm )
                     /* NOTE: If you want to see the carving process,
                      *       activate this and comment the query below */
                     if ( Param.includeBuildings == YES ) {
-                        //                        if ( depth_m < get_surface_shift() ) {
-                        //                            g_props.Vp  = NAN;
-                        //                            g_props.Vs  = NAN;
-                        //                            g_props.rho = NAN;
-                        //                        } else {
                         depth_m -= get_surface_shift();
-                        //                            res = cvm_query( Global.theCVMEp, east_m, north_m,
-                        //                                             depth_m, &g_props );
-                        //                        }
                     }
 
-                    if (Param.useProfile == NO) {
+                    if ( ( Param.includeTopography == YES ) && ( get_theetree_type() == SQD )  ) {
+                                depth_m -=  point_elevation ( north_m, east_m ) ;
+                                if ( depth_m < 0 )
+                                    continue;
+
+                                if ( depth_m > Param.theDomainZ )
+                                    depth_m = Param.theDomainZ - edata->edgesize * 0.005;
+
+                    }
+
+                    if ( belongs2hmgHalfspace( east_m, north_m, depth_m ) )
+                        res = get_halfspaceproperties( &g_props );
+                    else if (Param.useProfile == NO) {
                         res = cvm_query( Global.theCVMEp, east_m, north_m, depth_m, &g_props );
                     } else {
                         res = profile_query(depth_m, &g_props);
                     }
 
                     if (res != 0) {
-                        fprintf(stderr, "Cannot find the query point\n");
+                        fprintf(stderr, "Cannot find the query point: east = %lf, north = %lf, depth = %lf \n",
+                                east_m, north_m, depth_m);
                         exit(1);
                     }
 
                     vp  += g_props.Vp;
                     vs  += g_props.Vs;
                     rho += g_props.rho;
+                    ++cnt;
+
+                    // get geostatic stress as 1d column
+                    double nlayers=100, depth_o = depth_m/nlayers, depth_k;
+                    int    k;
+                    if (iNorth == 1 && iEast == 1 && iDepth ==1 && Param.includeNonlinearAnalysis == YES ) {
+
+                        for (k = 0; k < nlayers; k++) {
+                            depth_k = depth_o * (k + 0.5);
+                            res = cvm_query( Global.theCVMEp, east_m, north_m,
+                                    depth_k, &g_props );
+                            if ( assume_groundwatertable() )
+                                s_0 += depth_o * (g_props.rho - 1000.0 ) * 9.81 ;
+                            else
+                                s_0 += depth_o * g_props.rho * 9.81 ;
+                        }
+
+                        edata->sigma_0 = s_0;
+                    }
                 }
             }
         }
