@@ -1576,53 +1576,50 @@ static vector3D_t compute_global_coords_mapping(vector3D_t point){
  */
 static double compute_strike_planewithkinks(vector3D_t point){
 
-  int iKink=-1, iKinkOrigin=-1;
+    int iKink=-1, iKinkOrigin=-1;
+    double normalizedDistance, strike = 0;
 
-  double normalizedDistance, strike;
+    /* Normalize x[0]  value with the totalLength */
 
-  /* Normalize x[0]  value with the totalLength */
+    normalizedDistance = point.x[0]/theTotalTraceLength;
 
-  normalizedDistance = point.x[0]/theTotalTraceLength;
+    /* Check between which elements is this length */
 
-  /* Check between which elements is this length */
-
-  /* do not make it more complex unless you really want to do something
+    /* do not make it more complex unless you really want to do something
      more complex in geometry */
 
-  while ( iKinkOrigin < 0 ){
+    while ( iKinkOrigin < 0 ) {
 
-    iKink=iKink +1;
+        iKink=iKink +1;
 
-    if ( theTraceLengthAccumulated[iKink] <= normalizedDistance &&
-	 theTraceLengthAccumulated[iKink+1] >= normalizedDistance )
+        if ( theTraceLengthAccumulated[iKink]   <= normalizedDistance &&
+             theTraceLengthAccumulated[iKink+1] >= normalizedDistance ) {
+            iKinkOrigin = iKink;
+        }
+    }
 
-      iKinkOrigin = iKink;
+    if( theTraceVectors[iKinkOrigin].x[1] >= 0) {
 
+        strike = acos(theTraceVectors[iKinkOrigin].x[0]);
 
-  }
+    } else if ( theTraceVectors[iKinkOrigin].x[0] < 0 &&
+                theTraceVectors[iKinkOrigin].x[1] <= 0 ) {
 
-  if( theTraceVectors[iKinkOrigin].x[1] >= 0)
+        strike = ( 3*PI/2 ) - acos(theTraceVectors[iKinkOrigin].x[0]);
 
-    strike = acos(theTraceVectors[iKinkOrigin].x[0]);
+    } else if ( theTraceVectors[iKinkOrigin].x[0] > 0 &&
+                theTraceVectors[iKinkOrigin].x[1] < 0 ) {
 
-  else if ( theTraceVectors[iKinkOrigin].x[0] < 0 &&
-	    theTraceVectors[iKinkOrigin].x[1] <= 0 )
+        strike = acos(theTraceVectors[iKinkOrigin].x[0]) + 3*PI/2;
+    }
 
-    strike = ( 3*PI/2 ) - acos(theTraceVectors[iKinkOrigin].x[0]);
-
-  else if ( theTraceVectors[iKinkOrigin].x[0] > 0 &&
-	    theTraceVectors[iKinkOrigin].x[1] < 0 )
-
-    strike = acos(theTraceVectors[iKinkOrigin].x[0]) + 3*PI/2;
-
-
-  /* compute deg that is what is take from the code */
+    /* compute deg that is what is take from the code */
 
 
-  strike = 180* strike / PI;
+    strike = 180* strike / PI;
 
 
-  return strike;
+    return strike;
 
 }
 
@@ -1915,50 +1912,47 @@ read_domain( FILE* fp )
 
 /*
  * read_filter :  if myForce vector is going to be read extra data is required
- *
  *       input :  fp - to source.in
- *
- *
  *      output :  -1 fail
  *                 1 success
- *
  *      Notes  :  a low pass butterworth filter is used
- *
+ *                number of poles and threshold frequency are initialized to 4 and 0.5
+ *                to avoid warnings.
  */
 static int read_filter(FILE *fp){
 
 
-  int source_is_filtered, number_of_poles;
+    int source_is_filtered, number_of_poles = 4;
 
-  double threshold_frequency;
+    double threshold_frequency = 0.5 ;
 
-  if ( parsetext( fp, "source_is_filtered", 'i', &source_is_filtered) != 0){
-    fprintf(stderr, "Error parsing source.in reading filter parameters\n");
-    return -1;
-  }
-  if ( source_is_filtered == 1 ){
+    if ( parsetext( fp, "source_is_filtered", 'i', &source_is_filtered) != 0){
+        fprintf(stderr, "Error parsing source.in reading filter parameters\n");
+        return -1;
+    }
+    if ( source_is_filtered == 1 ){
 
-    if ( parsetext( fp, "threshold_frequency", 'd', &threshold_frequency) != 0){
-      fprintf(stderr, "Error parsing source.in reading filter parameters\n");
-      return -1;
+        if ( parsetext( fp, "threshold_frequency", 'd', &threshold_frequency) != 0){
+            fprintf(stderr, "Error parsing source.in reading filter parameters\n");
+            return -1;
+        }
+
+        if ( (parsetext(fp, "threshold_frequency", 'd',
+                &threshold_frequency) != 0) ||
+                (parsetext(fp, "number_of_poles", 'i',
+                        &number_of_poles)     != 0) ) {
+            fprintf(stderr, "Error parsing source.in reading filter parameters\n");
+            return -1;
+        }
+
     }
 
-    if ( (parsetext(fp, "threshold_frequency", 'd',
-		    &threshold_frequency) != 0) ||
-	 (parsetext(fp, "number_of_poles", 'i',
-		    &number_of_poles)     != 0) ) {
-      fprintf(stderr, "Error parsing source.in reading filter parameters\n");
-      return -1;
-    }
 
-  }
+    theSourceIsFiltered   = source_is_filtered;
+    theThresholdFrequency = threshold_frequency;
+    theNumberOfPoles      = number_of_poles;
 
-
-  theSourceIsFiltered   = source_is_filtered;
-  theThresholdFrequency = threshold_frequency;
-  theNumberOfPoles      = number_of_poles;
-
-  return 1;
+    return 1;
 
 }
 
@@ -1978,72 +1972,67 @@ static int read_filter(FILE *fp){
  *
  *
  */
-static int read_common_all_formats ( FILE *fp ){
+static int read_common_all_formats ( FILE *fp ) {
 
+    double average_risetime_sec, ricker_Ts = 0, ricker_Tp = 0;
+    char  source_function_type[64];
+    source_function_t sourceFunctionType;
 
-  double average_risetime_sec, ricker_Ts, ricker_Tp;
+    /*
+     *  From source.in slip function parameters
+     */
 
-  char  source_function_type[64];
+    if ( (parsetext(fp, "source_function_type", 's',
+            &source_function_type) != 0) ) {
+        fprintf(stderr, "Error parsing files from source.in");
+        return -1;
 
-  source_function_t sourceFunctionType;
-
-
-  /*
-   *  From source.in slip function parameters
-   */
-
-
-  if ( (parsetext(fp, "source_function_type", 's',
-		  &source_function_type) != 0) ) {
-    fprintf(stderr, "Error parsing files from source.in");
-    return -1;
-
-  }
-
-  if ( strcasecmp(source_function_type, "ramp") == 0 )
-    sourceFunctionType = RAMP;
-  else if ( strcasecmp(source_function_type, "sine") == 0 )
-    sourceFunctionType = SINE;
-  else if ( strcasecmp(source_function_type, "quadratic") == 0 )
-    sourceFunctionType = QUADRATIC;
-  else if ( strcasecmp(source_function_type, "ricker") == 0 )
-    sourceFunctionType = RICKER;
-  else if ( strcasecmp(source_function_type, "exponential") == 0 )
-    sourceFunctionType = EXPONENTIAL;
-  else if ( strcasecmp(source_function_type, "discrete") == 0 )
-    sourceFunctionType = DISCRETE;
-
-  else {
-    fprintf(stderr, "Unknown excitation type %s\n", source_function_type);
-    return -1;
-  }
-
-  if ( sourceFunctionType == RAMP       ||
-       sourceFunctionType == SINE       ||
-       sourceFunctionType == QUADRATIC  ||
-       sourceFunctionType == EXPONENTIAL ) {
-
-    if ( (parsetext(fp, "average_risetime_sec", 'd',
-		    &average_risetime_sec) != 0)){
-      fprintf(stderr, "Cannot get time function parameters\n");
-      return -1;
     }
-  }
 
-  if (  sourceFunctionType == RICKER ) {
-    if ( (parsetext(fp, "ricker_Ts", 'd', &ricker_Ts) != 0)||
-	 (parsetext(fp, "ricker_Tp", 'd', &ricker_Tp) != 0)) {
-      fprintf(stderr, "Cannot get parameters to ricker's function\n");
-      return -1;
+    if ( strcasecmp(source_function_type, "ramp") == 0 )
+        sourceFunctionType = RAMP;
+    else if ( strcasecmp(source_function_type, "sine") == 0 )
+        sourceFunctionType = SINE;
+    else if ( strcasecmp(source_function_type, "quadratic") == 0 )
+        sourceFunctionType = QUADRATIC;
+    else if ( strcasecmp(source_function_type, "ricker") == 0 )
+        sourceFunctionType = RICKER;
+    else if ( strcasecmp(source_function_type, "exponential") == 0 )
+        sourceFunctionType = EXPONENTIAL;
+    else if ( strcasecmp(source_function_type, "discrete") == 0 )
+        sourceFunctionType = DISCRETE;
+
+    else {
+        fprintf(stderr, "Unknown excitation type %s\n", source_function_type);
+        return -1;
     }
-  }
 
-  theSourceFunctionType = sourceFunctionType;
-  theAverageRisetimeSec = average_risetime_sec;
-  theRickerTs = ricker_Ts;
-  theRickerTp = ricker_Tp;;
+    if ( sourceFunctionType == RAMP       ||
+         sourceFunctionType == SINE       ||
+         sourceFunctionType == QUADRATIC  ||
+         sourceFunctionType == EXPONENTIAL ) {
 
-  return 1;
+        if ( (parsetext(fp, "average_risetime_sec", 'd',
+                &average_risetime_sec) != 0)){
+            fprintf(stderr, "Cannot get time function parameters\n");
+            return -1;
+        }
+    }
+
+    if (  sourceFunctionType == RICKER ) {
+        if ( ( parsetext(fp, "ricker_Ts", 'd', &ricker_Ts) != 0 ) ||
+             ( parsetext(fp, "ricker_Tp", 'd', &ricker_Tp) != 0 ) ) {
+            fprintf(stderr, "Cannot get parameters to ricker's function\n");
+            return -1;
+        }
+    }
+
+    theSourceFunctionType = sourceFunctionType;
+    theAverageRisetimeSec = average_risetime_sec;
+    theRickerTs = ricker_Ts;
+    theRickerTp = ricker_Tp;;
+
+    return 1;
 
 }
 

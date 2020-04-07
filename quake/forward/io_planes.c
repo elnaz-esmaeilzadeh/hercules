@@ -383,7 +383,7 @@ void Old_planes_setup ( int32_t     myID, int32_t *thePlanePrintRate,
 	    char delimiters[] = " =\n";
 	    char querystring[] = "output_planes";
 	    /* Read in one line */
-	    if (fgets (line, LINESIZE, fp) == NULL) {
+	    if (fgets (line, LINESIZE, fp_planes) == NULL) {
 		break;
 	    }
 	    name = strtok(line, delimiters);
@@ -839,7 +839,7 @@ void New_planes_setup( int32_t     PENum, int32_t *thePlanePrintRate,
 	    char delimiters[] = " =\n";
 	    char querystring[] = "output_planes";
 	    /* Read in one line */
-	    if (fgets (line, LINESIZE, fp) == NULL) {
+	    if (fgets (line, LINESIZE, fp_planes) == NULL) {
 		break;
 	    }
 	    name = strtok(line, delimiters);

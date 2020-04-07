@@ -1,5 +1,9 @@
 user.mk
+systemdef.mk
 rundir
+.gitignore
+
+.DS_Store
 
 quake/cvm/dumpcvm
 quake/cvm/pickrecord

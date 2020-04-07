@@ -99,6 +99,12 @@ static void    read_parameters(int argc, char **argv);
 static int32_t parse_parameters(const char *numericalin);
 static void    local_finalize(void);
 
+/** cvmrecord_t: cvm record.  Onlye used if USECVMDB not defined **/
+typedef struct cvmrecord_t {
+    char key[12];
+    float Vp, Vs, density;
+} cvmrecord_t;
+
 /*---------------- Mesh generation data structures -----------------------*/
 #ifdef USECVMDB
 
@@ -116,11 +122,6 @@ static int32_t zsearch(void *base, int32_t count, int32_t recordsize,
 static cvmrecord_t *sliceCVM(const char *cvm_flatfile);
 
 #endif
-/** cvmrecord_t: cvm record.  Onlye used if USECVMDB not defined **/
-typedef struct cvmrecord_t {
-    char key[12];
-    float Vp, Vs, density;
-} cvmrecord_t;
 
 /**
  * mrecord_t: Complete mesh database record
@@ -229,6 +230,7 @@ static struct Param_t {
     noyesflag_t  printStationAccelerations;
     noyesflag_t  includeBuildings;
     noyesflag_t  includeTopography;
+    noyesflag_t  useParametricQ;
     noyesflag_t  includeNonlinearAnalysis;
     noyesflag_t  useInfQk;
     noyesflag_t  includeIncidentPlaneWaves;
@@ -266,6 +268,18 @@ static struct Param_t {
     double  theDomainZ;
     noyesflag_t  drmImplement;
     drm_part_t   theDrmPart;
+    noyesflag_t  useProfile;
+    int32_t      theNumberOfLayers;
+    double*  theProfileZ;
+    double*  theProfileVp;
+    double*  theProfileVs;
+    double*  theProfileRho;
+    double*  theProfileQp;
+    double*  theProfileQs;
+    double   theQConstant;
+    double   theQAlpha;
+    double   theQBeta;
+
 } Param = {
     .FourDOutFp = NULL,
     .theMonitorFileFp = NULL,
@@ -284,7 +298,9 @@ static struct Param_t {
     .theUseCheckPoint =0,
     .theTimingBarriersFlag = 0,
     .the4DOutSize   = 0,
-    .theMeshOutFlag = DO_OUTPUT
+    .theMeshOutFlag = DO_OUTPUT,
+    .useProfile = NO,
+    .theNumberOfLayers = 0
 };
 
 /* These are all of the remaining global variables - this list should not grow */
@@ -370,8 +386,8 @@ monitor_print( const char* format, ... )
 
 static void read_parameters( int argc, char** argv ){
 
-#define LOCAL_INIT_DOUBLE_MESSAGE_LENGTH 18  /* Must adjust this if adding double params */
-#define LOCAL_INIT_INT_MESSAGE_LENGTH 23     /* Must adjust this if adding int params */
+#define LOCAL_INIT_DOUBLE_MESSAGE_LENGTH 21  /* Must adjust this if adding double params */
+#define LOCAL_INIT_INT_MESSAGE_LENGTH 25     /* Must adjust this if adding int params */
 
     double  double_message[LOCAL_INIT_DOUBLE_MESSAGE_LENGTH];
     int     int_message[LOCAL_INIT_INT_MESSAGE_LENGTH];
@@ -406,6 +422,9 @@ static void read_parameters( int argc, char** argv ){
     double_message[15] = Param.theRegionLat;
     double_message[16] = Param.theRegionLong;
     double_message[17] = Param.theRegionDepth;
+    double_message[18] = Param.theQConstant;
+    double_message[19] = Param.theQAlpha;
+    double_message[20] = Param.theQBeta;
 
 
     MPI_Bcast(double_message, LOCAL_INIT_DOUBLE_MESSAGE_LENGTH, MPI_DOUBLE, 0, comm_solver);
@@ -428,6 +447,9 @@ static void read_parameters( int argc, char** argv ){
     Param.theRegionLat      = double_message[15];
     Param.theRegionLong     = double_message[16];
     Param.theRegionDepth    = double_message[17];
+    Param.theQConstant      = double_message[18];
+    Param.theQAlpha         = double_message[19];
+    Param.theQBeta          = double_message[20];
 
     /*Broadcast all integer params*/
     int_message[0]  = Param.theTotalSteps;
@@ -453,7 +475,8 @@ static void read_parameters( int argc, char** argv ){
     int_message[20] = (int)Param.includeTopography;
     int_message[21] = (int)Param.includeIncidentPlaneWaves;
     int_message[22] = (int)Param.includeHomogeneousHalfSpace;
-
+    int_message[23] = (int)Param.useProfile;
+    int_message[24] = (int)Param.useParametricQ;
 
     MPI_Bcast(int_message, LOCAL_INIT_INT_MESSAGE_LENGTH, MPI_INT, 0, comm_solver);
 
@@ -480,6 +503,8 @@ static void read_parameters( int argc, char** argv ){
     Param.includeTopography              = int_message[20];
     Param.includeIncidentPlaneWaves      = int_message[21];
     Param.includeHomogeneousHalfSpace    = int_message[22];
+    Param.useProfile                     = int_message[23];
+    Param.useParametricQ                 = int_message[24];
 
     /*Broadcast all string params*/
     MPI_Bcast (Param.parameters_input_file,  256, MPI_CHAR, 0, comm_solver);
@@ -668,11 +693,13 @@ static int32_t parse_parameters( const char* numericalin )
               region_depth_shallow_m, region_length_east_m,
               region_length_north_m, region_depth_deep_m,
               startT, endT, deltaT, softening_factor,
-              threshold_damping, threshold_VpVs, freq_vel;
+              threshold_damping, threshold_VpVs, freq_vel,
+              qconstant,qalpha,qbeta;
     char      type_of_damping[64],
               checkpoint_path[256],
               include_buildings[64],
               include_nonlinear_analysis[64],
+              use_parametricq[64],
               stiffness_calculation_method[64],
               print_matrix_k[64],
               print_station_velocities[64],
@@ -688,6 +715,7 @@ static int32_t parse_parameters( const char* numericalin )
     damping_type_t   typeOfDamping     = -1;
     stiffness_type_t stiffness_method  = -1;
     noyesflag_t      have_buildings    = -1;
+    noyesflag_t      have_parametricq  = -1;
     noyesflag_t      includeNonlinear  = -1;
     noyesflag_t      printMatrixK      = -1;
     noyesflag_t      printStationVels  = -1;
@@ -733,6 +761,13 @@ static int32_t parse_parameters( const char* numericalin )
         typeOfDamping = NONE;
     } else if (strcasecmp(type_of_damping, "bkt") == 0) {
         typeOfDamping = BKT;
+    } else if (strcasecmp(type_of_damping, "bkt2") == 0) {
+        typeOfDamping = BKT2;
+    } else if (strcasecmp(type_of_damping, "bkt3") == 0) {
+        typeOfDamping = BKT3;
+    } else if (strcasecmp(type_of_damping, "bkt3f") == 0) {
+        typeOfDamping = BKT3F;
+
     } else {
         solver_abort( __FUNCTION_NAME, NULL,
                 "Unknown damping type: %s\n",
@@ -763,6 +798,9 @@ static int32_t parse_parameters( const char* numericalin )
 
     /* numerical.in parse texts */
     if ((parsetext(fp, "simulation_wave_max_freq_hz",    'd', &freq                        ) != 0) ||
+        (parsetext(fp, "parametric_q_factor_constant",   'd', &qconstant                   ) != 0) ||
+        (parsetext(fp, "parametric_q_factor_alpha",      'd', &qalpha                      ) != 0) ||
+        (parsetext(fp, "parametric_q_factor_beta",       'd', &qbeta                       ) != 0) ||
         (parsetext(fp, "simulation_node_per_wavelength", 'i', &samples                     ) != 0) ||
         (parsetext(fp, "simulation_shear_velocity_min",  'd', &vscut                       ) != 0) ||
         (parsetext(fp, "simulation_start_time_sec",      'd', &startT                      ) != 0) ||
@@ -789,6 +827,7 @@ static int32_t parse_parameters( const char* numericalin )
         (parsetext(fp, "print_station_velocities",       's', &print_station_velocities    ) != 0) ||
         (parsetext(fp, "print_station_accelerations",    's', &print_station_accelerations ) != 0) ||
         (parsetext(fp, "include_buildings",              's', &include_buildings           ) != 0) ||
+        (parsetext(fp, "use_parametric_q_factor",        's', &use_parametricq             ) != 0) ||
         (parsetext(fp, "mesh_coordinates_for_matlab",    's', &mesh_coordinates_for_matlab ) != 0) ||
         (parsetext(fp, "implement_drm",                  's', &implement_drm               ) != 0) ||
         (parsetext(fp, "include_topography",             's', &include_topography          ) != 0) ||
@@ -984,6 +1023,16 @@ static int32_t parse_parameters( const char* numericalin )
                 include_buildings );
     }
 
+    if ( strcasecmp(use_parametricq, "yes") == 0 ) {
+        have_parametricq = YES;
+    } else if ( strcasecmp(use_parametricq, "no") == 0 ) {
+        have_parametricq = NO;
+    } else {
+        solver_abort( __FUNCTION_NAME, NULL,
+                "Unknown response for use new q factor (yes or no): %s\n",
+                use_parametricq );
+    }
+
     if ( strcasecmp(implement_drm, "yes") == 0 ) {
         implementdrm = YES;
     } else if ( strcasecmp(implement_drm, "no") == 0 ) {
@@ -1034,13 +1083,20 @@ static int32_t parse_parameters( const char* numericalin )
                 include_hmgHalfSpace );
     }
 
+    /* Check whether a profile will be used and init global flag to YES */
+    if ( strcasecmp(Param.cvmdb_input_file, "profile") == 0 ) {
+        Param.useProfile = YES;
+    }
+
     /* Init the static global variables */
 
     Param.theRegionLat      = region_origin_latitude_deg;
     Param.theRegionLong     = region_origin_longitude_deg ;
     Param.theRegionDepth    = region_depth_shallow_m ;
-
     Param.theVsCut        = vscut;
+    Param.theQConstant    = qconstant;
+    Param.theQAlpha       = qalpha;
+    Param.theQBeta        = qbeta;
     Param.theFactor       = freq * samples;
     Param.theFreq         = freq;
     Param.theFreq_Vel     = freq_vel;
@@ -1080,6 +1136,7 @@ static int32_t parse_parameters( const char* numericalin )
     Param.printStationAccelerations = printStationAccs;
 
     Param.includeBuildings          = have_buildings;
+    Param.useParametricQ            = have_parametricq;
 
     Param.storeMeshCoordinatesForMatlab  = meshCoordinatesForMatlab;
 
@@ -1106,10 +1163,14 @@ static int32_t parse_parameters( const char* numericalin )
     monitor_print("Printing accelerations on stations: %s\n", print_station_accelerations);
     monitor_print("Mesh Coordinates For Matlab:        %s\n", mesh_coordinates_for_matlab);
     monitor_print("cvmdb_input_file:                   %s\n", Param.cvmdb_input_file);
-    monitor_print("Implement drm:      	               %s\n", implement_drm);
+    monitor_print("Implement drm:                      %s\n", implement_drm);
     monitor_print("Include Topography:                 %s\n", include_topography);
     monitor_print("Include Incident Plane Waves:       %s\n", include_incident_planewaves);
     monitor_print("Include Homogeneous Halfspace:      %s\n", include_hmgHalfSpace);
+    monitor_print("Use Parametric Q factor:            %s\n", use_parametricq);
+    monitor_print("Constant value of Q factor:         %f\n", Param.theQConstant);
+    monitor_print("Alpha value of Q factor:            %f\n", Param.theQAlpha);
+    monitor_print("Beta value of Q factor:             %f\n", Param.theQBeta);
     monitor_print("\n-------------------------------------------------\n\n");
 
     fflush(Param.theMonitorFileFp);
@@ -1118,8 +1179,92 @@ static int32_t parse_parameters( const char* numericalin )
 }
 
 
-
 /*-----------Mesh generation related routines------------------------------*/
+
+/* In case a profile is used... */
+
+typedef enum {
+  PROFILE_VP = 0, PROFILE_VS, PROFILE_RHO, PROFILE_QP, PROFILE_QS
+} profile_flag_t;
+
+/**
+ * Interpolates the values of the profile property given the corresponding flag
+ * and the indices in the tables.
+ *
+ * @return float of property
+ */
+float interpolate_profile_property(double depth, int lowerIndex, int upperIndex, int flag) {
+
+    static const char* fname = __FUNCTION_NAME;
+    double* theProfileProperty = NULL;
+    double  theProperty;
+
+    switch (flag) {
+        case PROFILE_VP:
+            theProfileProperty = Param.theProfileVp;
+            break;
+        case PROFILE_VS:
+            theProfileProperty = Param.theProfileVs;
+            break;
+        case PROFILE_RHO:
+            theProfileProperty = Param.theProfileRho;
+            break;
+        case PROFILE_QP:
+            theProfileProperty = Param.theProfileQp;
+            break;
+        case PROFILE_QS:
+            theProfileProperty = Param.theProfileQs;
+            break;
+        default:
+            solver_abort(fname, NULL, "Error on interpolation of profile properties\n");
+    }
+
+    theProperty = theProfileProperty[lowerIndex]
+                + ( depth - Param.theProfileZ[lowerIndex] )
+                * ( theProfileProperty[upperIndex] - theProfileProperty[lowerIndex] )
+                / ( Param.theProfileZ[upperIndex] - Param.theProfileZ[lowerIndex] );
+
+    return (float)theProperty;
+}
+
+/**
+ * Finds the indices between which the depth queried is located and calls
+ * interpolate_profile to return the properties
+ *
+ * @return 0 on success
+ * @return 1 on failure
+ */
+int profile_query(double depth, cvmpayload_t* props) {
+
+    int i, last;
+
+    last = Param.theNumberOfLayers - 1;
+
+    if ( depth < 0 ) return 1;
+
+    if ( depth >= Param.theProfileZ[last] ) {
+        props->Vp  = Param.theProfileVp[last];
+        props->Vs  = Param.theProfileVs[last];
+        props->rho = Param.theProfileRho[last];
+        return 0;
+    }
+
+    for (i = 0; i < last; i++) {
+
+        if ( (depth >= Param.theProfileZ[i]) && (depth < Param.theProfileZ[i+1]) ) {
+
+            props->Vp  = interpolate_profile_property(depth, i, i+1, PROFILE_VP );
+            props->Vs  = interpolate_profile_property(depth, i, i+1, PROFILE_VS );
+            props->rho = interpolate_profile_property(depth, i, i+1, PROFILE_RHO);
+
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+/* In case an etree is used...*/
 
 static void  open_cvmdb(void){
 
@@ -1186,7 +1331,7 @@ static void  open_cvmdb(void){
     Global.theZForMeshOrigin = double_message_extra[2];
 
 #else
-    strcpy(Param.theCVMFlatFile, cvmdb_input_file);
+    strcpy(Param.theCVMFlatFile, Param.cvmdb_input_file);
 #endif
 
 }
@@ -1466,6 +1611,7 @@ setrec( octant_t* leaf, double ticksize, void* data )
         }
         }
     }
+
     }
  outer_loop_label: /* in order to completely break out from the inner loop */
 
@@ -1758,191 +1904,6 @@ static cvmrecord_t *sliceCVM(const char *cvm_flatfile)
 
     return cvmrecord;
 }
-
-
-static cvmrecord_t *sliceCVM_old(const char *cvm_flatfile)
-{
-    cvmrecord_t *cvmrecord;
-    int32_t bufferedbytes, bytecount, recordcount;
-
-    if (Global.myID == Global.theGroupSize - 1) {
-    /* the last processor reads data and
-       distribute to other processors*/
-
-    FILE *fp;
-    int fd, procid;
-    struct stat statbuf;
-    void *maxbuf;
-    const point_t *intervaltable;
-    off_t bytesent;
-    int32_t offset;
-    const int maxcount =  (1 << 29) / sizeof(cvmrecord_t);
-    const int maxbufsize = maxcount * sizeof(cvmrecord_t);
-
-    fp = fopen(cvm_flatfile, "r");
-    if (fp == NULL) {
-        fprintf(stderr, "Thread %d: Cannot open flat CVM file\n", Global.myID);
-        MPI_Abort(MPI_COMM_WORLD, ERROR);
-        exit(1);
-    }
-
-    fd = fileno(fp);
-    if (fstat(fd, &statbuf) != 0) {
-        fprintf(stderr, "Thread %d: Cannot get the status of CVM file\n",
-            Global.myID);
-        MPI_Abort(MPI_COMM_WORLD, ERROR);
-        exit(1);
-    }
-
-    intervaltable = octor_getintervaltable(Global.myOctree);
-    /*
-    for (procid = 0; procid <= Global.myID; procid++) {
-        fprintf(stderr, "interval[%d] = {%d, %d, %d}\n", procid,
-            intervaltable[procid].x << 1, intervaltable[procid].y << 1,
-            intervaltable[procid].z << 1);
-    }
-    */
-
-    bytesent = 0;
-    maxbuf = malloc(maxbufsize) ;
-    if (maxbuf == NULL) {
-        fprintf(stderr, "Thread %d: Cannot allocate send buffer\n", Global.myID);
-        MPI_Abort(MPI_COMM_WORLD, ERROR);
-        exit(1);
-    }
-
-    /* Try to read max number of CVM records as allowed */
-    recordcount = fread(maxbuf, sizeof(cvmrecord_t),
-                maxbufsize / sizeof(cvmrecord_t), fp);
-
-    if (recordcount != maxbufsize / sizeof(cvmrecord_t)) {
-        fprintf(stderr, "Thread %d: Cannot read-init buffer\n", Global.myID);
-        MPI_Abort(MPI_COMM_WORLD, ERROR);
-        exit(1);
-    }
-
-    /* start with proc 0 */
-    procid = 0;
-
-    while (procid < Global.myID) { /* repeatedly fill the buffer */
-        point_t searchpoint, *point;
-        int newreads;
-
-        /* we have recordcount to work with */
-        cvmrecord = (cvmrecord_t *)maxbuf;
-
-        while (procid < Global.myID) { /* repeatedly send out data */
-        searchpoint.x = intervaltable[procid + 1].x << 1;
-        searchpoint.y = intervaltable[procid + 1].y << 1;
-        searchpoint.z = intervaltable[procid + 1].z << 1;
-
-        offset = zsearch(cvmrecord, recordcount, Global.theCVMRecordSize,
-                 &searchpoint);
-
-        point = (point_t *)(cvmrecord + offset);
-
-        if ((point->x != searchpoint.x) ||
-            (point->y != searchpoint.y) ||
-            (point->z != searchpoint.z)) {
-            break;
-        } else {
-            bytecount = offset * sizeof(cvmrecord_t);
-            MPI_Send(cvmrecord, bytecount, MPI_CHAR, procid,
-                 CVMRECORD_MSG, comm_solver);
-            /*
-            fprintf(stderr,
-                "Procid = %d offset = %qd bytecount = %d\n",
-                procid, (int64_t)bytesent, bytecount);
-            */
-
-            bytesent += bytecount;
-
-            /* prepare for the next processor */
-            recordcount -= offset;
-            cvmrecord = (cvmrecord_t *)point;
-            procid++;
-        }
-        }
-
-        /* Move residual data to the beginning of the buffer
-           and try to fill the newly free space */
-        bufferedbytes = sizeof(cvmrecord_t) * recordcount;
-        memmove(maxbuf, cvmrecord, bufferedbytes);
-        newreads = fread((char *)maxbuf + bufferedbytes,
-                 sizeof(cvmrecord_t), maxcount - recordcount, fp);
-        recordcount += newreads;
-
-        if (newreads == 0)
-        break;
-    }
-
-    free(maxbuf);
-
-    /* I am supposed to accomodate the remaining octants */
-    bytecount = statbuf.st_size - bytesent;
-
-    cvmrecord = (cvmrecord_t *)malloc(bytecount);
-    if (cvmrecord == NULL) {
-        fprintf(stderr, "Thread %d: out of memory for %d bytes\n",
-            Global.myID, bytecount);
-        MPI_Abort(MPI_COMM_WORLD, ERROR);
-        exit(1);
-    }
-
-    /* fseek exiting the for loop has file cursor propertly */
-    if (fseeko(fp, bytesent, SEEK_SET) != 0) {
-        fprintf(stderr, "Thread %d: fseeko failed\n", Global.myID);
-        MPI_Abort(MPI_COMM_WORLD, ERROR);
-        exit(1);
-    }
-
-    if (fread(cvmrecord, 1, bytecount, fp) != (size_t)bytecount) {
-        fprintf(stderr, "Thread %d: fail to read the last chunk\n",
-            Global.myID);
-        MPI_Abort(MPI_COMM_WORLD, ERROR);
-        exit(1);
-    }
-
-    /*
-      fprintf(stderr, "Procid = %d offset = %qd bytecount = %d\n",
-      Global.myID, (int64_t)bytesent, bytecount);
-    */
-
-    fclose(fp);
-
-    } else {
-    /* wait for my turn till PE(n - 1) tells me to go ahead */
-
-    MPI_Status status;
-
-    MPI_Probe(Global.theGroupSize - 1, CVMRECORD_MSG, comm_solver, &status);
-    MPI_Get_count(&status, MPI_CHAR, &bytecount);
-
-    cvmrecord = (cvmrecord_t *)malloc(bytecount);
-    if (cvmrecord == NULL) {
-        fprintf(stderr, "Thread %d: out of memory\n", Global.myID);
-        MPI_Abort(MPI_COMM_WORLD, ERROR);
-        exit(1);
-    }
-
-    MPI_Recv(cvmrecord, bytecount, MPI_CHAR, Global.theGroupSize - 1,
-         CVMRECORD_MSG, comm_solver,     &status);
-
-    }
-
-    /* Every processor should set these parameters correctly */
-    Global.theCVMRecordCount = bytecount / sizeof(cvmrecord_t);
-    if (Global.theCVMRecordCount * sizeof(cvmrecord_t) != (size_t)bytecount) {
-    fprintf(stderr, "Thread %d: received corrupted CVM data\n",
-        Global.myID);
-    MPI_Abort(MPI_COMM_WORLD, ERROR);
-    exit(1);
-    }
-
-    return cvmrecord;
-}
-
-
 
 /**
  * setrec: Search the CVM record array to obtain the material property of
@@ -2268,8 +2229,10 @@ mesh_generate()
     }
 
 #ifdef USECVMDB
-    /* Close the material database */
-    etree_close(Global.theCVMEp);
+    if ( Param.useProfile == NO ) {
+        /* Close the material database */
+        etree_close(Global.theCVMEp);
+    }
 #else
     free(Global.theCVMRecord);
 #endif /* USECVMDB */
@@ -3454,10 +3417,18 @@ static void solver_init()
     Global.mySolver->tm1    = (fvector_t *)calloc(Global.myMesh->nharbored, sizeof(fvector_t));
     Global.mySolver->tm2    = (fvector_t *)calloc(Global.myMesh->nharbored, sizeof(fvector_t));
     Global.mySolver->force  = (fvector_t *)calloc(Global.myMesh->nharbored, sizeof(fvector_t));
-    Global.mySolver->conv_shear_1 = (fvector_t *)calloc(8 * Global.myMesh->lenum, sizeof(fvector_t));
-    Global.mySolver->conv_shear_2 = (fvector_t *)calloc(8 * Global.myMesh->lenum, sizeof(fvector_t));
-    Global.mySolver->conv_kappa_1 = (fvector_t *)calloc(8 * Global.myMesh->lenum, sizeof(fvector_t));
-    Global.mySolver->conv_kappa_2 = (fvector_t *)calloc(8 * Global.myMesh->lenum, sizeof(fvector_t));
+
+    if (Param.theTypeOfDamping >= BKT) {
+        Global.mySolver->conv_shear_1 = (fvector_t *)calloc(8 * Global.myMesh->lenum, sizeof(fvector_t));
+        Global.mySolver->conv_shear_2 = (fvector_t *)calloc(8 * Global.myMesh->lenum, sizeof(fvector_t));
+        Global.mySolver->conv_kappa_1 = (fvector_t *)calloc(8 * Global.myMesh->lenum, sizeof(fvector_t));
+        Global.mySolver->conv_kappa_2 = (fvector_t *)calloc(8 * Global.myMesh->lenum, sizeof(fvector_t));
+    }
+
+    if (Param.theTypeOfDamping >= BKT3) {
+        Global.mySolver->conv_shear_3 = (fvector_t *)calloc(8 * Global.myMesh->lenum, sizeof(fvector_t));
+        Global.mySolver->conv_kappa_3 = (fvector_t *)calloc(8 * Global.myMesh->lenum, sizeof(fvector_t));
+    }
 
     Global.mySolver->dn_sched = schedule_new();
     Global.mySolver->an_sched = schedule_new();
@@ -4174,6 +4145,7 @@ solver_compute_force_stiffness( mysolver_t *solver,
                                 fmatrix_t   k1[8][8],
                                 fmatrix_t   k2[8][8] )
 {
+
     Timer_Start( "Compute addforces e" );
     if(Param.theTypeOfDamping != BKT)
     {
@@ -4199,19 +4171,22 @@ solver_compute_force_damping( mysolver_t *solver,
 
     if(Param.theTypeOfDamping == RAYLEIGH  || Param.theTypeOfDamping == MASS)
     {
-        /* Dorian says: The Mass and Rayleigh damping are implicitly considered in the nodal mass
-         * and the stiffness computation module  */
-
-        //damping_addforce(Global.myMesh, Global.mySolver, Global.theK1, Global.theK2);
+        /* If damping is not of the BKT family */
+        damping_addforce(Global.myMesh, Global.mySolver, Global.theK1, Global.theK2);
     }
-    else if(Param.theTypeOfDamping == BKT)
+    else if(Param.theTypeOfDamping >= BKT)
     {
-        calc_conv(Global.myMesh, Global.mySolver, Param.theFreq, Param.theDeltaT, Param.theDeltaTSquared);
-        //addforce_conv(myMesh, mySolver, theFreq, theDeltaT, theDeltaTSquared);
-        constant_Q_addforce(Global.myMesh, Global.mySolver, Param.theFreq, Param.theDeltaT, Param.theDeltaTSquared);
+        /* Else, if damping is of the BKT family */
+        calc_conv(Global.myMesh, Global.mySolver, Param.theFreq, Param.theDeltaT, Param.theDeltaTSquared, Param.theTypeOfDamping);
+        constant_Q_addforce(Global.myMesh, Global.mySolver, Param.theFreq, Param.theDeltaT, Param.theDeltaTSquared, Param.theTypeOfDamping);
     }
     else
-    {}
+    {
+//      /* Should never reach this point */
+//        solver_abort( __FUNCTION_NAME, NULL,
+//                "Unknown damping type: %d\n",
+//                Param.theTypeOfDamping);
+    }
 
     Timer_Stop( "Damping addforce" );
 }
@@ -5847,47 +5822,46 @@ static void compute_K()
     return;
 }
 
-static void constract_Quality_Factor_Table()
-{
-int i,j;
-double local_QTABLE[26][6] = {{ 5., 0.211111102, 0.236842104, 0.032142857, 0.271428571, 0.14},
-        {6.25,  0.188888889,    0.184210526,    0.039893617,    0.336879433,    0.10152},
-        {8.33,  0.157777778,    0.139473684,    0.045,  0.38,   0.07},
-        {10., 0.137777765, 0.12105263, 0.032942899, 0.27818448, 0.0683},
-        {15., 0.097777765,  0.08105263, 0.032942899,    0.27818448, 0.045},
-        {20., 0.078139527, 0.060526314, 0.031409788, 0.277574872, 0.034225},
-        {25., 0.064285708, 0.049999999, 0.031578947, 0.285714286, 0.0266},
-        {30.,   0.053658537,    0.044736842,    0.026640676,    0.24691358, 0.023085},
-        {35.,   0.046341463,    0.038157895,    0.02709848, 0.251156642,    0.019669},
-        {40.,   0.040487805,    0.034210526,    0.025949367,    0.240506329,    0.01738},
-        {45.,   0.036585366,    0.028947368,    0.031393568,    0.290964778,    0.014366},
-        {50.,   0.032926829,    0.026315789,    0.032488114,    0.30110935, 0.01262},
-        {60.,     0.0279,    0.0223,    0.0275,    0.2545,    0.0114},
-        {70.,   0.024,          0.019,          0.032488114,    0.30110935, 0.0083},
-        {80.,  0.0207,    0.0174,    0.0251,    0.2326,    0.0088},
-        {90.,    0.0187,    0.0154,    0.0244,    0.2256,    0.0079},
-        {100.,  0.017,  0.014,  0.028021016,    0.288966725,    0.006281},
-        {120.,     0.0142,    0.0115,    0.0280,   0.2700,    0.0052},
-        {150.,  0.0114,    0.0094,    0.0240,    0.2316,    0.0047},
-        {200.,  0.0085, 0.00705,    0.022603978,    0.226039783,    0.0035392},
-        {250., 0.0069,    0.0055,    0.0269,    0.2596,    0.0027},
-        {300.,  0.0057, 0.0047, 0.027072758,    0.279187817,    0.0021276},
-        {350,  0.0048,    0.0040,    0.0242,    0.2339,    0.0020},
-        {400.,  0.0043, 0.0036, 0.021425572,    0.214255718,    0.0017935},
-        {450., 0.0039,    0.0030,   0.0280,    0.2710,    0.0015},
-        {500.,  0.0035, 0.00285,    0.023408925,    0.241404535,    0.001367}
-};
+static void constract_Quality_Factor_Table() {
 
-for(i = 0; i < 18; i++)
-{
-    for(j = 0; j < 6; j++)
-    {
-        Global.theQTABLE[i][j] = local_QTABLE[i][j];
-//      printf("%f ",theQTABLE[i][j]);
+    int i, j;
+    double local_QTABLE[26][6] = {
+            {   5.00,  0.211111102,  0.236842104,  0.032142857,  0.271428571,  0.1400000 },
+            {   6.25,  0.188888889,  0.184210526,  0.039893617,  0.336879433,  0.1015200 },
+            {   8.33,  0.157777778,  0.139473684,  0.045000000,  0.380000000,  0.0700000 },
+            {  10.00,  0.137777765,  0.121052630,  0.032942899,  0.278184480,  0.0683000 },
+            {  15.00,  0.097777765,  0.081052630,  0.032942899,  0.278184480,  0.0450000 },
+            {  20.00,  0.078139527,  0.060526314,  0.031409788,  0.277574872,  0.0342250 },
+            {  25.00,  0.064285708,  0.049999999,  0.031578947,  0.285714286,  0.0266000 },
+            {  30.00,  0.053658537,  0.044736842,  0.026640676,  0.246913580,  0.0230850 },
+            {  35.00,  0.046341463,  0.038157895,  0.027098480,  0.251156642,  0.0196690 },
+            {  40.00,  0.040487805,  0.034210526,  0.025949367,  0.240506329,  0.0173800 },
+            {  45.00,  0.036585366,  0.028947368,  0.031393568,  0.290964778,  0.0143660 },
+            {  50.00,  0.032926829,  0.026315789,  0.032488114,  0.301109350,  0.0126200 },
+            {  60.00,  0.027900000,  0.022300000,  0.027500000,  0.254500000,  0.0114000 },
+            {  70.00,  0.024000000,  0.019000000,  0.032488114,  0.301109350,  0.0083000 },
+            {  80.00,  0.020700000,  0.017400000,  0.025100000,  0.232600000,  0.0088000 },
+            {  90.00,  0.018700000,  0.015400000,  0.024400000,  0.225600000,  0.0079000 },
+            { 100.00,  0.017000000,  0.014000000,  0.028021016,  0.288966725,  0.0062810 },
+            { 120.00,  0.014200000,  0.011500000,  0.028000000,  0.270000000,  0.0052000 },
+            { 150.00,  0.011400000,  0.009400000,  0.024000000,  0.231600000,  0.0047000 },
+            { 200.00,  0.008500000,  0.007050000,  0.022603978,  0.226039783,  0.0035392 },
+            { 250.00,  0.006900000,  0.005500000,  0.026900000,  0.259600000,  0.0027000 },
+            { 300.00,  0.005700000,  0.004700000,  0.027072758,  0.279187817,  0.0021276 },
+            { 350.00,  0.004800000,  0.004000000,  0.024200000,  0.233900000,  0.0020000 },
+            { 400.00,  0.004300000,  0.003600000,  0.021425572,  0.214255718,  0.0017935 },
+            { 450.00,  0.003900000,  0.003000000,  0.028000000,  0.271000000,  0.0015000 },
+            { 500.00,  0.003500000,  0.002850000,  0.023408925,  0.241404535,  0.0013670 }
+            /*    Qo,      alpha_1,      alpha_2,      gamma_1,      gamma_2,       beta */
+    };
+
+    for(i = 0; i < 26; i++) {
+        for(j = 0; j < 6; j++) {
+            Global.theQTABLE[i][j] = local_QTABLE[i][j];
+        }
     }
-//  printf("\n");
-}
-return;
+
+    return;
 }
 
 
@@ -6095,6 +6069,7 @@ static void compute_setab(double freq, double *aBasePtr, double *bBasePtr)
 
     if (Param.theTypeOfDamping == RAYLEIGH)
     {
+
     /* the factors 0.2 and 1 were calibrated heuristically by LEO */
     w1 = 2 * PI * freq *.2;
     w2 = 2 * PI * freq * 1;
@@ -6132,6 +6107,7 @@ static void compute_setab(double freq, double *aBasePtr, double *bBasePtr)
     }
     else if ( Param.theTypeOfDamping == MASS )
     {
+
     w1 = 2 * PI * freq * .1;  /* these .1 and 8 heuristics */
     w2 = 2 * PI * freq * 8;
 
@@ -6140,8 +6116,9 @@ static void compute_setab(double freq, double *aBasePtr, double *bBasePtr)
 
     *aBasePtr = 1.3*numer / denom;  /* this 1.3 comes out from heuristics */
     *bBasePtr = 0;
+
     }
-    else if ( Param.theTypeOfDamping == NONE || Param.theTypeOfDamping == BKT )
+    else if ( Param.theTypeOfDamping == NONE || Param.theTypeOfDamping >= BKT )
     {
     *aBasePtr = 0;
     *bBasePtr = 0;
@@ -6721,36 +6698,36 @@ compute_csi_eta_dzeta( octant_t* octant, vector3D_t pointcoords,
 
     /* redefine local coordinates and nodes to interpolate if VT is on */
 
-	//FILE  *topoinfo = hu_fopen( "topoElem.txt", "w" );
+    //FILE  *topoinfo = hu_fopen( "topoElem.txt", "w" );
 
-	if ( ( Param.includeTopography == YES ) && ( isTopoElement ( Global.myMesh, eindex, 0) )
-		 && (get_topo_meth() == VT ) && (Param.drmImplement == NO) ) {
-		elem_t  *elemp;
-		edata_t *edata;
+    if ( ( Param.includeTopography == YES ) && ( isTopoElement ( Global.myMesh, eindex, 0) )
+         && (get_topo_meth() == VT ) && (Param.drmImplement == NO) ) {
+        elem_t  *elemp;
+        edata_t *edata;
 
-		elemp  = &Global.myMesh->elemTable[eindex];
-		edata = (edata_t *)elemp->data;
+        elemp  = &Global.myMesh->elemTable[eindex];
+        edata = (edata_t *)elemp->data;
 
-		/* Calculate the element's origin */
-		double xo = Global.myMesh->ticksize * octant->lx;
-		double yo = Global.myMesh->ticksize * octant->ly;
-		double zo = Global.myMesh->ticksize * octant->lz;
+        /* Calculate the element's origin */
+        double xo = Global.myMesh->ticksize * octant->lx;
+        double yo = Global.myMesh->ticksize * octant->ly;
+        double zo = Global.myMesh->ticksize * octant->lz;
 
-		double aux[3] = {0};
-		int cube_part = get_cube_partition( eindex );
+        double aux[3] = {0};
+        int cube_part = get_cube_partition( eindex );
 
-		compute_tetra_localcoord ( pointcoords, elemp,
-				localNodeID, aux, xo, yo, zo, h, cube_part  );
+        compute_tetra_localcoord ( pointcoords, elemp,
+                localNodeID, aux, xo, yo, zo, h, cube_part  );
 
-		localcoords->x[0] = aux[0];
-		localcoords->x[1] = aux[1];
-		localcoords->x[2] = aux[2];
+        localcoords->x[0] = aux[0];
+        localcoords->x[1] = aux[1];
+        localcoords->x[2] = aux[2];
 
-		*(localNodeID + 4)=0;
-		*(localNodeID + 5)=0;
-		*(localNodeID + 6)=0;
-		*(localNodeID + 7)=0;
-	}
+        *(localNodeID + 4)=0;
+        *(localNodeID + 5)=0;
+        *(localNodeID + 6)=0;
+        *(localNodeID + 7)=0;
+    }
 
     return 1;
 
@@ -6983,7 +6960,7 @@ void setup_stations_data()
                     "    Epsilon_XZ      Sigma_XZ"
                     "            Fs         Kappa"
                     "       Gamma1d         Tao1d"
-            		"         GGmax",
+                    "         GGmax",
 
                     Param.myStations[iLCStation].fpoutputfile );
         }
@@ -7160,15 +7137,123 @@ interpolate_station_displacements( int32_t step )
 /**
  * Init stations info and data structures
  */
-void output_stations_init( const char* numericalin )
-{
+void output_stations_init( const char* numericalin ) {
+
     if (Global.myID == 0) {
-    read_stations_info( numericalin );
+        read_stations_info( numericalin );
     }
 
     broadcast_stations_info();
     setup_stations_data();
 
+    MPI_Barrier( comm_solver );
+
+    return;
+}
+
+/**
+ * Reads the profile layers from parameters.in - only done by PE0
+ */
+static void read_profile (  const char* parametersin ) {
+
+    static const char* fname = __FUNCTION_NAME;
+
+    int    iLayer;
+    double *auxtable;
+    FILE*  fp;
+
+    if ( (fp = fopen(parametersin, "r")) == NULL ) {
+        solver_abort(fname, parametersin, "Error opening parameters.in file\n");
+    }
+
+    if ( parsetext(fp, "number_profile_layers", 'i', &Param.theNumberOfLayers) != 0 ) {
+        solver_abort(fname, NULL, "Error reading the number of layers from %s\n", parametersin);
+    }
+
+    auxtable            = (double*)malloc(sizeof(double) * Param.theNumberOfLayers * 6);
+    Param.theProfileZ   = (double*)malloc(sizeof(double) * Param.theNumberOfLayers);
+    Param.theProfileVp  = (double*)malloc(sizeof(double) * Param.theNumberOfLayers);
+    Param.theProfileVs  = (double*)malloc(sizeof(double) * Param.theNumberOfLayers);
+    Param.theProfileRho = (double*)malloc(sizeof(double) * Param.theNumberOfLayers);
+    Param.theProfileQp  = (double*)malloc(sizeof(double) * Param.theNumberOfLayers);
+    Param.theProfileQs  = (double*)malloc(sizeof(double) * Param.theNumberOfLayers);
+
+    if ( (auxtable            == NULL) ||
+         (Param.theProfileZ   == NULL) ||
+         (Param.theProfileVp  == NULL) ||
+         (Param.theProfileVs  == NULL) ||
+         (Param.theProfileRho == NULL) ||
+         (Param.theProfileQp  == NULL) ||
+         (Param.theProfileQs  == NULL) ) {
+        solver_abort(fname, NULL, "Error allocating memory for the profile\n");
+    }
+
+    if ( parsedarray(fp, "profile_layers", Param.theNumberOfLayers * 6, auxtable) != 0 ) {
+        solver_abort(fname, NULL, "Error parsing the profile layers from %s\n", parametersin);
+    }
+
+    for (iLayer = 0; iLayer < Param.theNumberOfLayers; iLayer++) {
+        Param.theProfileZ  [iLayer] = auxtable[ iLayer * 6     ];
+        Param.theProfileVp [iLayer] = auxtable[ iLayer * 6 + 1 ];
+        Param.theProfileVs [iLayer] = auxtable[ iLayer * 6 + 2 ];
+        Param.theProfileRho[iLayer] = auxtable[ iLayer * 6 + 3 ];
+        Param.theProfileQp [iLayer] = auxtable[ iLayer * 6 + 4 ];
+        Param.theProfileQs [iLayer] = auxtable[ iLayer * 6 + 5 ];
+    }
+
+    return;
+}
+
+
+/**
+ * Broadcasts the profile to all other PEs
+ */
+void broadcast_profile() {
+
+    static const char* fname = __FUNCTION_NAME;
+
+    MPI_Bcast(&Param.theNumberOfLayers, 1, MPI_INT, 0, comm_solver);
+
+    if ( Global.myID != 0 ) {
+        Param.theProfileZ   = (double*)malloc(sizeof(double) * Param.theNumberOfLayers);
+        Param.theProfileVp  = (double*)malloc(sizeof(double) * Param.theNumberOfLayers);
+        Param.theProfileVs  = (double*)malloc(sizeof(double) * Param.theNumberOfLayers);
+        Param.theProfileRho = (double*)malloc(sizeof(double) * Param.theNumberOfLayers);
+        Param.theProfileQp  = (double*)malloc(sizeof(double) * Param.theNumberOfLayers);
+        Param.theProfileQs  = (double*)malloc(sizeof(double) * Param.theNumberOfLayers);
+    }
+
+    if ( Param.theProfileZ   == NULL ||
+         Param.theProfileVp  == NULL ||
+         Param.theProfileVs  == NULL ||
+         Param.theProfileRho == NULL ||
+         Param.theProfileQp  == NULL ||
+         Param.theProfileQs  == NULL ) {
+        solver_abort(fname, NULL, "Error allocating memory for the profile\n");
+    }
+
+    MPI_Barrier(comm_solver);
+
+    MPI_Bcast(Param.theProfileZ,   Param.theNumberOfLayers, MPI_DOUBLE, 0, comm_solver);
+    MPI_Bcast(Param.theProfileVp,  Param.theNumberOfLayers, MPI_DOUBLE, 0, comm_solver);
+    MPI_Bcast(Param.theProfileVs,  Param.theNumberOfLayers, MPI_DOUBLE, 0, comm_solver);
+    MPI_Bcast(Param.theProfileRho, Param.theNumberOfLayers, MPI_DOUBLE, 0, comm_solver);
+    MPI_Bcast(Param.theProfileQp,  Param.theNumberOfLayers, MPI_DOUBLE, 0, comm_solver);
+    MPI_Bcast(Param.theProfileQs,  Param.theNumberOfLayers, MPI_DOUBLE, 0, comm_solver);
+
+    return;
+}
+
+/**
+ * Load the velocity profile is given by the user
+ */
+void load_profile( const char* parametersin ) {
+
+    if ( Global.myID == 0 ) {
+        read_profile( parametersin );
+    }
+
+    broadcast_profile();
     MPI_Barrier( comm_solver );
 
     return;
@@ -7387,7 +7472,6 @@ output_init_parameters (const char* numericalin, output_parameters_t* params)
 #undef VALUES_COUNT
 }
 
-
 /**
  * Intialize parallel output structures according to config file
  * parameters.
@@ -7474,15 +7558,16 @@ mesh_correct_properties( etree_t* cvm )
     double   points[3];
     int32_t  lnid0;
 
-    // INTRODUCE BKT MODEL
-
-    double Qs, Qp, Qk, L, vs_vp_Ratio, vksquared, w;
-    int index_Qs, index_Qk;
-    int QTable_Size = (int)(sizeof(Global.theQTABLE)/( 6 * sizeof(double)));
+    double Qs, Qp, Qk, L;
 
     points[0] = 0.005;
     points[1] = 0.5;
     points[2] = 0.995;
+
+    if (Global.myID == 0) {
+        fprintf( stdout,"mesh_correct_properties  ... " );
+        fflush( stdout );
+    }
 
     /* iterate over mesh elements */
     for (eindex = 0; eindex < Global.myMesh->lenum; eindex++) {
@@ -7531,53 +7616,31 @@ mesh_correct_properties( etree_t* cvm )
                     /* NOTE: If you want to see the carving process,
                      *       activate this and comment the query below */
                     if ( Param.includeBuildings == YES ) {
+                        //                        if ( depth_m < get_surface_shift() ) {
+                        //                            g_props.Vp  = NAN;
+                        //                            g_props.Vs  = NAN;
+                        //                            g_props.rho = NAN;
+                        //                        } else {
                         depth_m -= get_surface_shift();
+                        //                            res = cvm_query( Global.theCVMEp, east_m, north_m,
+                        //                                             depth_m, &g_props );
+                        //                        }
                     }
 
-
-                    if ( ( Param.includeTopography == YES ) && ( get_theetree_type() == SQD )  ) {
-                                depth_m -=  point_elevation ( north_m, east_m ) ;
-                                if ( depth_m < 0 )
-                                    continue;
-
-                                if ( depth_m > Param.theDomainZ )
-                                    depth_m = Param.theDomainZ - edata->edgesize * 0.005;
-
-                    }
-
-                    if ( belongs2hmgHalfspace( east_m, north_m, depth_m ) )
-                        res = get_halfspaceproperties( &g_props );
-                    else
+                    if (Param.useProfile == NO) {
                         res = cvm_query( Global.theCVMEp, east_m, north_m, depth_m, &g_props );
+                    } else {
+                        res = profile_query(depth_m, &g_props);
+                    }
 
                     if (res != 0) {
-                        fprintf(stderr, "Cannot find the query point: east = %lf, north = %lf, depth = %lf \n",
-                                east_m, north_m, depth_m);
+                        fprintf(stderr, "Cannot find the query point\n");
                         exit(1);
                     }
 
                     vp  += g_props.Vp;
                     vs  += g_props.Vs;
                     rho += g_props.rho;
-                    ++cnt;
-
-                    // get geostatic stress as 1d column
-                    double nlayers=100, depth_o = depth_m/nlayers, depth_k;
-                    int    k;
-                    if (iNorth == 1 && iEast == 1 && iDepth ==1 && Param.includeNonlinearAnalysis == YES ) {
-
-                        for (k = 0; k < nlayers; k++) {
-                            depth_k = depth_o * (k + 0.5);
-                            res = cvm_query( Global.theCVMEp, east_m, north_m,
-                                    depth_k, &g_props );
-                            if ( assume_groundwatertable() )
-                            	s_0 += depth_o * (g_props.rho - 1000.0 ) * 9.81 ;
-                            else
-                            	s_0 += depth_o * g_props.rho * 9.81 ;
-                        }
-
-                        edata->sigma_0 = s_0;
-                    }
                 }
             }
         }
@@ -7622,29 +7685,45 @@ mesh_correct_properties( etree_t* cvm )
         /* Readjust Vs, Vp and Density according to VsCut */
         if ( edata->Vs < Param.theVsCut ) {
             edata->Vs  = Param.theVsCut;
-            edata->Vp  = Param.theVsCut  * VpVsRatio;
+            edata->Vp  = Param.theVsCut * VpVsRatio;
             /* edata->rho = edata->Vp * RhoVpRatio; */ /* Discuss with Jacobo */
         }
 
-
-        // IMPLEMENT BKT MODEL
-        /* CALCULATE QUALITY FACTOR VALUES AND READ CORRESPONDING VISCOELASTICITY COEFFICIENTS FROM THE TABLE */
-        /* L IS THE COEFFICIENT DEFINED BY "SHEARER-2009" TO RELATE QK, QS AND QP */
-
-        if(Param.theTypeOfDamping == BKT)
+        /*
+         * Definition of BTK-Family Damping parameters
+         */
+        if( Param.theTypeOfDamping >= BKT )
         {
+            double vs_vp_Ratio, vksquared;
+            double vs_kms = edata->Vs * 0.001; /* Vs in km/s */
 
             vksquared = edata->Vp * edata->Vp - 4. / 3. * edata->Vs * edata->Vs;
+
             vs_vp_Ratio = edata->Vs / edata->Vp;
-            vs = edata->Vs * 0.001;
-            L = 4. / 3. * vs_vp_Ratio * vs_vp_Ratio;
+            L = 4. / 3. * vs_vp_Ratio * vs_vp_Ratio; /* As defined in Shearer (2009) */
 
-            //Qs = 0.02 * edata->Vs;
+            if ( Param.useParametricQ == YES ) {
 
-            // Ricardo's Formula based on Brocher's paper (2008) on the subject. In the paper Qp = 2*Qs is given.
-            //TODO : Make sure Qp Qs relation is correct...
+                /* Use of the formula
+                 *
+                 * Qs = C + QAlpha * ( Vs ^ (QBeta) )
+                 *
+                 * This formula was introduce by Ricardo and Naeem
+                 * and it is versatile enough and simpler than the
+                 * option used in Taborda and Bielak (2013, BSSA)
+                 */
+                Qs = Param.theQConstant + Param.theQAlpha * pow(vs_kms,Param.theQBeta);
 
-            Qs = 10.5 + vs * (-16. + vs * (153. + vs * (-103. + vs * (34.7 + vs * (-5.29 + vs * 0.31)))));
+            } else {
+
+                /* Use of the formula introduced by Ricardo in the
+                 * paper Taborda and Bielak (2013, BSSA) which is
+                 * based on the idea of Brocher (2005)
+                 */
+                Qs = 10.5 + vs_kms * (-16. + vs_kms * (153. + vs_kms * (-103. + vs_kms * (34.7 + vs_kms * (-5.29 + vs_kms * 0.31)))));
+            }
+
+            /* Default option for Qp */
             Qp = 2. * Qs;
 
             if (Param.useInfQk == YES) {
@@ -7653,73 +7732,211 @@ mesh_correct_properties( etree_t* cvm )
                 Qk = (1. - L) / (1. / Qp - L / Qs);
             }
 
-            index_Qs = Search_Quality_Table(Qs, &(Global.theQTABLE[0][0]), QTable_Size);
+            if ( Param.theTypeOfDamping == BKT ) {
 
-//          printf("Quality Factor Table\n Qs : %lf \n Vs : %lf\n",Qs,edata->Vs);
+                /* Legacy implementation of original BKT
+                 * model using a table to set parameters
+                 */
 
-            if(index_Qs == -2 || index_Qs >= QTable_Size)
-            {
-                fprintf(stderr,"Problem with the Quality Factor Table\n Qs : %lf \n Vs : %lf\n",Qs,edata->Vs);
-                exit(1);
-            }
-            else if(index_Qs == -1)
-            {
-                edata->a0_shear = 0;
-                edata->a1_shear = 0;
-                edata->g0_shear = 0;
-                edata->g1_shear = 0;
-                edata->b_shear  = 0;
-            }
-            else
-            {
-                edata->a0_shear = Global.theQTABLE[index_Qs][1];
-                edata->a1_shear = Global.theQTABLE[index_Qs][2];
-                edata->g0_shear = Global.theQTABLE[index_Qs][3];
-                edata->g1_shear = Global.theQTABLE[index_Qs][4];
-                edata->b_shear  = Global.theQTABLE[index_Qs][5];
+                int index_Qs, index_Qk;
+                int QTable_Size = (int)(sizeof(Global.theQTABLE)/( 6 * sizeof(double)));
+
+                index_Qs = Search_Quality_Table(Qs, &(Global.theQTABLE[0][0]), QTable_Size);
+                index_Qk = Search_Quality_Table(Qk, &(Global.theQTABLE[0][0]), QTable_Size);
+
+                if ( (index_Qs == -2) || (index_Qs >= QTable_Size) ||
+                     (index_Qk == -2) || (index_Qk >= QTable_Size) ) {
+                    solver_abort( __FUNCTION_NAME, NULL, "Unexpected damping type: %d\n", Param.theTypeOfDamping);
+                }
+
+                if ( index_Qs == -1 ) {
+                    edata->a0_shear = 0;
+                    edata->a1_shear = 0;
+                    edata->g0_shear = 0;
+                    edata->g1_shear = 0;
+                    edata->b_shear  = 0;
+                } else {
+                    edata->a0_shear = Global.theQTABLE[index_Qs][1];
+                    edata->a1_shear = Global.theQTABLE[index_Qs][2];
+                    edata->g0_shear = Global.theQTABLE[index_Qs][3];
+                    edata->g1_shear = Global.theQTABLE[index_Qs][4];
+                    edata->b_shear  = Global.theQTABLE[index_Qs][5];
+                }
+
+                if ( (Param.useInfQk == YES) || (index_Qk == -1) ) {
+                    edata->a0_kappa = 0;
+                    edata->a1_kappa = 0;
+                    edata->g0_kappa = 0;
+                    edata->g1_kappa = 0;
+                    edata->b_kappa  = 0;
+                } else {
+                    edata->a0_kappa = Global.theQTABLE[index_Qk][1];
+                    edata->a1_kappa = Global.theQTABLE[index_Qk][2];
+                    edata->g0_kappa = Global.theQTABLE[index_Qk][3];
+                    edata->g1_kappa = Global.theQTABLE[index_Qk][4];
+                    edata->b_kappa  = Global.theQTABLE[index_Qk][5];
+                }
+
+            } else if ( Param.theTypeOfDamping == BKT2 ) {
+
+                /* Notes:
+                 * g = normilized_gamma * ( 2 * pi * f_max);
+                 * b = normilized_beta / (Q * 2 * pi * f_max);
+                 */
+                if ( Qs >= 1000 ) {
+                    edata->g0_shear = 0;
+                    edata->g1_shear = 0;
+                    edata->a0_shear = 0;
+                    edata->a1_shear = 0;
+                    edata->b_shear  = 0;
+                } else {
+                    edata->g0_shear =   0.0373 * (2. * M_PI * Param.theFreq);
+                    edata->g1_shear =   0.3082 * (2. * M_PI * Param.theFreq);
+                    edata->a0_shear = (-2.656  * pow(Qs, -0.8788) + 1.677 ) / Qs;
+                    edata->a1_shear = (-0.5623 * pow(Qs, -1.0300) + 1.262 ) / Qs;
+                    edata->b_shear  = ( 0.1876 * pow(Qs, -0.9196) + 0.6137) / (Qs * (2. * M_PI * Param.theFreq));
+                }
+
+                if ( ( Param.useInfQk == YES ) || ( Qk >= 1000 ) ) {
+                    edata->g0_kappa = 0;
+                    edata->g1_kappa = 0;
+                    edata->a0_kappa = 0;
+                    edata->a1_kappa = 0;
+                    edata->b_kappa  = 0;
+                } else {
+                    edata->g0_kappa =   0.0373 * (2. * M_PI * Param.theFreq);
+                    edata->g1_kappa =   0.3082 * (2. * M_PI * Param.theFreq);
+                    edata->a0_kappa = (-2.656  * pow(Qk, -0.8788) + 1.677 ) / Qk;
+                    edata->a1_kappa = (-0.5623 * pow(Qk, -1.0300) + 1.262 ) / Qk;
+                    edata->b_kappa  = ( 0.1876 * pow(Qk, -0.9196) + 0.6137) / (Qk * (2. * M_PI * Param.theFreq));
+                }
+
+            } else if ( Param.theTypeOfDamping == BKT3 ) {
+
+                if ( Qs >= 1000 ) {
+                    edata->g0_shear = 0;
+                    edata->g1_shear = 0;
+                    edata->g2_shear = 0;
+                    edata->a0_shear = 0;
+                    edata->a1_shear = 0;
+                    edata->a2_shear = 0;
+                    edata->b_shear  = 0;
+                } else {
+                    edata->g0_shear =   0.0151 * (2. * M_PI * Param.theFreq);
+                    edata->g1_shear =   0.1000 * (2. * M_PI * Param.theFreq);
+                    edata->g2_shear =   0.4814 * (2. * M_PI * Param.theFreq);
+                    edata->a0_shear = (-2.723  * pow(Qs, -0.8206) + 1.601 ) / Qs;
+                    edata->a1_shear = (-1.439  * pow(Qs, -0.9668) + 1.04  ) / Qs;
+                    edata->a2_shear = (-0.3037 * pow(Qs, -0.8911) + 1.032 ) / Qs;
+                    edata->b_shear  = ( 0.1249 * pow(Qs, -0.804 ) + 0.4782) / (Qs * (2. * M_PI * Param.theFreq));
+                }
+
+                if ( ( Param.useInfQk == YES ) || ( Qk >= 1000 ) ) {
+                    edata->g0_kappa = 0;
+                    edata->g1_kappa = 0;
+                    edata->g2_kappa = 0;
+                    edata->a0_kappa = 0;
+                    edata->a1_kappa = 0;
+                    edata->a2_kappa = 0;
+                    edata->b_kappa  = 0;
+                } else {
+                    edata->g0_kappa =   0.0151 * (2. * M_PI * Param.theFreq);
+                    edata->g1_kappa =   0.1000 * (2. * M_PI * Param.theFreq);
+                    edata->g2_kappa =   0.4814 * (2. * M_PI * Param.theFreq);
+                    edata->a0_kappa = (-2.723  * pow(Qk, -0.8206) + 1.601 ) / Qk;
+                    edata->a1_kappa = (-1.439  * pow(Qk, -0.9668) + 1.04  ) / Qk;
+                    edata->a2_kappa = (-0.3037 * pow(Qk, -0.8911) + 1.032 ) / Qk;
+                    edata->b_kappa  = ( 0.1249 * pow(Qk, -0.804 ) + 0.4782) / (Qk * (2. * M_PI * Param.theFreq));
+                }
+
+            } else if ( Param.theTypeOfDamping == BKT3F ) {
+
+                /*
+                 * Temporal Implementation of frequency dependent Q with:
+                 * exponent = 0.8
+                 * f_max = 10 Hz (fixed)
+                 * f_o = 0.1 f_max = 1 Hz (fixed)
+                 */
+
+                if ( Qs >= 1000 ) {
+                    edata->g0_shear = 0;
+                    edata->g1_shear = 0;
+                    edata->g2_shear = 0;
+                    edata->a0_shear = 0;
+                    edata->a1_shear = 0;
+                    edata->a2_shear = 0;
+                    edata->b_shear  = 0;
+                } else {
+                    edata->g0_shear =   0.002  * (2. * M_PI * 10);
+                    edata->g1_shear =   0.0116 * (2. * M_PI * 10);
+                    edata->g2_shear =   0.0798 * (2. * M_PI * 10);
+                    edata->a0_shear = (-2.809  * pow(Qs, -0.7919) + 1.512 ) / Qs;
+                    edata->a1_shear = (-1.748  * pow(Qs, -0.882 ) + 1.064 ) / Qs;
+                    edata->a2_shear = (-2.358  * pow(Qs, -1.725 ) + 1.581 ) / Qs;
+                    edata->b_shear  = ( 0.09232* pow(Qs, -0.8876) + 0.006941) / (Qs * (2. * M_PI * 10));
+                }
+
+                if ( ( Param.useInfQk == YES ) || ( Qk >= 1000 ) ) {
+                    edata->g0_kappa = 0;
+                    edata->g1_kappa = 0;
+                    edata->g2_kappa = 0;
+                    edata->a0_kappa = 0;
+                    edata->a1_kappa = 0;
+                    edata->a2_kappa = 0;
+                    edata->b_kappa  = 0;
+                } else {
+                    edata->g0_kappa =   0.002  * (2. * M_PI * 10);
+                    edata->g1_kappa =   0.0116 * (2. * M_PI * 10);
+                    edata->g2_kappa =   0.0798 * (2. * M_PI * 10);
+                    edata->a0_kappa = (-2.809  * pow(Qk, -0.7919) + 1.512 ) / Qk;
+                    edata->a1_kappa = (-1.748  * pow(Qk, -0.882 ) + 1.064 ) / Qk;
+                    edata->a2_kappa = (-2.358  * pow(Qk, -1.725 ) + 1.581 ) / Qk;
+                    edata->b_kappa  = ( 0.09232* pow(Qk, -0.8876) + 0.006941) / (Qk * (2. * M_PI * 10));
+                }
+
+            } else {
+                /* Should never reach this point */
+                solver_abort( __FUNCTION_NAME, NULL, "Unexpected damping type: %d\n", Param.theTypeOfDamping);
             }
 
-            index_Qk = Search_Quality_Table(Qk, &(Global.theQTABLE[0][0]), QTable_Size);
+            /*
+             * Phase velocity adjustment
+             */
+            if(Param.theFreq_Vel != 0.) {
+                double w, w2;
+                double shear_vel_corr_factor = 1.0;
+                double kappa_vel_corr_factor = 1.0;
 
-//          printf("Quality Factor Table\n Qs : %lf \n Vs : %lf\n",Qs,edata->Vs);
-
-            if(index_Qk == -2 || index_Qk >= QTable_Size)
-            {
-                fprintf(stderr,"Problem with the Quality Factor Table\n Qk : %lf \n Vs : %lf\n",Qk,edata->Vs);
-                exit(1);
-            }
-            else if(index_Qk == -1)
-            {
-                edata->a0_kappa = 0;
-                edata->a1_kappa = 0;
-                edata->g0_kappa = 0;
-                edata->g1_kappa = 0;
-                edata->b_kappa  = 0;
-            }
-            else
-            {
-                edata->a0_kappa = Global.theQTABLE[index_Qk][1];
-                edata->a1_kappa = Global.theQTABLE[index_Qk][2];
-                edata->g0_kappa = Global.theQTABLE[index_Qk][3];
-                edata->g1_kappa = Global.theQTABLE[index_Qk][4];
-                edata->b_kappa  = Global.theQTABLE[index_Qk][5];
-            }
-
-            if(Param.theFreq_Vel != 0.)
-            {
                 w = Param.theFreq_Vel / Param.theFreq;
+                w2 = w * w;
 
-                if ( (edata->a0_shear != 0) && (edata->a1_shear != 0) ) {
-                    double shear_vel_corr_factor;
-                    shear_vel_corr_factor = sqrt(1. - (edata->a0_shear * edata->g0_shear * edata->g0_shear / (edata->g0_shear * edata->g0_shear + w * w) + edata->a1_shear * edata->g1_shear * edata->g1_shear / (edata->g1_shear * edata->g1_shear + w * w)));
-                    edata->Vs = shear_vel_corr_factor * edata->Vs;
+                if ( (Param.theTypeOfDamping == BKT) || (Param.theTypeOfDamping == BKT2) ) {
+                    if ( (edata->a0_shear != 0) && (edata->a1_shear != 0) ) {
+                        shear_vel_corr_factor = sqrt(1. - (   edata->a0_shear * edata->g0_shear * edata->g0_shear / (edata->g0_shear * edata->g0_shear + w2)
+                                                            + edata->a1_shear * edata->g1_shear * edata->g1_shear / (edata->g1_shear * edata->g1_shear + w2) ) );
+                    }
+                    if ( (edata->a0_kappa != 0) && (edata->a1_kappa != 0) ) {
+                        kappa_vel_corr_factor = sqrt(1. - (   edata->a0_kappa * edata->g0_kappa * edata->g0_kappa / (edata->g0_kappa * edata->g0_kappa + w2)
+                                                            + edata->a1_kappa * edata->g1_kappa * edata->g1_kappa / (edata->g1_kappa * edata->g1_kappa + w2) ) );
+                    }
+                } else if ( (Param.theTypeOfDamping == BKT3) || (Param.theTypeOfDamping == BKT3F) ) {
+                    if ( (edata->a0_shear != 0) && (edata->a1_shear != 0) && (edata->a2_shear != 0) ) {
+                        shear_vel_corr_factor = sqrt(1. - (   edata->a0_shear * edata->g0_shear * edata->g0_shear / (edata->g0_shear * edata->g0_shear + w2)
+                                                            + edata->a1_shear * edata->g1_shear * edata->g1_shear / (edata->g1_shear * edata->g1_shear + w2)
+                                                            + edata->a2_shear * edata->g2_shear * edata->g2_shear / (edata->g2_shear * edata->g2_shear + w2) ) );
+                    }
+                    if ( (edata->a0_kappa != 0) && (edata->a1_kappa != 0) && (edata->a2_kappa != 0) ) {
+                        kappa_vel_corr_factor = sqrt(1. - (   edata->a0_kappa * edata->g0_kappa * edata->g0_kappa / (edata->g0_kappa * edata->g0_kappa + w2)
+                                                            + edata->a1_kappa * edata->g1_kappa * edata->g1_kappa / (edata->g1_kappa * edata->g1_kappa + w2)
+                                                            + edata->a2_kappa * edata->g2_kappa * edata->g2_kappa / (edata->g2_kappa * edata->g2_kappa + w2) ) );
+                    }
+                } else {
+                    /* Should never reach this point */
+                    solver_abort( __FUNCTION_NAME, NULL, "Unexpected damping type: %d\n", Param.theTypeOfDamping);
                 }
 
-                if ( (edata->a0_kappa != 0) && (edata->a0_kappa != 0) ) {
-                    double kappa_vel_corr_factor;
-                    kappa_vel_corr_factor = sqrt(1. - (edata->a0_kappa * edata->g0_kappa * edata->g0_kappa / (edata->g0_kappa * edata->g0_kappa + w * w) + edata->a1_kappa * edata->g1_kappa * edata->g1_kappa / (edata->g1_kappa * edata->g1_kappa + w * w)));
-                    edata->Vp = sqrt(kappa_vel_corr_factor * kappa_vel_corr_factor * vksquared + 4. / 3. * edata->Vs * edata->Vs);
-                }
+                edata->Vs = shear_vel_corr_factor * edata->Vs;
+                edata->Vp = sqrt(kappa_vel_corr_factor * kappa_vel_corr_factor * vksquared + 4. / 3. * edata->Vs * edata->Vs);
             }
         }
     }
@@ -7792,8 +8009,16 @@ int main( int argc, char** argv )
     /* Read input parameters from file */
     read_parameters(argc, argv);
 
-    /* Create and open database */
-    open_cvmdb();
+    if ( Param.useProfile == YES ) {
+
+        /* Read profile to memory */
+        load_profile( Param.parameters_input_file );
+
+    } else {
+
+        /* Create and open database */
+        open_cvmdb();
+    }
 
     /* Initialize nonlinear parameters */
     if ( Param.includeNonlinearAnalysis == YES ) {

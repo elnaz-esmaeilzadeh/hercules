@@ -648,9 +648,16 @@ int bldgs_nodesearch ( tick_t x, tick_t y, tick_t z, double ticksize ) {
 /*                              Setrec Packet                                 */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Complement for the setrec function in psolve.
- * Return 1 if data is assigned to the octant, 0 otherwise.
+/*
+   Complement for the setrec function in psolve.
+   Return 1 if data is assigned to the octant, 0 otherwise.
+
+
+   Note: z_m is initialized to 0 to avoid warnings.
+
+   TODO: This function assumes the domain origin is 0,0,0. If this is not true
+         as it will be for DRM implementation, one will need to consider
+         theXForMeshOrigin, theYForMeshOrigin, (and theXForMeshOrigin ?)
  */
 
 int bldgs_setrec ( octant_t *leaf, double ticksize,
@@ -658,7 +665,7 @@ int bldgs_setrec ( octant_t *leaf, double ticksize,
                    double yoriginm, double zoriginm)
 {
     int          res;
-    double       z_m;
+    double       z_m = 0;
     cvmpayload_t props;
 
     res = bldgs_search( leaf, ticksize, edata );
