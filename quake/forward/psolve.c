@@ -1218,11 +1218,14 @@ float interpolate_profile_property(double depth, int lowerIndex, int upperIndex,
         default:
             solver_abort(fname, NULL, "Error on interpolation of profile properties\n");
     }
-
+   /* uncomment if linear interpolation is needed
     theProperty = theProfileProperty[lowerIndex]
                 + ( depth - Param.theProfileZ[lowerIndex] )
                 * ( theProfileProperty[upperIndex] - theProfileProperty[lowerIndex] )
-                / ( Param.theProfileZ[upperIndex] - Param.theProfileZ[lowerIndex] );
+                / ( Param.theProfileZ[upperIndex] - Param.theProfileZ[lowerIndex] ); */
+
+    theProperty = theProfileProperty[lowerIndex];
+
 
     return (float)theProperty;
 }
@@ -3425,11 +3428,30 @@ static void solver_init()
         Global.mySolver->conv_shear_2 = (fvector_t *)calloc(8 * Global.myMesh->lenum, sizeof(fvector_t));
         Global.mySolver->conv_kappa_1 = (fvector_t *)calloc(8 * Global.myMesh->lenum, sizeof(fvector_t));
         Global.mySolver->conv_kappa_2 = (fvector_t *)calloc(8 * Global.myMesh->lenum, sizeof(fvector_t));
+
+        if ( (Global.mySolver->conv_shear_1 == NULL) ||
+             (Global.mySolver->conv_shear_2 == NULL) ||
+             (Global.mySolver->conv_kappa_1 == NULL) ||
+             (Global.mySolver->conv_kappa_2 == NULL) ) {
+
+            fprintf(stderr, "Thread %d: solver_init: out of memory\n", Global.myID);
+            MPI_Abort(MPI_COMM_WORLD, ERROR);
+            exit(1);
+        }
     }
 
     if (Param.theTypeOfDamping >= BKT3) {
         Global.mySolver->conv_shear_3 = (fvector_t *)calloc(8 * Global.myMesh->lenum, sizeof(fvector_t));
         Global.mySolver->conv_kappa_3 = (fvector_t *)calloc(8 * Global.myMesh->lenum, sizeof(fvector_t));
+
+        if ( (Global.mySolver->conv_shear_3 == NULL) ||
+             (Global.mySolver->conv_kappa_3 == NULL) ) {
+
+            fprintf(stderr, "Thread %d: solver_init: out of memory\n", Global.myID);
+            MPI_Abort(MPI_COMM_WORLD, ERROR);
+            exit(1);
+        }
+
     }
 
     Global.mySolver->dn_sched = schedule_new();
@@ -3439,11 +3461,7 @@ static void solver_init()
          (Global.mySolver->nTable == NULL) ||
          (Global.mySolver->tm1    == NULL) ||
          (Global.mySolver->tm2    == NULL) ||
-         (Global.mySolver->force  == NULL) ||
-         (Global.mySolver->conv_shear_1 == NULL) ||
-         (Global.mySolver->conv_shear_2 == NULL) ||
-         (Global.mySolver->conv_kappa_1 == NULL) ||
-         (Global.mySolver->conv_kappa_2 == NULL) ) {
+         (Global.mySolver->force  == NULL)  ) {
 
         fprintf(stderr, "Thread %d: solver_init: out of memory\n", Global.myID);
         MPI_Abort(MPI_COMM_WORLD, ERROR);
