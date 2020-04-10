@@ -5885,6 +5885,69 @@ static void constract_Quality_Factor_Table() {
 }
 
 
+static void get_bktparams ( double Q, double *alpha_0, double *alpha_1,
+                                      double *gamma_0, double *gamma_1,
+                                      double *beta, double *ErrQ ) {
+
+    double lnQ, lnalpha_0, lnalpha_1, lngamma_0, lngamma_1, lnbeta, wmax=1.0, wmin=0.03;
+
+     lnQ = log(Q);
+     lnalpha_0 = -0.000033680165900*pow(lnQ,6) + 0.001194407627693*pow(lnQ,5)
+                 -0.017704153816854*pow(lnQ,4) + 0.142107765553207*pow(lnQ,3)
+                 -0.661064244934773*pow(lnQ,2) + 0.718867026555012*lnQ  -1.473184107632643;
+
+     lnalpha_1 = -0.000037696618291*pow(lnQ,6) + 0.001061668275963*pow(lnQ,5)
+                 -0.012590583832966*pow(lnQ,4) + 0.081510300846983*pow(lnQ,3)
+                 -0.309597904621198*pow(lnQ,2) - 0.329186554363151*lnQ  -0.471620225884072;
+
+     lngamma_0 = -0.000006540847810*pow(lnQ,6) + 0.000049542796114*pow(lnQ,5)
+                 +0.001336663819077*pow(lnQ,4) - 0.023499252329869*pow(lnQ,3)
+                 +0.154371842463020*pow(lnQ,2) - 0.487514656741054*lnQ  -2.491561199213426;
+
+     lngamma_1 =  0.000004415832665*pow(lnQ,6) - 0.000207807292869*pow(lnQ,5)
+                 +0.003639877295236*pow(lnQ,4) - 0.032496091217038*pow(lnQ,3)
+                 +0.161981989466603*pow(lnQ,2) - 0.440083540094969*lnQ  -0.533498363514503;
+
+     lnbeta    =  0.000000187042338*pow(lnQ,6) - 0.000003455739796*pow(lnQ,5)
+                 +0.000022832829792*pow(lnQ,4) - 0.000059552388961*pow(lnQ,3)
+                 +0.000019354089147*pow(lnQ,2) - 0.999855697578587*lnQ  -0.560313022870733;
+
+    *alpha_0  = exp(lnalpha_0);
+    *alpha_1  = exp(lnalpha_1);
+    *gamma_0  = exp(lngamma_0);
+    *gamma_1  = exp(lngamma_1);
+    *beta     = exp(lnbeta);
+
+    // compute error
+    int i, Ndiv=100;
+    double Num, Den, w, Dw, err_Q=0 ;
+
+    Dw = (wmax - wmin)/Ndiv;
+
+     for ( i = 0; i < Ndiv; i++ ) {
+
+         w = wmin + Dw * i;
+         Num = Q * w * (   fabs(*beta)
+                         + fabs(*alpha_0)*fabs(*gamma_0)/(pow((*gamma_0),2) + w * w)
+                         + fabs(*alpha_1)*fabs(*gamma_1)/(pow((*gamma_1),2) + w * w) );
+         Den =   1.0
+               - fabs(*alpha_0)*fabs(pow((*gamma_0),2))/( pow((*gamma_0),2) + w * w )
+               - fabs(*alpha_1)*fabs(pow((*gamma_1),2))/( pow((*gamma_1),2) + w * w ) ;
+
+         if ( i == 0 || i == (Ndiv-1) )
+             err_Q +=  0.5 * ( Num / Den - 1.0 ) * ( Num / Den - 1.0 ) ;
+         else
+             err_Q +=  ( Num / Den - 1.0 ) * ( Num / Den - 1.0 ) ;
+     }
+
+     *ErrQ = err_Q * Dw;
+
+    return;
+}
+
+
+
+
 /**
  * compute_setflag:
  *
@@ -7793,6 +7856,31 @@ mesh_correct_properties( etree_t* cvm )
                     solver_abort( __FUNCTION_NAME, NULL, "Unexpected damping type: %d\n", Param.theTypeOfDamping);
                 }
 
+                /* =-=-=-=-=-= compute bkt parameters from polynomial fitting =-=-=-=-=-= */
+                double alpha_0_shear, alpha_1_shear, gamma_0_shear,  gamma_1_shear, beta_shear, errQs,
+                       alpha_0_kappa, alpha_1_kappa, gamma_0_kappa,  gamma_1_kappa, beta_kappa, errQk;
+
+                get_bktparams ( Qs,  &alpha_0_shear, &alpha_1_shear, &gamma_0_shear,  &gamma_1_shear, &beta_shear, &errQs);
+                get_bktparams ( Qk,  &alpha_0_kappa, &alpha_1_kappa, &gamma_0_kappa,  &gamma_1_kappa, &beta_kappa, &errQk);
+
+                if ( errQs > 0.001 || errQk > 0.001 )
+                    solver_abort( __FUNCTION_NAME, NULL, "error > 0.001 in bkt minimization. errQs:%f errQk:%f \n", errQs, errQk);
+
+                /* =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
+
+                edata->a0_shear = alpha_0_shear;
+                edata->a1_shear = alpha_1_shear;
+                edata->g0_shear = gamma_0_shear;
+                edata->g1_shear = gamma_1_shear;
+                edata->b_shear  = beta_shear;
+
+                edata->a0_kappa = alpha_0_kappa;
+                edata->a1_kappa = alpha_1_kappa;
+                edata->g0_kappa = gamma_0_kappa;
+                edata->g1_kappa = gamma_1_kappa;
+                edata->b_kappa  = beta_kappa;
+
+                /*
                 if ( index_Qs == -1 ) {
                     edata->a0_shear = 0;
                     edata->a1_shear = 0;
@@ -7805,8 +7893,9 @@ mesh_correct_properties( etree_t* cvm )
                     edata->g0_shear = Global.theQTABLE[index_Qs][3];
                     edata->g1_shear = Global.theQTABLE[index_Qs][4];
                     edata->b_shear  = Global.theQTABLE[index_Qs][5];
-                }
+                } */
 
+                /*
                 if ( (Param.useInfQk == YES) || (index_Qk == -1) ) {
                     edata->a0_kappa = 0;
                     edata->a1_kappa = 0;
@@ -7819,7 +7908,7 @@ mesh_correct_properties( etree_t* cvm )
                     edata->g0_kappa = Global.theQTABLE[index_Qk][3];
                     edata->g1_kappa = Global.theQTABLE[index_Qk][4];
                     edata->b_kappa  = Global.theQTABLE[index_Qk][5];
-                }
+                } */
 
             } else if ( Param.theTypeOfDamping == BKT2 ) {
 
