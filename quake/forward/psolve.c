@@ -7764,6 +7764,13 @@ mesh_correct_properties( etree_t* cvm )
 
         /* Auxiliary ratios for adjustments */
         VpVsRatio  = edata->Vp  / edata->Vs;
+
+        if ( VpVsRatio < 1.45 )
+            VpVsRatio = 1.45; // Kim's suggestion
+
+        if ( VpVsRatio > 3.0 )
+            VpVsRatio = 3.0; // Kim's suggestion
+
         RhoVpRatio = edata->rho / edata->Vp;
 
         /* Adjust material properties according to the element size and
@@ -7827,7 +7834,8 @@ mesh_correct_properties( etree_t* cvm )
                  * paper Taborda and Bielak (2013, BSSA) which is
                  * based on the idea of Brocher (2005)
                  */
-                Qs = 10.5 + vs_kms * (-16. + vs_kms * (153. + vs_kms * (-103. + vs_kms * (34.7 + vs_kms * (-5.29 + vs_kms * 0.31)))));
+                //Qs = 10.5 + vs_kms * (-16. + vs_kms * (153. + vs_kms * (-103. + vs_kms * (34.7 + vs_kms * (-5.29 + vs_kms * 0.31)))));
+                  Qs = 0.1 * edata->Vs; // Kim's suggestion
             }
 
             /* Default option for Qp */
@@ -7864,7 +7872,7 @@ mesh_correct_properties( etree_t* cvm )
                 get_bktparams ( Qk,  &alpha_0_kappa, &alpha_1_kappa, &gamma_0_kappa,  &gamma_1_kappa, &beta_kappa, &errQk);
 
                 if ( errQs > 0.001 || errQk > 0.001 )
-                    solver_abort( __FUNCTION_NAME, NULL, "error > 0.001 in bkt minimization. errQs:%f errQk:%f \n", errQs, errQk);
+                    solver_abort( __FUNCTION_NAME, NULL, "error > 0.001 in bkt minimization. Qs_target:%f, Qk_target:%f, errQs:%f errQk:%f \n", Qs, Qk, errQs, errQk);
 
                 /* =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
 
