@@ -7963,13 +7963,23 @@ mesh_correct_properties( etree_t* cvm )
                     edata->a2_shear = 0;
                     edata->b_shear  = 0;
                 } else {
-                    edata->g0_shear =   0.0151 * (2. * M_PI * Param.theFreq);
+                    /* edata->g0_shear =   0.0151 * (2. * M_PI * Param.theFreq);
                     edata->g1_shear =   0.1000 * (2. * M_PI * Param.theFreq);
                     edata->g2_shear =   0.4814 * (2. * M_PI * Param.theFreq);
                     edata->a0_shear = (-2.723  * pow(Qs, -0.8206) + 1.601 ) / Qs;
                     edata->a1_shear = (-1.439  * pow(Qs, -0.9668) + 1.04  ) / Qs;
                     edata->a2_shear = (-0.3037 * pow(Qs, -0.8911) + 1.032 ) / Qs;
-                    edata->b_shear  = ( 0.1249 * pow(Qs, -0.804 ) + 0.4782) / (Qs * (2. * M_PI * Param.theFreq));
+                    edata->b_shear  = ( 0.1249 * pow(Qs, -0.804 ) + 0.4782) / (Qs * (2. * M_PI * Param.theFreq)); */
+
+                    // updated fitting. Doriam
+                    edata->g0_shear =   0.0270 * (2. * M_PI * Param.theFreq);
+                    edata->g1_shear =   0.5900 * (2. * M_PI * Param.theFreq);
+                    edata->g2_shear =   0.1400 * (2. * M_PI * Param.theFreq);
+                    edata->a0_shear = (0.8543  * pow(Qs, -0.8953) ) / Qs;
+                    edata->a1_shear = (0.8871  * pow(Qs, -0.9803) ) / Qs;
+                    edata->a2_shear = (0.6718 * pow(Qs, -0.9412) ) / Qs;
+                    edata->b_shear  = ( 0.446 * pow(Qs, -1.017 ) ) / (Qs * (2. * M_PI * Param.theFreq));
+
                 }
 
                 if ( ( Param.useInfQk == YES ) || ( Qk >= 1000 ) ) {
@@ -7981,13 +7991,24 @@ mesh_correct_properties( etree_t* cvm )
                     edata->a2_kappa = 0;
                     edata->b_kappa  = 0;
                 } else {
-                    edata->g0_kappa =   0.0151 * (2. * M_PI * Param.theFreq);
+                    /* edata->g0_kappa =   0.0151 * (2. * M_PI * Param.theFreq);
                     edata->g1_kappa =   0.1000 * (2. * M_PI * Param.theFreq);
                     edata->g2_kappa =   0.4814 * (2. * M_PI * Param.theFreq);
                     edata->a0_kappa = (-2.723  * pow(Qk, -0.8206) + 1.601 ) / Qk;
                     edata->a1_kappa = (-1.439  * pow(Qk, -0.9668) + 1.04  ) / Qk;
                     edata->a2_kappa = (-0.3037 * pow(Qk, -0.8911) + 1.032 ) / Qk;
-                    edata->b_kappa  = ( 0.1249 * pow(Qk, -0.804 ) + 0.4782) / (Qk * (2. * M_PI * Param.theFreq));
+                    edata->b_kappa  = ( 0.1249 * pow(Qk, -0.804 ) + 0.4782) / (Qk * (2. * M_PI * Param.theFreq)); */
+
+                    // updated fitting. Doriam
+                    edata->g0_kappa =  0.0270 * (2. * M_PI * Param.theFreq);
+                    edata->g1_kappa =  0.5900 * (2. * M_PI * Param.theFreq);
+                    edata->g2_kappa =  0.1400 * (2. * M_PI * Param.theFreq);
+                    edata->a0_kappa =  ( 0.8543  * pow(Qs, -0.8953) ) / Qs;
+                    edata->a1_kappa =  ( 0.8871  * pow(Qs, -0.9803) ) / Qs;
+                    edata->a2_kappa =  ( 0.6718 * pow(Qs, -0.9412) ) / Qs;
+                    edata->b_kappa  =  ( 0.446 * pow(Qs, -1.017 ) ) / (Qs * (2. * M_PI * Param.theFreq));
+
+
                 }
 
             } else if ( Param.theTypeOfDamping == BKT3F ) {
