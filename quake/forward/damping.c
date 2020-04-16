@@ -281,9 +281,9 @@ void calc_conv(mesh_t *myMesh, mysolver_t *mySolver, double theFreq, double theD
 
                 if (typeOfDamping >= BKT3) {
                     f2_tm1 = mySolver->conv_shear_3 + cindex;
-                    f2_tm1->f[0] = cg2 * tm1Disp->f[0] + g22 * tm2Disp->f[0] + eg2 * f1_tm1->f[0];
-                    f2_tm1->f[1] = cg2 * tm1Disp->f[1] + g22 * tm2Disp->f[1] + eg2 * f1_tm1->f[1];
-                    f2_tm1->f[2] = cg2 * tm1Disp->f[2] + g22 * tm2Disp->f[2] + eg2 * f1_tm1->f[2];
+                    f2_tm1->f[0] = cg2 * tm1Disp->f[0] + g22 * tm2Disp->f[0] + eg2 * f2_tm1->f[0];
+                    f2_tm1->f[1] = cg2 * tm1Disp->f[1] + g22 * tm2Disp->f[1] + eg2 * f2_tm1->f[1];
+                    f2_tm1->f[2] = cg2 * tm1Disp->f[2] + g22 * tm2Disp->f[2] + eg2 * f2_tm1->f[2];
                 }
 
             } // For local nodes (0:7)
@@ -338,9 +338,9 @@ void calc_conv(mesh_t *myMesh, mysolver_t *mySolver, double theFreq, double theD
 
                 if (typeOfDamping >= BKT3) {
                     f2_tm1 = mySolver->conv_kappa_3 + cindex;
-                    f2_tm1->f[0] = cg2 * tm1Disp->f[0] + g22 * tm2Disp->f[0] + eg2 * f1_tm1->f[0];
-                    f2_tm1->f[1] = cg2 * tm1Disp->f[1] + g22 * tm2Disp->f[1] + eg2 * f1_tm1->f[1];
-                    f2_tm1->f[2] = cg2 * tm1Disp->f[2] + g22 * tm2Disp->f[2] + eg2 * f1_tm1->f[2];
+                    f2_tm1->f[0] = cg2 * tm1Disp->f[0] + g22 * tm2Disp->f[0] + eg2 * f2_tm1->f[0];
+                    f2_tm1->f[1] = cg2 * tm1Disp->f[1] + g22 * tm2Disp->f[1] + eg2 * f2_tm1->f[1];
+                    f2_tm1->f[2] = cg2 * tm1Disp->f[2] + g22 * tm2Disp->f[2] + eg2 * f2_tm1->f[2];
                 }
 
             } // For local nodes (0:7)
@@ -412,7 +412,7 @@ void constant_Q_addforce(mesh_t *myMesh, mysolver_t *mySolver, double theFreq, d
 
             for (i = 0; i < 8; i++) {
 
-                fvector_t *tm1Disp, *tm2Disp, *f0_tm1, *f1_tm1;
+                fvector_t *tm1Disp, *tm2Disp, *f0_tm1, *f1_tm1, *f2_tm1;
                 int32_t    lnid, cindex;
 
                 cindex = eindex * 8 + i;
@@ -436,9 +436,10 @@ void constant_Q_addforce(mesh_t *myMesh, mysolver_t *mySolver, double theFreq, d
                                              + tm1Disp->f[2];
 
                 if ( typeOfDamping >= BKT3 ) {
-                    damping_vector_shear[i].f[0] -= a2_shear * f0_tm1->f[0];
-                    damping_vector_shear[i].f[1] -= a2_shear * f0_tm1->f[1];
-                    damping_vector_shear[i].f[2] -= a2_shear * f0_tm1->f[2];
+                    f2_tm1  = mySolver->conv_shear_3 + cindex;
+                    damping_vector_shear[i].f[0] -= a2_shear * f2_tm1->f[0];
+                    damping_vector_shear[i].f[1] -= a2_shear * f2_tm1->f[1];
+                    damping_vector_shear[i].f[2] -= a2_shear * f2_tm1->f[2];
                 }
 
             } // end for nodes in the element
