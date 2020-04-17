@@ -7871,8 +7871,8 @@ mesh_correct_properties( etree_t* cvm )
                 get_bktparams ( Qs,  &alpha_0_shear, &alpha_1_shear, &gamma_0_shear,  &gamma_1_shear, &beta_shear, &errQs);
                 get_bktparams ( Qk,  &alpha_0_kappa, &alpha_1_kappa, &gamma_0_kappa,  &gamma_1_kappa, &beta_kappa, &errQk);
 
-                if ( errQs > 0.001 || errQk > 0.001 )
-                    solver_abort( __FUNCTION_NAME, NULL, "error > 0.001 in bkt minimization. Qs_target:%f, Qk_target:%f, errQs:%f errQk:%f \n", Qs, Qk, errQs, errQk);
+                //if ( errQs > 0.001 || errQk > 0.001 )
+                //    solver_abort( __FUNCTION_NAME, NULL, "error > 0.001 in bkt minimization. Qs_target:%f, Qk_target:%f, errQs:%f errQk:%f \n", Qs, Qk, errQs, errQk);
 
                 /* =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
 
@@ -8003,10 +8003,10 @@ mesh_correct_properties( etree_t* cvm )
                     edata->g0_kappa =  0.0270 * (2. * M_PI * Param.theFreq);
                     edata->g1_kappa =  0.5900 * (2. * M_PI * Param.theFreq);
                     edata->g2_kappa =  0.1400 * (2. * M_PI * Param.theFreq);
-                    edata->a0_kappa =  ( 0.8543  * pow(Qs, -0.8953) ) / Qs;
-                    edata->a1_kappa =  ( 0.8871  * pow(Qs, -0.9803) ) / Qs;
-                    edata->a2_kappa =  ( 0.6718 * pow(Qs, -0.9412) ) / Qs;
-                    edata->b_kappa  =  ( 0.446 * pow(Qs, -1.017 ) ) / (Qs * (2. * M_PI * Param.theFreq));
+                    edata->a0_kappa =  ( 0.8543  * pow(Qk, -0.8953) ) / Qk;
+                    edata->a1_kappa =  ( 0.8871  * pow(Qk, -0.9803) ) / Qk;
+                    edata->a2_kappa =  ( 0.6718 * pow(Qk, -0.9412) ) / Qk;
+                    edata->b_kappa  =  ( 0.446 * pow(Qk, -1.017 ) ) / (Qk * (2. * M_PI * Param.theFreq));
 
 
                 }

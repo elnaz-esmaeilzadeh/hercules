@@ -240,18 +240,18 @@ void calc_conv(mesh_t *myMesh, mysolver_t *mySolver, double theFreq, double theD
             g0  = cdt * edata->g0_shear;
             g02 = g0 / 2.;
             cg0 = g02 * ( 1. - g0 );
-            eg0 = exp( -g0 );
+            eg0 = exp( -g0 ) * g0 / theDeltaT;
 
             g1  = cdt * edata->g1_shear;
             g12 = g1 / 2.;
             cg1 = g12 * ( 1. - g1 );
-            eg1 = exp( -g1 );
+            eg1 = exp( -g1 ) * g1 / theDeltaT;
 
             if (typeOfDamping >= BKT3) {
                 g2  = cdt * edata->g2_shear;
                 g22 = g2 / 2.;
                 cg2 = g22 * ( 1. - g2 );
-                eg2 = exp( -g2 );
+                eg2 = exp( -g2 ) * g2 / theDeltaT;
             }
 
             for(i = 0; i < 8; i++)
@@ -297,18 +297,18 @@ void calc_conv(mesh_t *myMesh, mysolver_t *mySolver, double theFreq, double theD
             g0  = cdt * edata->g0_kappa;
             g02 = g0 / 2.;
             cg0 = g02 * ( 1. - g0 );
-            eg0 = exp( -g0 );
+            eg0 = exp( -g0 ) * g0 / theDeltaT;
 
             g1  = cdt * edata->g1_kappa;
             g12 = g1 / 2.;
             cg1 = g12 * ( 1. - g1 );
-            eg1 = exp( -g1 );
+            eg1 = exp( -g1 ) * g1 / theDeltaT;
 
             if (typeOfDamping >= BKT3) {
                 g2  = cdt * edata->g2_kappa;
                 g22 = g2 / 2.;
                 cg2 = g22 * ( 1. - g2 );
-                eg2 = exp( -g2 );
+                eg2 = exp( -g2 ) * g2 / theDeltaT;
             }
 
             for(i = 0; i < 8; i++)
@@ -481,7 +481,7 @@ void constant_Q_addforce(mesh_t *myMesh, mysolver_t *mySolver, double theFreq, d
 
             for (i = 0; i < 8; i++) {
 
-                fvector_t *tm1Disp, *tm2Disp, *f0_tm1, *f1_tm1;
+                fvector_t *tm1Disp, *tm2Disp, *f0_tm1, *f1_tm1, *f2_tm1;
                 int32_t    lnid, cindex;
 
                 cindex = eindex * 8 + i;
@@ -507,9 +507,10 @@ void constant_Q_addforce(mesh_t *myMesh, mysolver_t *mySolver, double theFreq, d
                                              + tm1Disp->f[2];
 
                 if ( typeOfDamping >= BKT3 ) {
-                    damping_vector_kappa[i].f[0] -= a2_kappa * f0_tm1->f[0];
-                    damping_vector_kappa[i].f[1] -= a2_kappa * f0_tm1->f[1];
-                    damping_vector_kappa[i].f[2] -= a2_kappa * f0_tm1->f[2];
+                    f2_tm1  = mySolver->conv_kappa_3 + cindex;
+                    damping_vector_kappa[i].f[0] -= a2_kappa * f2_tm1->f[0];
+                    damping_vector_kappa[i].f[1] -= a2_kappa * f2_tm1->f[1];
+                    damping_vector_kappa[i].f[2] -= a2_kappa * f2_tm1->f[2];
                 }
 
             } // end for nodes in the element
