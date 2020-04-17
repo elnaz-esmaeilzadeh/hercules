@@ -7906,10 +7906,10 @@ mesh_correct_properties( etree_t* cvm )
                     edata->g0_kappa =  0.0270 * (2. * M_PI * Param.theFreq);
                     edata->g1_kappa =  0.5900 * (2. * M_PI * Param.theFreq);
                     edata->g2_kappa =  0.1400 * (2. * M_PI * Param.theFreq);
-                    edata->a0_kappa =  ( 0.8543  * pow(Qs, -0.8953) ) / Qs;
-                    edata->a1_kappa =  ( 0.8871  * pow(Qs, -0.9803) ) / Qs;
-                    edata->a2_kappa =  ( 0.6718 * pow(Qs, -0.9412) ) / Qs;
-                    edata->b_kappa  =  ( 0.446 * pow(Qs, -1.017 ) ) / (Qs * (2. * M_PI * Param.theFreq));
+                    edata->a0_kappa =  ( 0.8543  * pow(Qk, -0.8953) ) / Qk;
+                    edata->a1_kappa =  ( 0.8871  * pow(Qk, -0.9803) ) / Qk;
+                    edata->a2_kappa =  ( 0.6718 * pow(Qk, -0.9412) ) / Qk;
+                    edata->b_kappa  =  ( 0.446 * pow(Qk, -1.017 ) ) / (Qk * (2. * M_PI * Param.theFreq));
 
 
                 }
