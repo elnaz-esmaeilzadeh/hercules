@@ -481,7 +481,7 @@ void constant_Q_addforce(mesh_t *myMesh, mysolver_t *mySolver, double theFreq, d
 
             for (i = 0; i < 8; i++) {
 
-                fvector_t *tm1Disp, *tm2Disp, *f0_tm1, *f1_tm1;
+                fvector_t *tm1Disp, *tm2Disp, *f0_tm1, *f1_tm1, *f2_tm1;
                 int32_t    lnid, cindex;
 
                 cindex = eindex * 8 + i;
@@ -507,9 +507,10 @@ void constant_Q_addforce(mesh_t *myMesh, mysolver_t *mySolver, double theFreq, d
                                              + tm1Disp->f[2];
 
                 if ( typeOfDamping >= BKT3 ) {
-                    damping_vector_kappa[i].f[0] -= a2_kappa * f0_tm1->f[0];
-                    damping_vector_kappa[i].f[1] -= a2_kappa * f0_tm1->f[1];
-                    damping_vector_kappa[i].f[2] -= a2_kappa * f0_tm1->f[2];
+                    f2_tm1  = mySolver->conv_kappa_3 + cindex;
+                    damping_vector_kappa[i].f[0] -= a2_kappa * f2_tm1->f[0];
+                    damping_vector_kappa[i].f[1] -= a2_kappa * f2_tm1->f[1];
+                    damping_vector_kappa[i].f[2] -= a2_kappa * f2_tm1->f[2];
                 }
 
             } // end for nodes in the element
