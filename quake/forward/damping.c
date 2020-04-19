@@ -240,18 +240,18 @@ void calc_conv(mesh_t *myMesh, mysolver_t *mySolver, double theFreq, double theD
             g0  = cdt * edata->g0_shear;
             g02 = g0 / 2.;
             cg0 = g02 * ( 1. - g0 );
-            eg0 = exp( -g0 ) * g0 / theDeltaT;
+            eg0 = exp( -g0 );
 
             g1  = cdt * edata->g1_shear;
             g12 = g1 / 2.;
             cg1 = g12 * ( 1. - g1 );
-            eg1 = exp( -g1 ) * g1 / theDeltaT;
+            eg1 = exp( -g1 );
 
             if (typeOfDamping >= BKT3) {
                 g2  = cdt * edata->g2_shear;
                 g22 = g2 / 2.;
                 cg2 = g22 * ( 1. - g2 );
-                eg2 = exp( -g2 ) * g2 / theDeltaT;
+                eg2 = exp( -g2 );
             }
 
             for(i = 0; i < 8; i++)
@@ -297,18 +297,18 @@ void calc_conv(mesh_t *myMesh, mysolver_t *mySolver, double theFreq, double theD
             g0  = cdt * edata->g0_kappa;
             g02 = g0 / 2.;
             cg0 = g02 * ( 1. - g0 );
-            eg0 = exp( -g0 ) * g0 / theDeltaT;
+            eg0 = exp( -g0 );
 
             g1  = cdt * edata->g1_kappa;
             g12 = g1 / 2.;
             cg1 = g12 * ( 1. - g1 );
-            eg1 = exp( -g1 ) * g1 / theDeltaT;
+            eg1 = exp( -g1 );
 
             if (typeOfDamping >= BKT3) {
                 g2  = cdt * edata->g2_kappa;
                 g22 = g2 / 2.;
                 cg2 = g22 * ( 1. - g2 );
-                eg2 = exp( -g2 ) * g2 / theDeltaT;
+                eg2 = exp( -g2 );
             }
 
             for(i = 0; i < 8; i++)

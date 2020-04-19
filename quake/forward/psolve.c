@@ -7865,30 +7865,17 @@ mesh_correct_properties( etree_t* cvm )
                 }
 
                 /* =-=-=-=-=-= compute bkt parameters from polynomial fitting =-=-=-=-=-= */
-                double alpha_0_shear, alpha_1_shear, gamma_0_shear,  gamma_1_shear, beta_shear, errQs,
+                /*double alpha_0_shear, alpha_1_shear, gamma_0_shear,  gamma_1_shear, beta_shear, errQs,
                        alpha_0_kappa, alpha_1_kappa, gamma_0_kappa,  gamma_1_kappa, beta_kappa, errQk;
 
                 get_bktparams ( Qs,  &alpha_0_shear, &alpha_1_shear, &gamma_0_shear,  &gamma_1_shear, &beta_shear, &errQs);
-                get_bktparams ( Qk,  &alpha_0_kappa, &alpha_1_kappa, &gamma_0_kappa,  &gamma_1_kappa, &beta_kappa, &errQk);
+                get_bktparams ( Qk,  &alpha_0_kappa, &alpha_1_kappa, &gamma_0_kappa,  &gamma_1_kappa, &beta_kappa, &errQk); */
 
                 //if ( errQs > 0.001 || errQk > 0.001 )
                 //    solver_abort( __FUNCTION_NAME, NULL, "error > 0.001 in bkt minimization. Qs_target:%f, Qk_target:%f, errQs:%f errQk:%f \n", Qs, Qk, errQs, errQk);
 
                 /* =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
 
-                edata->a0_shear = alpha_0_shear;
-                edata->a1_shear = alpha_1_shear;
-                edata->g0_shear = gamma_0_shear;
-                edata->g1_shear = gamma_1_shear;
-                edata->b_shear  = beta_shear;
-
-                edata->a0_kappa = alpha_0_kappa;
-                edata->a1_kappa = alpha_1_kappa;
-                edata->g0_kappa = gamma_0_kappa;
-                edata->g1_kappa = gamma_1_kappa;
-                edata->b_kappa  = beta_kappa;
-
-                /*
                 if ( index_Qs == -1 ) {
                     edata->a0_shear = 0;
                     edata->a1_shear = 0;
@@ -7896,14 +7883,21 @@ mesh_correct_properties( etree_t* cvm )
                     edata->g1_shear = 0;
                     edata->b_shear  = 0;
                 } else {
-                    edata->a0_shear = Global.theQTABLE[index_Qs][1];
+                     edata->a0_shear = Global.theQTABLE[index_Qs][1];
                     edata->a1_shear = Global.theQTABLE[index_Qs][2];
                     edata->g0_shear = Global.theQTABLE[index_Qs][3];
                     edata->g1_shear = Global.theQTABLE[index_Qs][4];
                     edata->b_shear  = Global.theQTABLE[index_Qs][5];
-                } */
 
-                /*
+                    /*edata->a0_shear = alpha_0_shear;
+                    edata->a1_shear = alpha_1_shear;
+                    edata->g0_shear = gamma_0_shear;
+                    edata->g1_shear = gamma_1_shear;
+                    edata->b_shear  = beta_shear; */
+
+                }
+
+
                 if ( (Param.useInfQk == YES) || (index_Qk == -1) ) {
                     edata->a0_kappa = 0;
                     edata->a1_kappa = 0;
@@ -7916,7 +7910,13 @@ mesh_correct_properties( etree_t* cvm )
                     edata->g0_kappa = Global.theQTABLE[index_Qk][3];
                     edata->g1_kappa = Global.theQTABLE[index_Qk][4];
                     edata->b_kappa  = Global.theQTABLE[index_Qk][5];
-                } */
+
+                    /*edata->a0_kappa = alpha_0_kappa;
+                    edata->a1_kappa = alpha_1_kappa;
+                    edata->g0_kappa = gamma_0_kappa;
+                    edata->g1_kappa = gamma_1_kappa;
+                    edata->b_kappa  = beta_kappa; */
+                }
 
             } else if ( Param.theTypeOfDamping == BKT2 ) {
 
