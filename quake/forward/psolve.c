@@ -7833,6 +7833,9 @@ mesh_correct_properties( etree_t* cvm )
             /* edata->rho = edata->Vp * RhoVpRatio; */ /* Discuss with Jacobo */
         }
 
+        // final adjustment of Vp according to the group's suggestion
+        edata->Vp  = edata->Vs * VpVsRatio;
+
         /*
          * Definition of BTK-Family Damping parameters
          */
