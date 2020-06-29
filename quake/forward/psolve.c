@@ -4167,7 +4167,7 @@ solver_compute_force_stiffness( mysolver_t *solver,
 {
 
     Timer_Start( "Compute addforces e" );
-    if(Param.theTypeOfDamping != BKT)
+    if( ( Param.theTypeOfDamping < BKT   )   )
     {
         if (Param.theStiffness == EFFECTIVE) {
             compute_addforce_effective( mesh, solver );
@@ -5845,7 +5845,7 @@ static void compute_K()
 static void constract_Quality_Factor_Table() {
 
     int i, j;
-    double local_QTABLE[26][6] = {
+    /* double local_QTABLE[26][6] = {
             {   5.00,  0.211111102,  0.236842104,  0.032142857,  0.271428571,  0.1400000 },
             {   6.25,  0.188888889,  0.184210526,  0.039893617,  0.336879433,  0.1015200 },
             {   8.33,  0.157777778,  0.139473684,  0.045000000,  0.380000000,  0.0700000 },
@@ -5872,8 +5872,38 @@ static void constract_Quality_Factor_Table() {
             { 400.00,  0.004300000,  0.003600000,  0.021425572,  0.214255718,  0.0017935 },
             { 450.00,  0.003900000,  0.003000000,  0.028000000,  0.271000000,  0.0015000 },
             { 500.00,  0.003500000,  0.002850000,  0.023408925,  0.241404535,  0.0013670 }
-            /*    Qo,      alpha_1,      alpha_2,      gamma_1,      gamma_2,       beta */
+            //    Qo,      alpha_1,      alpha_2,      gamma_1,      gamma_2,       beta
+    }; */
+     // Doriam's table
+      double local_QTABLE[26][6] = {
+           { 5.0,     0.213824199306997,   0.214975081555006,   0.051565915820727,   0.392419601076068,   0.114223560617828 },
+           { 6.25,    0.186829389245902,   0.176495993330104,   0.050021147523697,   0.383250861967562,   0.091379110600293 },
+           { 8.33,    0.153250864931585,   0.135813992388522,   0.048477940850105,   0.374166449435453,   0.068561729073257 },
+           { 10.00,   0.133541701119348,   0.114543936056555,   0.047705132221359,   0.369647375406900,   0.057111817639174 },
+           { 15.00,   0.095975244603152,   0.077914986423977,   0.046428268749996,   0.362223775996977,   0.038074338344773 },
+           { 20.00,   0.074734684302201,   0.059014449564976,   0.045797618339140,   0.358572526832180,   0.028555662894623 },
+           { 25.00,   0.061146200167406,   0.047488939930242,   0.045423352297652,   0.356407244204920,   0.022844499869013 },
+           { 30.00,   0.051722724340693,   0.039728560381090,   0.045175923644991,   0.354975080940478,   0.019037079640288 },
+           { 35.00,   0.044809339288316,   0.034147885877092,   0.045000204762312,   0.353957211053003,   0.016317504582817 },
+           { 40.00,   0.039523175150440,   0.029941793660133,   0.044868873696694,   0.353195975615256,   0.014277828479929 },
+           { 45.00,   0.035351165343402,   0.026658136972439,   0.044766892469425,   0.352604653279352,   0.012691416011863 },
+           { 50.00,   0.031975096967461,   0.024023455052625,   0.044685320595041,   0.352131663633679,   0.011422286797518 },
+           { 60.00,   0.026846337747289,   0.020058425934387,   0.044562752020458,   0.351421365568300,   0.009518592500906 },
+           { 70.00,   0.023134990683038,   0.017216647306878,   0.044474817264180,   0.350912593773531,   0.008158808695107 },
+           { 80.00,   0.020324985209151,   0.015080030053759,   0.044408507155927,   0.350529798411748,   0.007138968333117 },
+           { 90.00,   0.018123577678620,   0.013415083146655,   0.044356656285723,   0.350231225564975,   0.006345756901192 },
+           { 100.00,  0.016352382860205,   0.012081157194701,   0.044314985694202,   0.349991873360687,   0.005711185876928 },
+           { 120.00,  0.013678649106408,   0.010077015436344,   0.044252210323555,   0.349632434464568,   0.004759325395322 },
+           { 150.00,  0.010984355197906,   0.008069044748514,   0.044189407612328,   0.349274010595048,   0.003807459231929 },
+           { 200.00,  0.008269251319794,   0.006057391664144,   0.044127549161943,   0.348920585136250,   0.002855587254772 },
+           { 250.00,  0.006630158272276,   0.004848705344604,   0.044091695658935,   0.348713672248562,   0.002284462652439 },
+           { 300.00,  0.005533298472639,   0.004042204370751,   0.044068463407196,   0.348577928429087,   0.001903713971116 },
+           { 350.00,  0.004747858760699,   0.003465747986440,   0.044051784382370,   0.348480186531356,   0.001631752444839 },
+           { 400.00,  0.004157744966802,   0.003033152859528,   0.044038500649086,   0.348403654469221,   0.001427783254767 },
+           { 450.00,  0.003698184940471,   0.002696500100933,   0.044026822537802,   0.348339033919198,   0.001269142412984 },
+           { 500.00,  0.003330190674661,   0.002427023350810,   0.044015678669530,   0.348280855263629,   0.001142231431869 }
     };
+            //    Qo,      alpha_1,      alpha_2,      gamma_1,      gamma_2,       beta
 
     for(i = 0; i < 26; i++) {
         for(j = 0; j < 6; j++) {
@@ -7827,18 +7857,34 @@ mesh_correct_properties( etree_t* cvm )
                  * g = normilized_gamma * ( 2 * pi * f_max);
                  * b = normilized_beta / (Q * 2 * pi * f_max);
                  */
-                if ( Qs >= 1000 ) {
+                 if ( Qs >= 1000 ) {
                     edata->g0_shear = 0;
                     edata->g1_shear = 0;
                     edata->a0_shear = 0;
                     edata->a1_shear = 0;
                     edata->b_shear  = 0;
                 } else {
-                    edata->g0_shear =   0.0373 * (2. * M_PI * Param.theFreq);
+                    //Doriam: Ricardo's functions
+                    /* edata->g0_shear =   0.0373 * (2. * M_PI * Param.theFreq);
                     edata->g1_shear =   0.3082 * (2. * M_PI * Param.theFreq);
                     edata->a0_shear = (-2.656  * pow(Qs, -0.8788) + 1.677 ) / Qs;
                     edata->a1_shear = (-0.5623 * pow(Qs, -1.0300) + 1.262 ) / Qs;
-                    edata->b_shear  = ( 0.1876 * pow(Qs, -0.9196) + 0.6137) / (Qs * (2. * M_PI * Param.theFreq));
+                    edata->b_shear  = ( 0.1876 * pow(Qs, -0.9196) + 0.6137) / (Qs * (2. * M_PI * Param.theFreq)); */
+
+                    // Doriam: All parameters free
+                    /* edata->g0_shear = ( 0.008634 * pow(Qs, -0.07081) + 0.04408) * (2. * M_PI * Param.theFreq);
+                    edata->g1_shear = ( 0.08366 * pow(Qs, -0.1043) + 0.3487) * (2. * M_PI * Param.theFreq);
+                    edata->a0_shear = ( 1.042  * pow(Qs, -0.9077) ) ;
+                    edata->a1_shear = ( 1.056 * pow(Qs, -0.9718) ) ;
+                    edata->b_shear  = ( 0.5711 * pow(Qs, -1.0) ) / ( (2. * M_PI * Param.theFreq)); */
+
+                    // Doriam: Gamma parameters fixed
+                    edata->g0_shear = 0.05 * (2. * M_PI * Param.theFreq);
+                    edata->g1_shear = 0.40 * (2. * M_PI * Param.theFreq);
+                    edata->a0_shear = ( 1.056  * pow(Qs, -0.9068) ) ;
+                    edata->a1_shear = ( 1.078 * pow(Qs, -0.9797) ) ;
+                    edata->b_shear  = ( 0.5709 * pow(Qs, -1.021) ) / ( (2. * M_PI * Param.theFreq));
+
                 }
 
                 if ( ( Param.useInfQk == YES ) || ( Qk >= 1000 ) ) {
@@ -7848,16 +7894,32 @@ mesh_correct_properties( etree_t* cvm )
                     edata->a1_kappa = 0;
                     edata->b_kappa  = 0;
                 } else {
-                    edata->g0_kappa =   0.0373 * (2. * M_PI * Param.theFreq);
+                    // Doriam: Ricardo's functions
+                    /* edata->g0_kappa =   0.0373 * (2. * M_PI * Param.theFreq);
                     edata->g1_kappa =   0.3082 * (2. * M_PI * Param.theFreq);
                     edata->a0_kappa = (-2.656  * pow(Qk, -0.8788) + 1.677 ) / Qk;
                     edata->a1_kappa = (-0.5623 * pow(Qk, -1.0300) + 1.262 ) / Qk;
-                    edata->b_kappa  = ( 0.1876 * pow(Qk, -0.9196) + 0.6137) / (Qk * (2. * M_PI * Param.theFreq));
+                    edata->b_kappa  = ( 0.1876 * pow(Qk, -0.9196) + 0.6137) / (Qk * (2. * M_PI * Param.theFreq)); */
+
+                    // Doriam: All parameters free
+                    /* edata->g0_kappa = ( 0.008634 * pow(Qk, -0.07081) + 0.04408 ) * (2. * M_PI * Param.theFreq);
+                    edata->g1_kappa = ( 0.08366 * pow(Qk, -0.1043) + 0.3487 ) * (2. * M_PI * Param.theFreq);
+                    edata->a0_kappa = ( 1.042  * pow(Qk, -0.9077) );
+                    edata->a1_kappa = ( 1.056 * pow(Qk, -0.9718) );
+                    edata->b_kappa  = ( 0.5711 * pow(Qk, -1.0) ) / ( (2. * M_PI * Param.theFreq)); */
+
+                    // Doriam: Gamma parameters fixed
+                    edata->g0_kappa = 0.05 * (2. * M_PI * Param.theFreq);
+                    edata->g1_kappa = 0.40 * (2. * M_PI * Param.theFreq);
+                    edata->a0_kappa = ( 1.056  * pow(Qk, -0.9068) ) ;
+                    edata->a1_kappa = ( 1.078 * pow(Qk, -0.9797) ) ;
+                    edata->b_kappa  = ( 0.5709 * pow(Qk, -1.021) ) / ( (2. * M_PI * Param.theFreq));
+
                 }
 
             } else if ( Param.theTypeOfDamping == BKT3 ) {
 
-                if ( Qs >= 1000 ) {
+                 if ( Qs >= 1000 ) {
                     edata->g0_shear = 0;
                     edata->g1_shear = 0;
                     edata->g2_shear = 0;
@@ -7866,6 +7928,7 @@ mesh_correct_properties( etree_t* cvm )
                     edata->a2_shear = 0;
                     edata->b_shear  = 0;
                 } else {
+                    // Doriam: Ricardo's functions
                     /* edata->g0_shear =   0.0151 * (2. * M_PI * Param.theFreq);
                     edata->g1_shear =   0.1000 * (2. * M_PI * Param.theFreq);
                     edata->g2_shear =   0.4814 * (2. * M_PI * Param.theFreq);
@@ -7874,14 +7937,14 @@ mesh_correct_properties( etree_t* cvm )
                     edata->a2_shear = (-0.3037 * pow(Qs, -0.8911) + 1.032 ) / Qs;
                     edata->b_shear  = ( 0.1249 * pow(Qs, -0.804 ) + 0.4782) / (Qs * (2. * M_PI * Param.theFreq)); */
 
-                    // updated fitting. Doriam
+                    // Doriam: Updated fitting. Gamma Fixed
                     edata->g0_shear =   0.0270 * (2. * M_PI * Param.theFreq);
                     edata->g1_shear =   0.5900 * (2. * M_PI * Param.theFreq);
                     edata->g2_shear =   0.1400 * (2. * M_PI * Param.theFreq);
-                    edata->a0_shear = (0.8543  * pow(Qs, -0.8953) ) / Qs;
-                    edata->a1_shear = (0.8871  * pow(Qs, -0.9803) ) / Qs;
-                    edata->a2_shear = (0.6718 * pow(Qs, -0.9412) ) / Qs;
-                    edata->b_shear  = ( 0.446 * pow(Qs, -1.017 ) ) / (Qs * (2. * M_PI * Param.theFreq));
+                    edata->a0_shear = (0.8543  * pow(Qs, -0.8953) );
+                    edata->a1_shear = (0.8871  * pow(Qs, -0.9803) );
+                    edata->a2_shear = (0.6718 * pow(Qs, -0.9412) );
+                    edata->b_shear  = ( 0.446 * pow(Qs, -1.017 ) ) / ( (2. * M_PI * Param.theFreq) );
 
                 }
 
@@ -7894,6 +7957,7 @@ mesh_correct_properties( etree_t* cvm )
                     edata->a2_kappa = 0;
                     edata->b_kappa  = 0;
                 } else {
+                    // Doriam: Ricardo's functions
                     /* edata->g0_kappa =   0.0151 * (2. * M_PI * Param.theFreq);
                     edata->g1_kappa =   0.1000 * (2. * M_PI * Param.theFreq);
                     edata->g2_kappa =   0.4814 * (2. * M_PI * Param.theFreq);
@@ -7902,15 +7966,15 @@ mesh_correct_properties( etree_t* cvm )
                     edata->a2_kappa = (-0.3037 * pow(Qk, -0.8911) + 1.032 ) / Qk;
                     edata->b_kappa  = ( 0.1249 * pow(Qk, -0.804 ) + 0.4782) / (Qk * (2. * M_PI * Param.theFreq)); */
 
-                    // updated fitting. Doriam
+                    // Doriam: Updated fitting. Gamma Fixed
                     edata->g0_kappa =  0.0270 * (2. * M_PI * Param.theFreq);
                     edata->g1_kappa =  0.5900 * (2. * M_PI * Param.theFreq);
                     edata->g2_kappa =  0.1400 * (2. * M_PI * Param.theFreq);
-                    edata->a0_kappa =  ( 0.8543  * pow(Qk, -0.8953) ) / Qk;
-                    edata->a1_kappa =  ( 0.8871  * pow(Qk, -0.9803) ) / Qk;
-                    edata->a2_kappa =  ( 0.6718 * pow(Qk, -0.9412) ) / Qk;
-                    edata->b_kappa  =  ( 0.446 * pow(Qk, -1.017 ) ) / (Qk * (2. * M_PI * Param.theFreq));
 
+                    edata->a0_kappa =  ( 0.8543  * pow(Qk, -0.8953) );
+                    edata->a1_kappa =  ( 0.8871  * pow(Qk, -0.9803) );
+                    edata->a2_kappa =  ( 0.6718 * pow(Qk, -0.9412) );
+                    edata->b_kappa  =  ( 0.446 * pow(Qk, -1.017 ) ) / ( (2. * M_PI * Param.theFreq));
 
                 }
 
