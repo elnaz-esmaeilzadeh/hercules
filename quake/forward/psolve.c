@@ -1249,6 +1249,8 @@ int profile_query(double depth, cvmpayload_t* props) {
         props->Vp  = Param.theProfileVp[last];
         props->Vs  = Param.theProfileVs[last];
         props->rho = Param.theProfileRho[last];
+        props->Qp  = Param.theProfileQp[last];
+        props->Qs  = Param.theProfileQs[last];
         return 0;
     }
 
@@ -1259,6 +1261,8 @@ int profile_query(double depth, cvmpayload_t* props) {
             props->Vp  = interpolate_profile_property(depth, i, i+1, PROFILE_VP );
             props->Vs  = interpolate_profile_property(depth, i, i+1, PROFILE_VS );
             props->rho = interpolate_profile_property(depth, i, i+1, PROFILE_RHO);
+            props->Qp = interpolate_profile_property(depth, i, i+1, PROFILE_QP);
+            props->Qs = interpolate_profile_property(depth, i, i+1, PROFILE_QS);
 
             return 0;
         }
@@ -7604,7 +7608,7 @@ mesh_correct_properties( etree_t* cvm )
     int32_t  eindex;
     double   east_m, north_m, depth_m, VpVsRatio, RhoVpRatio;
     int      res, iNorth, iEast, iDepth, numPoints = 3, cnt=0;
-    double   vs, vp, rho, s_0;
+    double   vs, vp, rho, s_0, qp, qs;
     double   points[3];
     int32_t  lnid0;
 
@@ -7644,6 +7648,8 @@ mesh_correct_properties( etree_t* cvm )
         rho = 0;
         cnt = 0;
         s_0 = 0;
+        qp  = 0;
+        qs  = 0;
 
         for (iNorth = 0; iNorth < numPoints; iNorth++) {
 
@@ -7696,6 +7702,8 @@ mesh_correct_properties( etree_t* cvm )
                     vp  += g_props.Vp;
                     vs  += g_props.Vs;
                     rho += g_props.rho;
+                    qp  += g_props.Qp;
+                    qs  += g_props.Qs;
                     ++cnt;
 
                     // get geostatic stress as 1d column
@@ -7722,11 +7730,15 @@ mesh_correct_properties( etree_t* cvm )
         edata->Vp  =  vp;
         edata->Vs  =  vs;
         edata->rho = rho;
+        edata->Qp  = qp;
+        edata->Qs  = qs;
 
         if (cnt != 0 ) {
             edata->Vp  =  vp / cnt;
             edata->Vs  =  vs / cnt;
             edata->rho = rho / cnt;
+            edata->Qp  = qp / cnt;
+            edata->Qs  = qs / cnt;
         }
 
         /* Auxiliary ratios for adjustments */
@@ -7786,7 +7798,10 @@ mesh_correct_properties( etree_t* cvm )
                  * and it is versatile enough and simpler than the
                  * option used in Taborda and Bielak (2013, BSSA)
                  */
-                Qs = Param.theQConstant + Param.theQAlpha * pow(vs_kms,Param.theQBeta);
+                if ( Param.useProfile == YES )
+                    Qs = edata->Qs;
+                else
+                    Qs = Param.theQConstant + Param.theQAlpha * pow(vs_kms,Param.theQBeta);
 
             } else {
 
@@ -7794,11 +7809,17 @@ mesh_correct_properties( etree_t* cvm )
                  * paper Taborda and Bielak (2013, BSSA) which is
                  * based on the idea of Brocher (2005)
                  */
-                Qs = 10.5 + vs_kms * (-16. + vs_kms * (153. + vs_kms * (-103. + vs_kms * (34.7 + vs_kms * (-5.29 + vs_kms * 0.31)))));
+                if ( Param.useProfile == YES )
+                    Qs = edata->Qs;
+                else
+                    Qs = 10.5 + vs_kms * (-16. + vs_kms * (153. + vs_kms * (-103. + vs_kms * (34.7 + vs_kms * (-5.29 + vs_kms * 0.31)))));
             }
 
             /* Default option for Qp */
-            Qp = 2. * Qs;
+            if ( Param.useProfile == YES )
+                Qp = edata->Qp;
+            else
+                Qp = 2. * Qs;
 
             if (Param.useInfQk == YES) {
                 Qk = 1000;
