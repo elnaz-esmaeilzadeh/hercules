@@ -7713,8 +7713,15 @@ mesh_correct_properties( etree_t* cvm )
 
                         for (k = 0; k < nlayers; k++) {
                             depth_k = depth_o * (k + 0.5);
-                            res = cvm_query( Global.theCVMEp, east_m, north_m,
-                                    depth_k, &g_props );
+
+                            if ( belongs2hmgHalfspace( east_m, north_m, depth_m ) )
+                                res = get_halfspaceproperties( &g_props );
+                            else if (Param.useProfile == NO) {
+                                res = cvm_query( Global.theCVMEp, east_m, north_m, depth_m, &g_props );
+                            } else {
+                                res = profile_query(depth_m, &g_props);
+                            }
+
                             if ( assume_groundwatertable() )
                                 s_0 += depth_o * (g_props.rho - 1000.0 ) * 9.81 ;
                             else
