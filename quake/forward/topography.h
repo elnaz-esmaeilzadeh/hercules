@@ -105,13 +105,13 @@ topometh_t get_topo_meth() ;
 
 
 /* ERASE LATER THESE FUNCTIONS, ARE JUST FOR A QUICK CHECKING*/
-void topo_DRM_init ( mesh_t *myMesh, mysolver_t *mySolver);
+//void topo_DRM_init ( mesh_t *myMesh, mysolver_t *mySolver);
 
-void compute_addforce_topoDRM ( mesh_t     *myMesh,
-                                mysolver_t *mySolver,
-                                double      theDeltaT,
-                                int         step,
-                                fmatrix_t (*theK1)[8], fmatrix_t (*theK2)[8]);
+//void compute_addforce_topoDRM ( mesh_t     *myMesh,
+//                                mysolver_t *mySolver,
+//                                double      theDeltaT,
+//                                int         step,
+//                                fmatrix_t (*theK1)[8], fmatrix_t (*theK2)[8]);
 
 void topo_stats(int32_t myID, int32_t theGroupSize) ;
 void topo_print_stats(int32_t *topoElementsCount,
@@ -124,6 +124,9 @@ int   get_cube_partition(int32_t eindex);
 void  get_tetraProps(int32_t eindex, double tetrVols[5], int *topoPart ) ;
 
 void get_airprops_topo( edata_t *edata );
+
+void TetraForcesBKT( fvector_t* un, fvector_t* un_kappa, fvector_t* resVec, double tetraVol[5], edata_t *edata,
+                     double mu, double lambda, int cube_part );
 
 
 #endif /* TOPOGRAPHY_H_ */
