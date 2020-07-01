@@ -4195,8 +4195,10 @@ solver_compute_force_damping( mysolver_t *solver,
 
     if(Param.theTypeOfDamping == RAYLEIGH  || Param.theTypeOfDamping == MASS)
     {
-        /* If damping is not of the BKT family */
-        damping_addforce(Global.myMesh, Global.mySolver, Global.theK1, Global.theK2);
+        /* Dorian says: The Mass and Rayleigh damping are implicitly considered in the nodal mass
+         * and the stiffness computation module  */
+
+        //damping_addforce(Global.myMesh, Global.mySolver, Global.theK1, Global.theK2);
     }
     else if(Param.theTypeOfDamping >= BKT)
     {
