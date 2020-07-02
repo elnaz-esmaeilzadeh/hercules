@@ -7807,7 +7807,7 @@ mesh_correct_properties( etree_t* cvm )
                  * and it is versatile enough and simpler than the
                  * option used in Taborda and Bielak (2013, BSSA)
                  */
-                if ( Param.useProfile == YES )
+                if ( Param.useProfile == YES || Param.includeHomogeneousHalfSpace )
                     Qs = edata->Qs;
                 else
                     Qs = Param.theQConstant + Param.theQAlpha * pow(vs_kms,Param.theQBeta);
@@ -7818,7 +7818,7 @@ mesh_correct_properties( etree_t* cvm )
                  * paper Taborda and Bielak (2013, BSSA) which is
                  * based on the idea of Brocher (2005)
                  */
-                if ( Param.useProfile == YES )
+                if ( Param.useProfile == YES || Param.includeHomogeneousHalfSpace )
                     Qs = edata->Qs;
                 else
                     Qs = 10.5 + vs_kms * (-16. + vs_kms * (153. + vs_kms * (-103. + vs_kms * (34.7 + vs_kms * (-5.29 + vs_kms * 0.31)))));
