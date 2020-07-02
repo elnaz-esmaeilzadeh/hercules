@@ -244,12 +244,16 @@ noyesflag_t isTopoElement (mesh_t *myMesh, int32_t eindex, int32_t topoNonlin_fl
         eindexT = myTopoElementsMapping[topo_eindex];
 
         if ( eindexT == eindex ) {
+            topoconstants_t *ecp    = myTopoSolver->topoconstants + topo_eindex;
             if ( topoNonlin_flag == 1 && theNonlinTopo_flag == YES ) {
-                topoconstants_t *ecp    = myTopoSolver->topoconstants + topo_eindex;
                 if ( theTopoMethod == VT )
                 	ecp->isTopoNonlin = 1;
                 myNumberOfTopoNonLinElements++;
             }
+
+            if ( theTopoBKT_flag == YES )
+                ecp->isTopoBKT = 1;
+
             return YES;
         }
 
