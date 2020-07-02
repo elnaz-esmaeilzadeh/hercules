@@ -54,7 +54,7 @@ static topostation_t      *myTopoStations;
 static int32_t            myNumberOfTopoStations = 0;
 static int32_t            myNumberOfTopoNonLinElements = 0;
 static noyesflag_t        theNonlinTopo_flag  = NO;
-
+static noyesflag_t        theTopoBKT_flag  = NO;
 
 /*static double The_hypocenter_lat_deg = 0;
 static double The_hypocenter_long_deg = 0;
@@ -1147,12 +1147,13 @@ topography_initparameters ( const char *parametersin ) {
     char                topo_dir[256];
     char                topo_file[256];
     double              L_ew, L_ns, int_np_ew, int_np_ns, fract_np_ew, fract_np_ns;
-    char                etree_model[64], fem_meth[64];
+    char                etree_model[64], fem_meth[64], type_of_damping[64];
     etreetype_t         etreetype;
     topometh_t          topo_method;
 
     char                consider_topo_nonlin[64], include_nonlin_analysis[64];
     noyesflag_t         considerTopoNonlin = -1;
+    noyesflag_t         TopoBKT = NO;
 
     /* Opens parametersin file */
     if ( ( fp = fopen(parametersin, "r" ) ) == NULL ) {
@@ -1171,12 +1172,20 @@ topography_initparameters ( const char *parametersin ) {
          ( parsetext(fp, "type_of_etree",                   's', &etree_model              ) != 0) ||
          ( parsetext(fp, "region_length_north_m",           'd', &L_ns                     ) != 0) ||
          ( parsetext(fp, "consider_nonlinear_topography",   's', &consider_topo_nonlin     ) != 0) ||
+         ( parsetext(fp, "type_of_damping",                 's', &type_of_damping          ) != 0) ||
          ( parsetext(fp, "include_nonlinear_analysis",      's', &include_nonlin_analysis  ) != 0)  )
     {
         fprintf( stderr,
                  "Error parsing topography parameters from %s\n",
                  parametersin );
         return -1;
+    }
+
+    if ( (strcasecmp(type_of_damping, "bkt" )  == 0) ||
+         (strcasecmp(type_of_damping, "bkt2")  == 0) ||
+         (strcasecmp(type_of_damping, "bkt3")  == 0) ||
+         (strcasecmp(type_of_damping, "bkt3f") == 0) ) {
+        TopoBKT = YES;
     }
 
     if ( strcasecmp(etree_model, "full") == 0 ) {
@@ -1250,6 +1259,7 @@ topography_initparameters ( const char *parametersin ) {
 	theDomainLong_ew    = L_ew;
 	theDomainLong_ns    = L_ns;
 	theNonlinTopo_flag  = considerTopoNonlin;
+	theTopoBKT_flag     = TopoBKT;
 
     /* read topography info */
 	sprintf( topo_file,"%s/topography.in", topo_dir );
@@ -1295,7 +1305,7 @@ topography_initparameters ( const char *parametersin ) {
 
 void topo_init ( int32_t myID, const char *parametersin ) {
 
-    int     int_message[7];
+    int     int_message[8];
     double  double_message[4];
 
     /* Capturing data from file --- only done by PE0 */
@@ -1323,9 +1333,10 @@ void topo_init ( int32_t myID, const char *parametersin ) {
     int_message   [4]    = (int)theEtreeType;
     int_message   [5]    = (int)theTopoMethod;
     int_message   [6]    = (int)theNonlinTopo_flag;
+    int_message   [7]    = (int)theTopoBKT_flag;
 
     MPI_Bcast(double_message, 4, MPI_DOUBLE, 0, comm_solver);
-    MPI_Bcast(int_message,    7, MPI_INT,    0, comm_solver);
+    MPI_Bcast(int_message,    8, MPI_INT,    0, comm_solver);
 
     thebase_zcoord       = double_message[0];
     So				     = double_message[1];
@@ -1339,6 +1350,7 @@ void topo_init ( int32_t myID, const char *parametersin ) {
     theEtreeType         = int_message[4];
     theTopoMethod        = int_message[5];
     theNonlinTopo_flag   = int_message[6];
+    theTopoBKT_flag      = int_message[7];
 
     /* allocate table of properties for all other PEs */
     if (myID != 0) {
