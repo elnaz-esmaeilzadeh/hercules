@@ -7825,7 +7825,7 @@ mesh_correct_properties( etree_t* cvm )
             }
 
             /* Default option for Qp */
-            if ( Param.useProfile == YES )
+            if ( Param.useProfile == YES || Param.includeHomogeneousHalfSpace )
                 Qp = edata->Qp;
             else
                 Qp = 2. * Qs;
