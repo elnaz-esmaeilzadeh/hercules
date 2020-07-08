@@ -52,9 +52,6 @@ static double 	        thehmgHsVs                = 0.0;
 static double 	        thehmgHsVp                = 0.0;
 static double 	        thehmgHsRho               = 0.0;
 
-static double           thehmgHsQs                = 2000.0;
-static double           thehmgHsQp                = 2000.0;
-
 static double 	        theUg_Dt;
 static double           *theUg_str;
 static double           *theUg_nrm;
@@ -1197,7 +1194,7 @@ void get_reflection_coeff ( double *A1, double *B1, double Vs, double Vp  ) {
 // Dorian says: I'm going to initialize the homogeneous halfspace option here to avoid creating additional files for such a small change
 void hmgHalfspace_init ( int32_t myID, const char *parametersin ) {
 
-    double  double_message[10];
+    double  double_message[8];
 
     /* Capturing data from file --- only done by PE0 */
     if (myID == 0) {
@@ -1218,8 +1215,6 @@ void hmgHalfspace_init ( int32_t myID, const char *parametersin ) {
     double_message[5]  = thehmgHsVs;
     double_message[6]  = thehmgHsVp;
     double_message[7]  = thehmgHsRho;
-    double_message[8]  = thehmgHsQs;
-    double_message[9]  = thehmgHsQp;
 
     MPI_Bcast(double_message, 10, MPI_DOUBLE, 0, comm_solver);
 
@@ -1231,8 +1226,6 @@ void hmgHalfspace_init ( int32_t myID, const char *parametersin ) {
     thehmgHsVs              = double_message[5];
     thehmgHsVp              = double_message[6];
     thehmgHsRho             = double_message[7];
-    thehmgHsQs              = double_message[8];
-    thehmgHsQp              = double_message[9];
 
     return;
 
@@ -1262,8 +1255,6 @@ int32_t hmgHalfspace_initparameters ( const char *parametersin ) {
 			( parsetext(fp, "etreeBox_depth",     'd', &etreeBoxdepth     ) != 0) ||
 			( parsetext(fp, "hmgHS_Vs",           'd', &hmgVs             ) != 0) ||
 			( parsetext(fp, "hmgHS_Vp",           'd', &hmgVp             ) != 0) ||
-            ( parsetext(fp, "hmgHS_Qs",           'd', &hmgQs             ) != 0) ||
-            ( parsetext(fp, "hmgHS_Qp",           'd', &hmgQp             ) != 0) ||
 			( parsetext(fp, "hmgHS_rho",          'd', &hmgrho            ) != 0) )
 	{
 		fprintf( stderr,
@@ -1282,8 +1273,6 @@ int32_t hmgHalfspace_initparameters ( const char *parametersin ) {
 	thehmgHsVs                      = hmgVs;
 	thehmgHsVp                      = hmgVp;
 	thehmgHsRho                     = hmgrho;
-    thehmgHsQs                      = hmgQs;
-    thehmgHsQp                      = hmgQp;
 
 	fclose(fp);
 
@@ -1314,9 +1303,6 @@ int get_halfspaceproperties( cvmpayload_t* payload ) {
 	payload->Vp  = thehmgHsVp;
 	payload->Vs  = thehmgHsVs;
 	payload->rho = thehmgHsRho;
-
-    payload->Qp  = thehmgHsQp;
-    payload->Qs  = thehmgHsQs;
 
 	return 0;
 }

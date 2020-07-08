@@ -7789,10 +7789,10 @@ mesh_correct_properties( etree_t* cvm )
          */
         if( Param.theTypeOfDamping >= BKT )
         {
-            double vs_vp_Ratio, vksquared;
+            double vs_vp_Ratio;
             double vs_kms = edata->Vs * 0.001; /* Vs in km/s */
 
-            vksquared = edata->Vp * edata->Vp - 4. / 3. * edata->Vs * edata->Vs;
+            //vksquared = edata->Vp * edata->Vp - 4. / 3. * edata->Vs * edata->Vs;
 
             vs_vp_Ratio = edata->Vs / edata->Vp;
             L = 4. / 3. * vs_vp_Ratio * vs_vp_Ratio; /* As defined in Shearer (2009) */
@@ -7807,9 +7807,6 @@ mesh_correct_properties( etree_t* cvm )
                  * and it is versatile enough and simpler than the
                  * option used in Taborda and Bielak (2013, BSSA)
                  */
-                if ( Param.useProfile == YES || Param.includeHomogeneousHalfSpace )
-                    Qs = edata->Qs;
-                else
                     Qs = Param.theQConstant + Param.theQAlpha * pow(vs_kms,Param.theQBeta);
 
             } else {
@@ -7818,14 +7815,14 @@ mesh_correct_properties( etree_t* cvm )
                  * paper Taborda and Bielak (2013, BSSA) which is
                  * based on the idea of Brocher (2005)
                  */
-                if ( Param.useProfile == YES || Param.includeHomogeneousHalfSpace )
+                if ( Param.useProfile == YES )
                     Qs = edata->Qs;
                 else
                     Qs = 10.5 + vs_kms * (-16. + vs_kms * (153. + vs_kms * (-103. + vs_kms * (34.7 + vs_kms * (-5.29 + vs_kms * 0.31)))));
             }
 
             /* Default option for Qp */
-            if ( Param.useProfile == YES || Param.includeHomogeneousHalfSpace )
+            if ( Param.useProfile == YES )
                 Qp = edata->Qp;
             else
                 Qp = 2. * Qs;

@@ -99,6 +99,8 @@ typedef struct edata_t {
 		  g0_shear, g1_shear, g2_shear,
 		  g0_kappa, g1_kappa, g2_kappa,
 		  b_shear, b_kappa, sigma_0;
+    int     topoBkt;
+    int32_t topo_eindex;
 
 } edata_t;
 

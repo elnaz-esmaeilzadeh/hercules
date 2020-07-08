@@ -41,7 +41,6 @@ typedef struct topoconstants_t {
     double       tetraVol[5];
     int          isTopoNonlin;
     int          cube_part;
-    int          isTopoBKT;
 
 } topoconstants_t;
 
@@ -126,8 +125,10 @@ void  get_tetraProps(int32_t eindex, double tetrVols[5], int *topoPart ) ;
 
 void get_airprops_topo( edata_t *edata );
 
-void TetraForcesBKT( fvector_t* un, fvector_t* un_kappa, fvector_t* resVec, double tetraVol[5], edata_t *edata,
-                     double mu, double lambda, int cube_part );
+void TetraForcesBKT( fvector_t* un, fvector_t* un_kappa, fvector_t* resVec,
+                     double edgesize, double mu, double kappa, int topo_eindex );
+
+int IsDampingElement (mesh_t *myMesh, int32_t eindex) ;
 
 
 #endif /* TOPOGRAPHY_H_ */

@@ -58,8 +58,12 @@ void trad_elements_count(int32_t myID, mesh_t *myMesh) {
 
     for (eindex = 0; eindex < myMesh->lenum; eindex++) {
 
-        if ( ( isThisElementNonLinear(myMesh, eindex) == NO ) &&
+/*        if ( ( isThisElementNonLinear(myMesh, eindex) == NO ) &&
              ( BelongstoTopography(myMesh, eindex)    == NO )  ) {
+            count++;
+        }*/
+        if ( ( isThisElementNonLinear(myMesh, eindex) == NO ) &&
+             ( IsDampingElement(myMesh, eindex)    == YES )  ) {
             count++;
         }
 
@@ -90,12 +94,18 @@ void trad_elements_mapping(int32_t myID, mesh_t *myMesh) {
 
     for (eindex = 0; eindex < myMesh->lenum; eindex++) {
 
-
         if ( ( isThisElementNonLinear(myMesh, eindex) == NO ) &&
-             ( BelongstoTopography(myMesh, eindex)    == NO ) ) {
+             ( IsDampingElement(myMesh, eindex)    == YES ) ) {
             myLinearElementsMapper[count] = eindex;
             count++;
         }
+
+
+/*        if ( ( isThisElementNonLinear(myMesh, eindex) == NO ) &&
+             ( BelongstoTopography(myMesh, eindex)    == NO ) ) {
+            myLinearElementsMapper[count] = eindex;
+            count++;
+        }*/
 
     }
 
@@ -540,37 +550,78 @@ void constant_Q_addforce(mesh_t *myMesh, mysolver_t *mySolver, double theFreq, d
         double atu[24];
         double firstVec[24];
 
-        for(i = 0; i<24; i++)
-            firstVec[i] = 0.;
+        if ( edata->topoBkt == 0 ) {
 
-        memset(localForce, 0, 8 * sizeof(fvector_t));
+            for(i = 0; i<24; i++)
+                firstVec[i] = 0.;
 
-        if(vector_is_zero( damping_vector_shear ) != 0) {
+            memset(localForce, 0, 8 * sizeof(fvector_t));
 
-            aTransposeU( damping_vector_shear, atu );
-            firstVector_mu( atu, firstVec, mu);
+            if(vector_is_zero( damping_vector_shear ) != 0) {
 
-        }
+                aTransposeU( damping_vector_shear, atu );
+                firstVector_mu( atu, firstVec, mu);
 
-        if(vector_is_zero( damping_vector_kappa ) != 0) {
+            }
 
-            aTransposeU( damping_vector_kappa, atu );
-            firstVector_kappa( atu, firstVec, kappa);
+            if(vector_is_zero( damping_vector_kappa ) != 0) {
 
-        }
+                aTransposeU( damping_vector_kappa, atu );
+                firstVector_kappa( atu, firstVec, kappa);
 
-        au( localForce, firstVec );
+            }
 
-        for (i = 0; i < 8; i++) {
-            int32_t lnid;
-            fvector_t *nodalForce;
+            au( localForce, firstVec );
 
-            lnid = elemp->lnid[i];
+            for (i = 0; i < 8; i++) {
+                int32_t lnid;
+                fvector_t *nodalForce;
 
-            nodalForce = mySolver->force + lnid;
-            nodalForce->f[0] += localForce[i].f[0];
-            nodalForce->f[1] += localForce[i].f[1];
-            nodalForce->f[2] += localForce[i].f[2];
+                lnid = elemp->lnid[i];
+
+                nodalForce = mySolver->force + lnid;
+                nodalForce->f[0] += localForce[i].f[0];
+                nodalForce->f[1] += localForce[i].f[1];
+                nodalForce->f[2] += localForce[i].f[2];
+            }
+
+        } else {
+
+            fvector_t localForce[8];
+            memset( localForce, 0, 8 * sizeof(fvector_t) );
+
+            mu    = edata->rho * edata->Vs * edata->Vs;
+            kappa = edata->rho * ( edata->Vp * edata->Vp - 4./3. * edata->Vs * edata->Vs );
+
+            if( vector_is_zero( damping_vector_shear ) != 0 ||
+                vector_is_zero( damping_vector_kappa ) != 0) {
+
+                TetraForcesBKT(  damping_vector_shear, damping_vector_kappa, localForce,
+                        edata->edgesize,
+                        mu, kappa,
+                        edata->topo_eindex );
+            }
+
+            /* Loop over the 8 element nodes:
+             * Add the contribution calculated above to the node
+             * forces carried from the source and stiffness.
+             */
+
+            for (i = 0; i < 8; i++) {
+
+                int32_t    lnid;
+                fvector_t *nodalForce;
+
+                lnid = elemp->lnid[i];
+
+                nodalForce = mySolver->force + lnid;
+
+                nodalForce->f[0] -= localForce[i].f[0] * theDeltaTSquared;
+                nodalForce->f[1] -= localForce[i].f[1] * theDeltaTSquared;
+                nodalForce->f[2] -= localForce[i].f[2] * theDeltaTSquared;
+
+            } /* element nodes */
+
         }
 
     } /* for all the elements */

@@ -251,8 +251,12 @@ noyesflag_t isTopoElement (mesh_t *myMesh, int32_t eindex, int32_t topoNonlin_fl
                 myNumberOfTopoNonLinElements++;
             }
 
-            if ( theTopoBKT_flag == YES )
-                ecp->isTopoBKT = 1;
+/*            if ( theTopoBKT_flag == YES ) {
+                if ( ecp->isTopoNonlin == 0 )
+                    ecp->isTopoBKT = 1;
+                else
+                    ecp->isTopoBKT = 0;
+            }*/
 
             return YES;
         }
@@ -289,12 +293,58 @@ int BelongstoTopography (mesh_t *myMesh, int32_t eindex) {
 
         eindexT = myTopoElementsMapping[topo_eindex];
 
-        if ( eindexT == eindex )
+        if ( eindexT == eindex ) {
             return YES;
+        }
 
     } /* for all topograhy elements */
 
     return NO;
+}
+
+/* returns YES if the element could be included in the damping computation force.
+Nonlinearity is verified by another function */
+int IsDampingElement (mesh_t *myMesh, int32_t eindex) {
+
+    int32_t topo_eindex;
+    elem_t  *elemp;
+    edata_t *edata;
+
+    /* return YES if topography is not considered */
+    if ( thebase_zcoord == 0 )
+            return YES;
+
+    elemp = &myMesh->elemTable[eindex];
+    edata = (edata_t *)elemp->data;
+
+    /* NO if air element  */
+    if ( edata->Vp == -1 )
+        return NO;
+
+    /* YES if cubic element  */
+    if ( theTopoMethod == FEM )
+        return YES;
+
+    /*  check if this is a topo element and update topobkt variable   */
+    for ( topo_eindex = 0; topo_eindex < myTopoElementsCount; topo_eindex++ ) {
+
+        int32_t          eindexT;
+
+        eindexT = myTopoElementsMapping[topo_eindex];
+
+        if ( eindexT == eindex ) {
+
+            if ( theTopoBKT_flag == YES && theNonlinTopo_flag == NO && edata->topoBkt == 0 ) {
+                edata->topoBkt = 1;
+                edata->topo_eindex = topo_eindex;
+            }
+
+            return YES;
+        }
+
+    } /* for all topograhy elements */
+
+    return YES;
 }
 
 
@@ -1766,7 +1816,7 @@ void compute_addforce_topoEffective ( mesh_t     *myMesh,
             node0dat                = &myMesh->nodeTable[elemp->lnid[0]];
             ep                      = &mySolver->eTable[eindex];
 
-            if ( topo_ec.isTopoNonlin == 0 || theNonlinTopo_flag == NO ) {
+            if ( ( topo_ec.isTopoNonlin == 0 || theNonlinTopo_flag == NO ) && edata->topoBkt == 0 ) {
                 /* get coordinates of element zero node */
                 //double xo = (node0dat->x)*(myMesh->ticksize);
                 //double yo = (node0dat->y)*(myMesh->ticksize);
@@ -1788,7 +1838,7 @@ void compute_addforce_topoEffective ( mesh_t     *myMesh,
                 }
 
 
-                if (vector_is_zero( curDisp ) != 0)
+                if ( vector_is_zero( curDisp ) != 0 )
                     TetraForces( curDisp, localForce, topo_ec.tetraVol ,
                                  edata, topo_ec.mu, topo_ec.lambda,
                                  topo_ec.cube_part );
@@ -2128,18 +2178,28 @@ void TetraForces( fvector_t* un, fvector_t* resVec, double tetraVol[5], edata_t 
 }
 
 
-void TetraForcesBKT( fvector_t* un, fvector_t* un_kappa, fvector_t* resVec, double tetraVol[5], edata_t *edata, double mu, double lambda, int cube_part )
+void TetraForcesBKT( fvector_t* un, fvector_t* un_kappa, fvector_t* resVec,
+                     double edgesize,
+                     double mu, double kappa,
+                     int topo_eindex )
 {
     /*
      * un:       shear displacement vector from bkt convolution
      * un_kappa: kappa displacement vector from bkt convolution
      * */
 
-    int k;
-    double prs;
+    int k, i, cube_part;
+    double prs, tetraVol[5];
     int32_t N0, N1, N2, N3;
 
-    double VTetr = edata->edgesize * edata->edgesize * edata->edgesize / 6.0; /* full tetrahedron volume */
+    topoconstants_t topo_ec = myTopoSolver->topoconstants[topo_eindex];
+
+    cube_part = topo_ec.cube_part;
+    for (i = 0; i < 5; i++) {
+        tetraVol[i] = topo_ec.tetraVol[i];
+    }
+
+    double VTetr = edgesize * edgesize * edgesize / 6.0; /* full tetrahedron volume */
 
     /*  distribution for the first and third quadrants */
     if ( cube_part == 1 )
@@ -2151,9 +2211,9 @@ void TetraForcesBKT( fvector_t* un, fvector_t* un_kappa, fvector_t* resVec, doub
 
             if ( tetraVol[k] != 0 ) {
 
-                double topoC1 = tetraVol[k] * VTetr * ( lambda + 2 * mu / 3 ) / ( edata->edgesize * edata->edgesize );
-                double topoC2 = tetraVol[k] * VTetr * mu / ( edata->edgesize * edata->edgesize );
-                double topoC3 = tetraVol[k] * VTetr * ( -2 * mu / 3 ) / ( edata->edgesize * edata->edgesize );
+                double topoC1 = tetraVol[k] * VTetr * kappa / ( edgesize * edgesize );
+                double topoC2 = tetraVol[k] * VTetr * mu / ( edgesize * edgesize );
+                double topoC3 = tetraVol[k] * VTetr * ( -2. * mu / 3. ) / ( edgesize * edgesize );
 
                 switch ( k ) {
 
@@ -2303,9 +2363,9 @@ void TetraForcesBKT( fvector_t* un, fvector_t* un_kappa, fvector_t* resVec, doub
 
             if ( tetraVol[k] != 0 ) {
 
-                double topoC1 = tetraVol[k] * VTetr * lambda / ( edata->edgesize * edata->edgesize );
-                double topoC2 = tetraVol[k] * VTetr * mu / ( edata->edgesize * edata->edgesize );
-                double topoC3 = tetraVol[k] * VTetr * ( -2 * mu / 3 ) / ( edata->edgesize * edata->edgesize );
+                double topoC1 = tetraVol[k] * VTetr * kappa / ( edgesize * edgesize );
+                double topoC2 = tetraVol[k] * VTetr * mu / ( edgesize * edgesize );
+                double topoC3 = tetraVol[k] * VTetr * ( -2. * mu / 3. ) / ( edgesize * edgesize );
 
                 switch ( k ) {
 
