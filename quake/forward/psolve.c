@@ -3805,10 +3805,17 @@ static void solver_delete()
     free(Global.mySolver->tm2);
     free(Global.mySolver->force);
 
-    free(Global.mySolver->conv_shear_1);
-    free(Global.mySolver->conv_shear_2);
-    free(Global.mySolver->conv_kappa_1);
-    free(Global.mySolver->conv_kappa_2);
+    if ( Param.theTypeOfDamping >= BKT ) {
+        free(Global.mySolver->conv_shear_1);
+        free(Global.mySolver->conv_shear_2);
+        free(Global.mySolver->conv_kappa_1);
+        free(Global.mySolver->conv_kappa_2);
+
+        if ( Param.theTypeOfDamping >= BKT3 ) {
+            free(Global.mySolver->conv_shear_3);
+            free(Global.mySolver->conv_kappa_3);
+        }
+    }
 
     schedule_delete(Global.mySolver->dn_sched);
     schedule_delete(Global.mySolver->an_sched);
@@ -7789,10 +7796,10 @@ mesh_correct_properties( etree_t* cvm )
          */
         if( Param.theTypeOfDamping >= BKT )
         {
-            double vs_vp_Ratio;
+            double vs_vp_Ratio, vksquared;
             double vs_kms = edata->Vs * 0.001; /* Vs in km/s */
 
-            //vksquared = edata->Vp * edata->Vp - 4. / 3. * edata->Vs * edata->Vs;
+            vksquared = edata->Vp * edata->Vp - 4. / 3. * edata->Vs * edata->Vs;
 
             vs_vp_Ratio = edata->Vs / edata->Vp;
             L = 4. / 3. * vs_vp_Ratio * vs_vp_Ratio; /* As defined in Shearer (2009) */
