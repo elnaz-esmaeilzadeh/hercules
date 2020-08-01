@@ -1216,7 +1216,7 @@ void hmgHalfspace_init ( int32_t myID, const char *parametersin ) {
     double_message[6]  = thehmgHsVp;
     double_message[7]  = thehmgHsRho;
 
-    MPI_Bcast(double_message, 10, MPI_DOUBLE, 0, comm_solver);
+    MPI_Bcast(double_message, 8, MPI_DOUBLE, 0, comm_solver);
 
     theetreebox_xo          = double_message[0];
     theetreebox_yo          = double_message[1];
@@ -1234,8 +1234,7 @@ void hmgHalfspace_init ( int32_t myID, const char *parametersin ) {
 int32_t hmgHalfspace_initparameters ( const char *parametersin ) {
 	FILE                *fp;
 
-	double      etreebox_xo, etreebox_yo, etreeBoxlengthEW, etreeBoxlengthNS, etreeBoxdepth,
-	            hmgVs, hmgVp, hmgQs, hmgQp, hmgrho;
+	double      etreebox_xo, etreebox_yo, etreeBoxlengthEW, etreeBoxlengthNS, etreeBoxdepth, hmgVs, hmgVp, hmgrho;
 
 	/* Opens parametersin file */
 

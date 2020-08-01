@@ -8327,8 +8327,10 @@ int main( int argc, char** argv )
      * This is for compatibility with nonlinear
      * \TODO a more clever way should be possible
      */
-    stiffness_init(Global.myID, Global.myMesh);
-    damp_init     (Global.myID, Global.myMesh);
+    if( Param.theTypeOfDamping < BKT )
+        stiffness_init(Global.myID, Global.myMesh); //initialize linear elements only for Rayleigh damping
+    else
+        damp_init(Global.myID, Global.myMesh);
 
     /* this is a little too late to check for output parameters,
      * but let's do this in the mean time

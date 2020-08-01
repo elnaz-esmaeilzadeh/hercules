@@ -34,4 +34,14 @@ void calc_conv(mesh_t *myMesh, mysolver_t *mySolver, double theFreq, double theD
 void constant_Q_addforce(mesh_t *myMesh, mysolver_t *mySolver, double theFreq, double theDeltaT, double theDeltaTSquared, damping_type_t typeOfDamping);
 void damp_init(int32_t myID, mesh_t *myMesh);
 
+void calc_conv_optimized(mesh_t *myMesh, mysolver_t *mySolver, double theFreq, double theDeltaT, double theDeltaTSquared, damping_type_t typeOfDamping);
+void constant_Q_addforce_optimized(mesh_t *myMesh, mysolver_t *mySolver, double theFreq, double theDeltaT, double theDeltaTSquared, damping_type_t typeOfDamping);
+
+void constant_Q_addforce_simplifiedConv_old(mesh_t *myMesh, mysolver_t *mySolver, double theFreq, double theDeltaT, double theDeltaTSquared, damping_type_t typeOfDamping);
+void constant_Q_addforce_simplifiedConvolution(mesh_t *myMesh, mysolver_t *mySolver, double theFreq, double theDeltaT, double theDeltaTSquared, damping_type_t typeOfDamping);
+
+void conv_and_bktForceCombined(mesh_t *myMesh, mysolver_t *mySolver, double theFreq, double theDeltaT, double theDeltaTSquared, damping_type_t typeOfDamping);
+
+
+
 #endif /* DAMPING_H_ */
