@@ -4212,6 +4212,9 @@ solver_compute_force_damping( mysolver_t *solver,
         /* Else, if damping is of the BKT family */
         calc_conv(Global.myMesh, Global.mySolver, Param.theFreq, Param.theDeltaT, Param.theDeltaTSquared, Param.theTypeOfDamping);
         constant_Q_addforce(Global.myMesh, Global.mySolver, Param.theFreq, Param.theDeltaT, Param.theDeltaTSquared, Param.theTypeOfDamping);
+
+        //constant_Q_addforce_simplifiedConvolution(Global.myMesh, Global.mySolver, Param.theFreq, Param.theDeltaT, Param.theDeltaTSquared, Param.theTypeOfDamping);
+
     }
     else
     {

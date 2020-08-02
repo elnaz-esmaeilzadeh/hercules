@@ -1257,7 +1257,8 @@ void nonlinear_solver_init(int32_t myID, mesh_t *myMesh, double depth) {
                 break;
 
             case VONMISES_EP:
-                ecp->c         = get_cohesion(elementVs);
+                //ecp->c         = get_cohesion(elementVs);
+                ecp->c         = sqrt(3.0) * tau_max / 2.0;
                 ecp->phi       = 0.0;
                 ecp->dil_angle = 0.0;
 
