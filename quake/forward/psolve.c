@@ -4210,10 +4210,10 @@ solver_compute_force_damping( mysolver_t *solver,
     else if(Param.theTypeOfDamping >= BKT)
     {
         /* Else, if damping is of the BKT family */
-        calc_conv(Global.myMesh, Global.mySolver, Param.theFreq, Param.theDeltaT, Param.theDeltaTSquared, Param.theTypeOfDamping);
-        constant_Q_addforce(Global.myMesh, Global.mySolver, Param.theFreq, Param.theDeltaT, Param.theDeltaTSquared, Param.theTypeOfDamping);
+        //calc_conv(Global.myMesh, Global.mySolver, Param.theFreq, Param.theDeltaT, Param.theDeltaTSquared, Param.theTypeOfDamping);
+        //constant_Q_addforce(Global.myMesh, Global.mySolver, Param.theFreq, Param.theDeltaT, Param.theDeltaTSquared, Param.theTypeOfDamping);
 
-        //constant_Q_addforce_simplifiedConvolution(Global.myMesh, Global.mySolver, Param.theFreq, Param.theDeltaT, Param.theDeltaTSquared, Param.theTypeOfDamping);
+        conv_and_bktForceCombined(Global.myMesh, Global.mySolver, Param.theFreq, Param.theDeltaT, Param.theDeltaTSquared, Param.theTypeOfDamping);
 
     }
     else
@@ -4563,13 +4563,17 @@ static void solver_run()
         solver_output_stations( step );
         solver_output_drm_nodes( Global.mySolver, step, Param.theTotalSteps );
         solver_read_source_forces( step, Param.theDeltaT );
-        solver_read_drm_displacements( step , Param.theDeltaT ,Param.theTotalSteps );
+        solver_read_drm_displacements_v2 ( step , Param.theDeltaT ,Param.theTotalSteps );
         Timer_Stop( "Solver I/O" );
 
         Timer_Start( "Compute Physics" );
         solver_nonlinear_state( Global.mySolver, Global.myMesh, Global.theK1, Global.theK2, step );
         solver_compute_force_source( step );
-        solver_compute_effective_drm_force( Global.mySolver, Global.myMesh,Global.theK1, Global.theK2, step, Param.theDeltaT );
+        //solver_compute_effective_drm_force( Global.mySolver, Global.myMesh,Global.theK1, Global.theK2, step, Param.theDeltaT );
+        solver_compute_effective_drm_force_v2( Global.mySolver, Global.myMesh,Global.theK1, Global.theK2, step,
+                                               Param.theDeltaT, Param.theTypeOfDamping, Param.theFreq, Param.theDeltaTSquared );
+
+
         solver_compute_force_topography( Global.mySolver, Global.myMesh, Param.theDeltaTSquared );
         solver_compute_force_stiffness( Global.mySolver, Global.myMesh, Global.theK1, Global.theK2 );
         solver_compute_force_damping( Global.mySolver, Global.myMesh, Global.theK1, Global.theK2 );

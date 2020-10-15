@@ -43,5 +43,13 @@ void constant_Q_addforce_simplifiedConvolution(mesh_t *myMesh, mysolver_t *mySol
 void conv_and_bktForceCombined(mesh_t *myMesh, mysolver_t *mySolver, double theFreq, double theDeltaT, double theDeltaTSquared, damping_type_t typeOfDamping);
 
 
+void BKT_TU_transf( double theFreq, double theDeltaT, double theDeltaTSquared, damping_type_t typeOfDamping,
+        fvector_t *convShear1, fvector_t *convKappa1,
+        fvector_t *convShear2, fvector_t *convKappa2,
+        fvector_t *convShear3, fvector_t *convKappa3,
+        edata_t *edata,
+        fvector_t  *tm1Disp, fvector_t *tm2Disp,
+        fvector_t  *damping_vector_shear, fvector_t *damping_vector_kappa);
+
 
 #endif /* DAMPING_H_ */

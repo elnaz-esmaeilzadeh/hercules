@@ -1473,5 +1473,202 @@ void conv_and_bktForceCombined(mesh_t *myMesh, mysolver_t *mySolver, double theF
 
 }
 
+void BKT_TU_transf( double theFreq, double theDeltaT, double theDeltaTSquared, damping_type_t typeOfDamping,
+        fvector_t *convShear1, fvector_t *convKappa1,
+        fvector_t *convShear2, fvector_t *convKappa2,
+        fvector_t *convShear3, fvector_t *convKappa3,
+        edata_t *edata,
+        fvector_t  *tm1Disp, fvector_t *tm2Disp,
+        fvector_t  *damping_vector_shear, fvector_t *damping_vector_kappa){
 
+    // *damping_vector_shear, fvector_t *damping_vector_kappa: Transformed displacements according to the bkt approach
+    // fvector_t  *tm1Disp, fvector_t *tm2Disp:                Current and previous displacements
+
+    double rmax, cdt;
+
+    double g0, g02, cg0, eg0, g0k, g02k, cg0k, eg0k;
+    double g1, g12, cg1, eg1, g1k, g12k, cg1k, eg1k;
+    double g2, g22, cg2, eg2, g2k, g22k, cg2k, eg2k;
+
+
+    if (typeOfDamping == BKT) {
+        cdt = 2. * M_PI * theFreq * theDeltaT;
+    } else {
+        cdt = theDeltaT;
+    }
+
+    // SHEAR RELATED CONVOLUTION
+    g0  = cdt * edata->g0_shear;
+    g02 = g0 / 2.;
+    cg0 = g02 * ( 1. - g0 );
+    eg0 = exp( -g0 );
+
+    g1  = cdt * edata->g1_shear;
+    g12 = g1 / 2.;
+    cg1 = g12 * ( 1. - g1 );
+    eg1 = exp( -g1 );
+
+    g0k  = cdt * edata->g0_kappa;
+    g02k = g0k / 2.;
+    cg0k = g02k * ( 1. - g0k );
+    eg0k = exp( -g0k );
+
+    g1k  = cdt * edata->g1_kappa;
+    g12k = g1k / 2.;
+    cg1k = g12k * ( 1. - g1k );
+    eg1k = exp( -g1k );
+
+    if (typeOfDamping >= BKT3) {
+        g2  = cdt * edata->g2_shear;
+        g22 = g2 / 2.;
+        cg2 = g22 * ( 1. - g2 );
+        eg2 = exp( -g2 );
+
+        g2k  = cdt * edata->g2_kappa;
+        g22k = g2k / 2.;
+        cg2k = g22k * ( 1. - g2k );
+        eg2k = exp( -g2k );
+    }
+
+    fvector_t  *f0_tm1, *f1_tm1, *f2_tm1;
+
+    // SHEAR RELATED CONVOLUTION
+    if ( (edata->g0_shear != 0) && (edata->g1_shear != 0) ) {
+        f0_tm1 = convShear1;
+        f1_tm1 = convShear2;
+
+        f0_tm1->f[0] = cg0 * tm1Disp->f[0] + g02 * tm2Disp->f[0] + eg0 * f0_tm1->f[0];
+        f0_tm1->f[1] = cg0 * tm1Disp->f[1] + g02 * tm2Disp->f[1] + eg0 * f0_tm1->f[1];
+        f0_tm1->f[2] = cg0 * tm1Disp->f[2] + g02 * tm2Disp->f[2] + eg0 * f0_tm1->f[2];
+
+        f1_tm1->f[0] = cg1 * tm1Disp->f[0] + g12 * tm2Disp->f[0] + eg1 * f1_tm1->f[0];
+        f1_tm1->f[1] = cg1 * tm1Disp->f[1] + g12 * tm2Disp->f[1] + eg1 * f1_tm1->f[1];
+        f1_tm1->f[2] = cg1 * tm1Disp->f[2] + g12 * tm2Disp->f[2] + eg1 * f1_tm1->f[2];
+
+        if (typeOfDamping >= BKT3) {
+            f2_tm1 = convShear3;
+            f2_tm1->f[0] = cg2 * tm1Disp->f[0] + g22 * tm2Disp->f[0] + eg2 * f2_tm1->f[0];
+            f2_tm1->f[1] = cg2 * tm1Disp->f[1] + g22 * tm2Disp->f[1] + eg2 * f2_tm1->f[1];
+            f2_tm1->f[2] = cg2 * tm1Disp->f[2] + g22 * tm2Disp->f[2] + eg2 * f2_tm1->f[2];
+        }
+    }
+
+    // DILATATION RELATED CONVOLUTION
+    if ( (edata->g0_kappa != 0) && (edata->g1_kappa != 0) ) {
+        f0_tm1 = convKappa1;
+        f1_tm1 = convKappa2;
+
+        f0_tm1->f[0] = cg0k * tm1Disp->f[0] + g02k * tm2Disp->f[0] + eg0k * f0_tm1->f[0];
+        f0_tm1->f[1] = cg0k * tm1Disp->f[1] + g02k * tm2Disp->f[1] + eg0k * f0_tm1->f[1];
+        f0_tm1->f[2] = cg0k * tm1Disp->f[2] + g02k * tm2Disp->f[2] + eg0k * f0_tm1->f[2];
+
+        f1_tm1->f[0] = cg1k * tm1Disp->f[0] + g12k * tm2Disp->f[0] + eg1k * f1_tm1->f[0];
+        f1_tm1->f[1] = cg1k * tm1Disp->f[1] + g12k * tm2Disp->f[1] + eg1k * f1_tm1->f[1];
+        f1_tm1->f[2] = cg1k * tm1Disp->f[2] + g12k * tm2Disp->f[2] + eg1k * f1_tm1->f[2];
+
+        if (typeOfDamping >= BKT3) {
+            f2_tm1 = convKappa3;
+            f2_tm1->f[0] = cg2k * tm1Disp->f[0] + g22k * tm2Disp->f[0] + eg2k * f2_tm1->f[0];
+            f2_tm1->f[1] = cg2k * tm1Disp->f[1] + g22k * tm2Disp->f[1] + eg2k * f2_tm1->f[1];
+            f2_tm1->f[2] = cg2k * tm1Disp->f[2] + g22k * tm2Disp->f[2] + eg2k * f2_tm1->f[2];
+        }
+    }
+
+    // =*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+    // =*=*=*=*=*=*=*=*=*=*=*= get transformed displacements =*=*=*=*=*=*=*=*=*=*=*
+    // =*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+
+    double a0_shear, a1_shear, a2_shear,
+    a0_kappa, a1_kappa, a2_kappa,
+    b_shear, b_kappa,
+    csum, csumk;
+
+    if (typeOfDamping == BKT) {
+        rmax = 2. * M_PI * theFreq * theDeltaT;
+    } else {
+        rmax = theDeltaT;
+    }
+
+    a0_shear = edata->a0_shear;
+    a1_shear = edata->a1_shear;
+    a2_shear = edata->a2_shear;
+    b_shear  = edata->b_shear;
+
+    a0_kappa   = edata->a0_kappa;
+    a1_kappa   = edata->a1_kappa;
+    a2_kappa   = edata->a2_kappa;
+    b_kappa    = edata->b_kappa;
+
+    csum = a0_shear + a1_shear + b_shear;
+    csumk = a0_kappa + a1_kappa + b_kappa;
+
+    if ( typeOfDamping >= BKT3 ) {
+        csum  += a2_shear;
+        csumk += a2_kappa;
+    }
+
+    double coef_shear = b_shear / rmax;
+    double coef_kappa = b_kappa / rmax;
+
+    if ( csum != 0 ) {
+        f0_tm1  = convShear1;
+        f1_tm1  = convShear2;
+
+        damping_vector_shear->f[0] = coef_shear * (tm1Disp->f[0] - tm2Disp->f[0])
+                                   - (a0_shear * f0_tm1->f[0] + a1_shear * f1_tm1->f[0])
+                                   + tm1Disp->f[0];
+
+        damping_vector_shear->f[1] = coef_shear * (tm1Disp->f[1] - tm2Disp->f[1])
+                                   - (a0_shear * f0_tm1->f[1] + a1_shear * f1_tm1->f[1])
+                                   + tm1Disp->f[1];
+
+        damping_vector_shear->f[2] = coef_shear * (tm1Disp->f[2] - tm2Disp->f[2])
+                                   - (a0_shear * f0_tm1->f[2] + a1_shear * f1_tm1->f[2])
+                                   + tm1Disp->f[2];
+
+        if ( typeOfDamping >= BKT3 ) {
+            f2_tm1  = convShear3;
+            damping_vector_shear->f[0] -= a2_shear * f2_tm1->f[0];
+            damping_vector_shear->f[1] -= a2_shear * f2_tm1->f[1];
+            damping_vector_shear->f[2] -= a2_shear * f2_tm1->f[2];
+        }
+    } else {
+        damping_vector_shear->f[0] = tm1Disp->f[0];
+        damping_vector_shear->f[1] = tm1Disp->f[1];
+        damping_vector_shear->f[2] = tm1Disp->f[2];
+    }
+
+    if ( csumk != 0 ) {
+        f0_tm1  = convKappa1;
+        f1_tm1  = convKappa2;
+
+        damping_vector_kappa->f[0] = coef_kappa * (tm1Disp->f[0] - tm2Disp->f[0])
+                                   - (a0_kappa * f0_tm1->f[0] + a1_kappa * f1_tm1->f[0])
+                                   + tm1Disp->f[0];
+
+        damping_vector_kappa->f[1] = coef_kappa * (tm1Disp->f[1] - tm2Disp->f[1])
+                                   - (a0_kappa * f0_tm1->f[1] + a1_kappa * f1_tm1->f[1])
+                                   + tm1Disp->f[1];
+
+        damping_vector_kappa->f[2] = coef_kappa * (tm1Disp->f[2] - tm2Disp->f[2])
+                                   - (a0_kappa * f0_tm1->f[2] + a1_kappa * f1_tm1->f[2])
+                                   + tm1Disp->f[2];
+
+        if ( typeOfDamping >= BKT3 ) {
+            f2_tm1  = convKappa3;
+            damping_vector_kappa->f[0] -= a2_kappa * f2_tm1->f[0];
+            damping_vector_kappa->f[1] -= a2_kappa * f2_tm1->f[1];
+            damping_vector_kappa->f[2] -= a2_kappa * f2_tm1->f[2];
+        }
+    } else {
+
+        damping_vector_kappa->f[0] = tm1Disp->f[0];
+        damping_vector_kappa->f[1] = tm1Disp->f[1];
+        damping_vector_kappa->f[2] = tm1Disp->f[2];
+
+    }
+
+    return;
+
+}
 
