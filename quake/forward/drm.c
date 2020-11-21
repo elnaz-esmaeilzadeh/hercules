@@ -168,7 +168,7 @@ drm_part_t drm_init (int32_t myID, const char *parametersin, noyesflag_t include
 	double_message[8] = thePart1DeltaT;
 	double_message[9] = thePart1SimTime;
 
-	MPI_Bcast(double_message, 9, MPI_DOUBLE, 0, comm_solver);
+	MPI_Bcast(double_message, 10, MPI_DOUBLE, 0, comm_solver);
 
 	theDrmXMin      = double_message[0];
 	theDrmYMin      = double_message[1];
