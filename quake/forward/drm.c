@@ -55,6 +55,7 @@ static double  theDrmDepth;
 static double  theX_Offset;
 static double  theY_Offset;
 static double  thePart1DeltaT;
+static double  thePart1SimTime;
 static int     theDrmPrintRate;
 static double  theDrmEdgeSize;
 static double  *myDispWrite;
@@ -125,7 +126,7 @@ static 	FILE   *drmDisp;
 
 drm_part_t drm_init (int32_t myID, const char *parametersin, noyesflag_t includeBldgs)
 {
-	double double_message[9];
+	double double_message[10];
 	int    int_message[2];
 
 	MPI_Datatype coords_mpi, coordscnt_mpi;
@@ -165,18 +166,20 @@ drm_part_t drm_init (int32_t myID, const char *parametersin, noyesflag_t include
 	double_message[6] = theY_Offset;
 	double_message[7] = theDrmEdgeSize;
 	double_message[8] = thePart1DeltaT;
+	double_message[9] = thePart1SimTime;
 
 	MPI_Bcast(double_message, 9, MPI_DOUBLE, 0, comm_solver);
 
-	theDrmXMin     = double_message[0];
-	theDrmYMin     = double_message[1];
-	theDrmXMax     = double_message[2];
-	theDrmYMax     = double_message[3];
-	theDrmDepth    = double_message[4];
-	theX_Offset    = double_message[5];
-	theY_Offset    = double_message[6];
-	theDrmEdgeSize = double_message[7];
-	thePart1DeltaT = double_message[8];
+	theDrmXMin      = double_message[0];
+	theDrmYMin      = double_message[1];
+	theDrmXMax      = double_message[2];
+	theDrmYMax      = double_message[3];
+	theDrmDepth     = double_message[4];
+	theX_Offset     = double_message[5];
+	theY_Offset     = double_message[6];
+	theDrmEdgeSize  = double_message[7];
+	thePart1DeltaT  = double_message[8];
+	thePart1SimTime = double_message[9];
 
 	broadcast_char_array( theDrmOutputDir, sizeof(theDrmOutputDir), 0,
 			comm_solver );
@@ -227,7 +230,8 @@ int32_t drm_initparameters (const char *parametersin) {
 			drm_edgesize,
 			x_offset,
 			y_offset,
-			part1_delta_t;
+			part1_delta_t,
+			part1_simtime;
 
 	int    drm_print_rate;
 	char   which_drm_part[64],
@@ -244,13 +248,14 @@ int32_t drm_initparameters (const char *parametersin) {
 		return -1;
 	}
 
-	if ((parsetext ( fp, "drm_directory",  's', &drm_output_directory ) != 0) ||
-	    (parsetext ( fp, "which_drm_part", 's', &which_drm_part       ) != 0) ||
-	    (parsetext ( fp, "drm_edgesize",   'd', &drm_edgesize         ) != 0) ||
-	    (parsetext ( fp, "drm_offset_x",   'd', &x_offset             ) != 0) ||
-	    (parsetext ( fp, "drm_offset_y",   'd', &y_offset             ) != 0) ||
-	    (parsetext ( fp, "drm_print_rate", 'i', &drm_print_rate       ) != 0) ||
-	    (parsetext ( fp, "part1_delta_t",  'd', &part1_delta_t        ) != 0) )
+	if ((parsetext ( fp, "drm_directory",         's', &drm_output_directory ) != 0) ||
+	    (parsetext ( fp, "which_drm_part",        's', &which_drm_part       ) != 0) ||
+	    (parsetext ( fp, "drm_edgesize",          'd', &drm_edgesize         ) != 0) ||
+	    (parsetext ( fp, "drm_offset_x",          'd', &x_offset             ) != 0) ||
+	    (parsetext ( fp, "drm_offset_y",          'd', &y_offset             ) != 0) ||
+	    (parsetext ( fp, "drm_print_rate",        'i', &drm_print_rate       ) != 0) ||
+	    (parsetext ( fp, "part1_delta_t",         'd', &part1_delta_t        ) != 0) ||
+	    (parsetext ( fp, "part1_simulation_time", 'd', &part1_simtime        ) != 0) )
 	{
 		solver_abort ( "drm_initparameters", NULL,
 				"Error parsing fields from %s\n", parametersin);
@@ -292,6 +297,7 @@ int32_t drm_initparameters (const char *parametersin) {
 
 	thePart1DeltaT = part1_delta_t;
 	theDrmPrintRate = drm_print_rate;
+	thePart1SimTime = part1_simtime;
 
 	theDrmPart  = drmPart;
 
@@ -2353,7 +2359,7 @@ void solver_read_drm_displacements_v2( int32_t step, double deltat, int32_t tota
 
     Timer_Start("Solver drm read displacements");
 
-    if ( drmImplement == YES && theDrmPart == PART2 && myNumberOfDrmNodes != 0 )
+    if ( drmImplement == YES && theDrmPart == PART2 && myNumberOfDrmNodes != 0 && T < thePart1SimTime)
     {
 
         if ( thePart1DeltaT <  deltat  ) {
