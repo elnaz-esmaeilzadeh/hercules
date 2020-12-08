@@ -38,7 +38,7 @@ typedef enum {
      * allows one to initially evaluate the levels of deformation and serves
      * for comparisons with the corresponding elastoplastic runs.
      */
-    LINEAR = 0, VONMISES_EP, VONMISES_FA, VONMISES_FAM, VONMISES_BAE, VONMISES_BAH, VONMISES_GQH, VONMISES_MKZ, VONMISES_RO, DRUCKERPRAGER, MOHR_COULOMB
+    LINEAR = 0, VONMISES_EP, VONMISES_FA, VONMISES_FAM, DRUCKERPRAGER, MOHR_COULOMB, VONMISES_BAE, VONMISES_BAH, VONMISES_GQH, VONMISES_MKZ, VONMISES_RO
 
 } materialmodel_t;
 
