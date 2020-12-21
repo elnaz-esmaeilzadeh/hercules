@@ -108,6 +108,7 @@ static double totalWeight = 0;
 
 static noyesflag_t           DRMActive  = NO;
 static drm_part_t            whichDrmPart;
+static double                DRMXMin, DRMXMax, DRMYMin, DRMYMax, DRMDepth;
 /* -------------------------------------------------------------------------- */
 /*                                 Utilities                                  */
 /* -------------------------------------------------------------------------- */
@@ -127,14 +128,14 @@ int isThisElementNonLinear(mesh_t *myMesh, int32_t eindex) {
 
     elem_t  *elemp;
     edata_t *edata;
-    double  elem_h;
+    double  esize;
 
     if ( theNonlinearFlag == 0 )
         return NO;
 
     elemp = &myMesh->elemTable[eindex];
     edata = (edata_t *)elemp->data;
-    elem_h = edata->edgesize;
+    esize = edata->edgesize;
 
     int32_t lnid0 = myMesh->elemTable[eindex].lnid[0];
 
@@ -144,8 +145,13 @@ int isThisElementNonLinear(mesh_t *myMesh, int32_t eindex) {
 
     if ( ( edata->Vs <=  theVsLimits[thePropertiesCount-1] ) && ( edata->Vs >=  theVsLimits[0] ) ) {
 
-        // if DRM=yes and part2 ==2 and xo>xmin && xo+h<xmax && yo>ymin && yo+h<yomax
+        if ( (DRMActive == YES) && (whichDrmPart == PART2)  ) { // Todo: Dorian says: I need to double check this when topo+drm get merged
 
+            if ( ( xo > DRMXMin) && ( xo + esize < DRMXMax ) &&
+                 ( yo > DRMYMin) && ( yo + esize < DRMYMax ) &&
+                 ( zo + esize < DRMDepth )  )
+                return YES;
+        }
 
         if ( ( get_thebase_topo()==0.0  ) || ( get_topo_nonlin_flag() )  ) {
             return YES;
@@ -478,7 +484,7 @@ void nonlinear_init( int32_t     myID,
                      double      theDeltaT,
                      double      theEndT )
 {
-    double  double_message[6];
+    double  double_message[11];
     int     int_message[11];
 
     /* Capturing data from file --- only done by PE0 */
@@ -498,6 +504,11 @@ void nonlinear_init( int32_t     myID,
     double_message[3] = theBackboneErrorTol;
     double_message[4] = theStiffDamp;
     double_message[5] = theStiffDampFreq;
+    double_message[6]  = DRMXMin;
+    double_message[7]  = DRMXMax;
+    double_message[8]  = DRMYMin;
+    double_message[9]  = DRMYMax;
+    double_message[10] = DRMDepth;
 
     int_message[0]  = (int)theMaterialModel;
     int_message[1]  = thePropertiesCount;
@@ -511,7 +522,7 @@ void nonlinear_init( int32_t     myID,
     int_message[9]  = (int)DRMActive;
     int_message[10] = (int)whichDrmPart;
 
-    MPI_Bcast(double_message, 6, MPI_DOUBLE, 0, comm_solver);
+    MPI_Bcast(double_message, 11, MPI_DOUBLE, 0, comm_solver);
     MPI_Bcast(int_message,    11, MPI_INT,    0, comm_solver);
 
     theGeostaticLoadingT  = double_message[0];
@@ -520,6 +531,11 @@ void nonlinear_init( int32_t     myID,
     theBackboneErrorTol   = double_message[3];
     theStiffDamp          = double_message[4];
     theStiffDampFreq      = double_message[5];
+    DRMXMin               = double_message[6];
+    DRMXMax               = double_message[7];
+    DRMYMin               = double_message[8];
+    DRMYMax               = double_message[9];
+    DRMDepth              = double_message[10];
 
     theMaterialModel           = int_message[0];
     thePropertiesCount         = int_message[1];
@@ -650,6 +666,26 @@ int32_t nonlinear_initparameters ( const char *parametersin,
                 isDRMActive );
         return -1;
     }
+
+    XMALLOC_VAR_N( auxiliar, double, 5 );
+
+    if ( parsedarray( fp, "drm_boundary", 5 , auxiliar ) != 0)
+    {
+        fprintf( stderr,
+                "Error parsing drm_boundaries list from %s\n",
+                parametersin );
+        return -1;
+    }
+
+    /* Init the static global variables */
+
+    DRMXMin  = auxiliar [ 0 ];
+    DRMYMin  = auxiliar [ 1 ];
+    DRMXMax  = auxiliar [ 2 ];
+    DRMYMax  = auxiliar [ 3 ];
+    DRMDepth = auxiliar [ 4 ];
+
+    free( auxiliar );
 
 
     if ( (geostatic_loading_t < 0) || (geostatic_cushion_t < 0) ||
