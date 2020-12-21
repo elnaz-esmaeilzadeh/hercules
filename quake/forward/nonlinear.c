@@ -33,6 +33,7 @@
 #include "util.h"
 #include "stiffness.h"
 #include "topography.h"
+#include "drm.h"
 
 
 #define  QC  qc = 0.577350269189 /* sqrt(3.0)/3.0; */
@@ -105,6 +106,8 @@ static int32_t               theNonlinearFlag = 0;
 
 static double totalWeight = 0;
 
+static noyesflag_t           DRMActive  = NO;
+static drm_part_t            whichDrmPart;
 /* -------------------------------------------------------------------------- */
 /*                                 Utilities                                  */
 /* -------------------------------------------------------------------------- */
@@ -124,14 +127,26 @@ int isThisElementNonLinear(mesh_t *myMesh, int32_t eindex) {
 
     elem_t  *elemp;
     edata_t *edata;
+    double  elem_h;
 
     if ( theNonlinearFlag == 0 )
         return NO;
 
     elemp = &myMesh->elemTable[eindex];
     edata = (edata_t *)elemp->data;
+    elem_h = edata->edgesize;
+
+    int32_t lnid0 = myMesh->elemTable[eindex].lnid[0];
+
+    double xo = (myMesh->ticksize) * (double)myMesh->nodeTable[lnid0].x;
+    double yo = (myMesh->ticksize) * (double)myMesh->nodeTable[lnid0].y;
+    double zo = (myMesh->ticksize) * (double)myMesh->nodeTable[lnid0].z;
 
     if ( ( edata->Vs <=  theVsLimits[thePropertiesCount-1] ) && ( edata->Vs >=  theVsLimits[0] ) ) {
+
+        // if DRM=yes and part2 ==2 and xo>xmin && xo+h<xmax && yo>ymin && yo+h<yomax
+
+
         if ( ( get_thebase_topo()==0.0  ) || ( get_topo_nonlin_flag() )  ) {
             return YES;
         } else {
@@ -464,7 +479,7 @@ void nonlinear_init( int32_t     myID,
                      double      theEndT )
 {
     double  double_message[6];
-    int     int_message[9];
+    int     int_message[11];
 
     /* Capturing data from file --- only done by PE0 */
     if (myID == 0) {
@@ -484,18 +499,20 @@ void nonlinear_init( int32_t     myID,
     double_message[4] = theStiffDamp;
     double_message[5] = theStiffDampFreq;
 
-    int_message[0] = (int)theMaterialModel;
-    int_message[1] = thePropertiesCount;
-    int_message[2] = theGeostaticFinalStep;
-    int_message[3] = (int)thePlasticityModel;
-    int_message[4] = (int)theApproxGeoState;
-    int_message[5] = (int)theNonlinearFlag;
-    int_message[6] = (int)theTensionCutoff;
-    int_message[7] = (int)theNoSubsteps;
-    int_message[8] = (int)theSurfaceGroundwaterTable;
+    int_message[0]  = (int)theMaterialModel;
+    int_message[1]  = thePropertiesCount;
+    int_message[2]  = theGeostaticFinalStep;
+    int_message[3]  = (int)thePlasticityModel;
+    int_message[4]  = (int)theApproxGeoState;
+    int_message[5]  = (int)theNonlinearFlag;
+    int_message[6]  = (int)theTensionCutoff;
+    int_message[7]  = (int)theNoSubsteps;
+    int_message[8]  = (int)theSurfaceGroundwaterTable;
+    int_message[9]  = (int)DRMActive;
+    int_message[10] = (int)whichDrmPart;
 
     MPI_Bcast(double_message, 6, MPI_DOUBLE, 0, comm_solver);
-    MPI_Bcast(int_message,    9, MPI_INT,    0, comm_solver);
+    MPI_Bcast(int_message,    11, MPI_INT,    0, comm_solver);
 
     theGeostaticLoadingT  = double_message[0];
     theGeostaticCushionT  = double_message[1];
@@ -513,6 +530,8 @@ void nonlinear_init( int32_t     myID,
     theTensionCutoff           = int_message[6];
     theNoSubsteps              = int_message[7];
     theSurfaceGroundwaterTable = int_message[8];
+    DRMActive                  = int_message[9];
+    whichDrmPart               = int_message[10];
 
     /* allocate table of properties for all other PEs */
 
@@ -567,12 +586,14 @@ int32_t nonlinear_initparameters ( const char *parametersin,
     double   geostatic_loading_t, geostatic_cushion_t, errorTol, backbone_errorTol,
             *auxiliar, stff_dmp, stff_dmp_freq;
     char     material_model[64], surf_groundwatertable[64],
-             plasticity_type[64], approx_geostatic_state[64], tension_cutoff[64];
+             plasticity_type[64], approx_geostatic_state[64], tension_cutoff[64],
+             isDRMActive[64], DRMPart[64];
 
     materialmodel_t      materialmodel;
     plasticitytype_t     plasticitytype;
     noyesflag_t          approxgeostatic = -1, surf_groundwater_table = -1;
     noyesflag_t          tensioncutoff = -1;
+    drm_part_t           drmPart = -1;
 
     /* Opens numericalin file */
     if ((fp = fopen(parametersin, "r")) == NULL) {
@@ -594,13 +615,43 @@ int32_t nonlinear_initparameters ( const char *parametersin,
          (parsetext(fp, "no_substeps",                  'i', &no_substeps            ) != 0) ||
          (parsetext(fp, "stiff_damp",                   'd', &stff_dmp               ) != 0) ||
          (parsetext(fp, "freq_stiff_damp",              'd', &stff_dmp_freq          ) != 0) ||
-         (parsetext(fp, "tension_cutoff",               's', &tension_cutoff         ) != 0) )
+         (parsetext(fp, "tension_cutoff",               's', &tension_cutoff         ) != 0) ||
+         (parsetext(fp, "implement_drm",                's', &isDRMActive            ) != 0) ||
+         (parsetext(fp, "which_drm_part",               's', &DRMPart                ) != 0)  )
     {
         fprintf(stderr, "Error parsing nonlinear parameters from %s\n", parametersin);
         return -1;
     }
 
     /* Performs sanity checks */
+
+    if ( strcasecmp(DRMPart, "part0") == 0) {
+        drmPart = PART0;
+    } else if (strcasecmp(DRMPart, "part1") == 0) {
+        drmPart = PART1;
+    } else if (strcasecmp(DRMPart, "part2") == 0) {
+        drmPart = PART2;
+    } else {
+        solver_abort( __FUNCTION_NAME, NULL,
+            "Unknown drm type: %s\n",
+                drmPart );
+    }
+
+    whichDrmPart  = drmPart;
+
+    if ( strcasecmp(isDRMActive, "yes") == 0 ) {
+        DRMActive = YES;
+    } else if ( strcasecmp(isDRMActive, "no") == 0 ) {
+        DRMActive = NO;
+    } else {
+        fprintf(stderr,
+                ":Unknown response for DRM consideration "
+                " (yes or no): %s\n",
+                isDRMActive );
+        return -1;
+    }
+
+
     if ( (geostatic_loading_t < 0) || (geostatic_cushion_t < 0) ||
          (geostatic_loading_t + geostatic_cushion_t > theEndT) ) {
         fprintf(stderr, "Illegal geostatic loading/cushion time %f/%f\n",
