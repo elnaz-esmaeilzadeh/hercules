@@ -151,6 +151,8 @@ int isThisElementNonLinear(mesh_t *myMesh, int32_t eindex) {
                  ( yo > DRMYMin) && ( yo + esize < DRMYMax ) &&
                  ( zo + esize < DRMDepth )  )
                 return YES;
+            else
+                return NO;
         }
 
         if ( ( get_thebase_topo()==0.0  ) || ( get_topo_nonlin_flag() )  ) {
