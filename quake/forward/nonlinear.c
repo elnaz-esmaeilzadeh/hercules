@@ -145,21 +145,25 @@ int isThisElementNonLinear(mesh_t *myMesh, int32_t eindex) {
 
     if ( ( edata->Vs <=  theVsLimits[thePropertiesCount-1] ) && ( edata->Vs >=  theVsLimits[0] ) ) {
 
-        if ( (DRMActive == YES) && (whichDrmPart == PART2)  ) { // Todo: Dorian says: I need to double check this when topo+drm get merged
+        if ( ( DRMActive == YES ) && ( whichDrmPart == PART2 ) &&
+             ( xo > DRMXMin )     && ( xo + esize < DRMXMax )  &&
+             ( yo > DRMYMin )     && ( yo + esize < DRMYMax )  &&
+             ( zo + esize < DRMDepth ) ) { // Todo: Dorian says: I need to double check this when topo+drm get merged
 
-            if ( ( xo > DRMXMin) && ( xo + esize < DRMXMax ) &&
-                 ( yo > DRMYMin) && ( yo + esize < DRMYMax ) &&
-                 ( zo + esize < DRMDepth )  )
+            if ( ( get_thebase_topo()==0.0  ) || ( get_topo_nonlin_flag() )  ) {
                 return YES;
-            else
-                return NO;
-        }
-
-        if ( ( get_thebase_topo()==0.0  ) || ( get_topo_nonlin_flag() )  ) {
-            return YES;
+            } else {
+                if ( !get_topo_nonlin_flag() && isTopoElement ( myMesh, eindex, 0 ) == 0  )
+                    return YES;
+            }
         } else {
-            if ( !get_topo_nonlin_flag() && isTopoElement ( myMesh, eindex, 0 ) == 0  )
+
+            if ( ( get_thebase_topo()==0.0  ) || ( get_topo_nonlin_flag() )  ) {
                 return YES;
+            } else {
+                if ( !get_topo_nonlin_flag() && isTopoElement ( myMesh, eindex, 0 ) == 0  )
+                    return YES;
+            }
         }
     }
 
