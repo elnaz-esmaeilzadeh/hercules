@@ -4210,10 +4210,10 @@ solver_compute_force_damping( mysolver_t *solver,
     else if(Param.theTypeOfDamping >= BKT)
     {
         /* Else, if damping is of the BKT family */
-        //calc_conv(Global.myMesh, Global.mySolver, Param.theFreq, Param.theDeltaT, Param.theDeltaTSquared, Param.theTypeOfDamping);
-        //constant_Q_addforce(Global.myMesh, Global.mySolver, Param.theFreq, Param.theDeltaT, Param.theDeltaTSquared, Param.theTypeOfDamping);
+        calc_conv(Global.myMesh, Global.mySolver, Param.theFreq, Param.theDeltaT, Param.theDeltaTSquared, Param.theTypeOfDamping);
+        constant_Q_addforce(Global.myMesh, Global.mySolver, Param.theFreq, Param.theDeltaT, Param.theDeltaTSquared, Param.theTypeOfDamping);
 
-        conv_and_bktForceCombined(Global.myMesh, Global.mySolver, Param.theFreq, Param.theDeltaT, Param.theDeltaTSquared, Param.theTypeOfDamping);
+        //conv_and_bktForceCombined(Global.myMesh, Global.mySolver, Param.theFreq, Param.theDeltaT, Param.theDeltaTSquared, Param.theTypeOfDamping);
 
     }
     else
