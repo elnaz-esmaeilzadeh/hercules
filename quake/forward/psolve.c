@@ -7723,25 +7723,28 @@ mesh_correct_properties( etree_t* cvm )
                     ++cnt;
 
                     // get geostatic stress as 1d column
-                    double nlayers=100, depth_o = depth_m/nlayers, depth_k;
+                    double nlayers=100, depth_o = (depth_m - edata->edgesize/2.0) /nlayers, depth_k;
                     int    k;
                     if (iNorth == 1 && iEast == 1 && iDepth ==1 && Param.includeNonlinearAnalysis == YES ) {
+                        s_0 += edata->edgesize / 2.0 *  g_props.rho * 9.81;
 
-                        for (k = 0; k < nlayers; k++) {
-                            depth_k = depth_o * (k + 0.5);
+                        if ( depth_o != 0.0 ) {
+                            for (k = 0; k < nlayers; k++) {
+                                depth_k = depth_o * (k + 0.5);
 
-                            if ( belongs2hmgHalfspace( east_m, north_m, depth_m ) )
-                                res = get_halfspaceproperties( &g_props );
-                            else if (Param.useProfile == NO) {
-                                res = cvm_query( Global.theCVMEp, east_m, north_m, depth_m, &g_props );
-                            } else {
-                                res = profile_query(depth_m, &g_props);
+                                if ( belongs2hmgHalfspace( east_m, north_m, depth_k ) )
+                                    res = get_halfspaceproperties( &g_props );
+                                else if (Param.useProfile == NO) {
+                                    res = cvm_query( Global.theCVMEp, east_m, north_m, depth_k, &g_props );
+                                } else {
+                                    res = profile_query(depth_k, &g_props);
+                                }
+
+                                if ( assume_groundwatertable() )
+                                    s_0 += depth_o * (g_props.rho - 1000.0 ) * 9.81 ;
+                                else
+                                    s_0 += depth_o * g_props.rho * 9.81 ;
                             }
-
-                            if ( assume_groundwatertable() )
-                                s_0 += depth_o * (g_props.rho - 1000.0 ) * 9.81 ;
-                            else
-                                s_0 += depth_o * g_props.rho * 9.81 ;
                         }
 
                         edata->sigma_0 = s_0;
