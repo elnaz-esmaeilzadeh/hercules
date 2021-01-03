@@ -7756,20 +7756,32 @@ mesh_correct_properties( etree_t* cvm )
         edata->Vp  =  vp;
         edata->Vs  =  vs;
         edata->rho = rho;
-        edata->Qp  = qp;
-        edata->Qs  = qs;
+        //edata->Qp  = qp;
+        //edata->Qs  = qs;
 
         if (cnt != 0 ) {
             edata->Vp  =  vp / cnt;
             edata->Vs  =  vs / cnt;
             edata->rho = rho / cnt;
-            edata->Qp  = qp / cnt;
-            edata->Qs  = qs / cnt;
+            qp  = qp / cnt;
+            qs  = qs / cnt;
+
+            //edata->Qp  = qp / cnt;
+            //edata->Qs  = qs / cnt;
         }
 
         /* Auxiliary ratios for adjustments */
         VpVsRatio  = edata->Vp  / edata->Vs;
         RhoVpRatio = edata->rho / edata->Vp;
+
+        // Doriam says: Adjust minimum value as in La Habra project
+        if ( VpVsRatio <= 1.453 )
+            VpVsRatio = 1.453;   // makes nu=0.05
+
+        if ( VpVsRatio > Param.theThresholdVpVs   )
+            VpVsRatio = Param.theThresholdVpVs ;
+
+        edata->Vp = VpVsRatio * edata->Vs;
 
         /* Adjust material properties according to the element size and
          * softening factor.
@@ -7833,16 +7845,19 @@ mesh_correct_properties( etree_t* cvm )
                  * based on the idea of Brocher (2005)
                  */
                 if ( Param.useProfile == YES )
-                    Qs = edata->Qs;
+                    Qs = qs;
                 else
                     Qs = 10.5 + vs_kms * (-16. + vs_kms * (153. + vs_kms * (-103. + vs_kms * (34.7 + vs_kms * (-5.29 + vs_kms * 0.31)))));
             }
 
             /* Default option for Qp */
             if ( Param.useProfile == YES )
-                Qp = edata->Qp;
+                Qp = qp;
             else
                 Qp = 2. * Qs;
+
+            //edata->Qs = Qs;  // update Qs and Qp
+            //edata->Qp = Qp;
 
             if (Param.useInfQk == YES) {
                 Qk = 1000;
