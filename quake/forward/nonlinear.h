@@ -20,6 +20,9 @@
 #ifndef Q_NONLINEAR_H
 #define Q_NONLINEAR_H
 
+#include <gsl/gsl_vector.h>
+#include <gsl/gsl_multiroots.h>
+
 /* -------------------------------------------------------------------------- */
 /*                        Structures and definitions                          */
 /* -------------------------------------------------------------------------- */
@@ -185,6 +188,23 @@ typedef struct bottomelement_t {
 
 } bottomelement_t;
 
+
+typedef struct BAParam_t {
+
+tensor_t sigma_o;  // stress tensor at the last reversal
+tensor_t sigma_n;  // previous stress tensor
+tensor_t De_dev;   // incremental total deviatoric strain tensor
+
+//double   R;        // bounding surface radius
+//double   h;        // H = h * kappa^m: exponential hardening function
+//double   m;
+//double   mu;       // shear modulus
+
+double   gamma_n;  // 1d shear strain as initial value for getting H of particular models
+nlconstants_t nl_const;
+
+} BAParam_t;
+
 /* -------------------------------------------------------------------------- */
 /*                                 Utilities                                  */
 /* -------------------------------------------------------------------------- */
@@ -212,6 +232,22 @@ double get_hardmod(double vs);
 double interp_phi (double vsvp, double li, double lf, double phi_i, double phi_f);
 double get_gamma_eff (double vs30, double zo);
 
+
+int    BorjaAmies_f (const gsl_vector * x, void *params, gsl_vector * f);
+double BorjaAmies1D_f ( double kappa, void *params );
+
+void MatUpd_BA_GSL ( nlconstants_t el_cnt, double   *kappa,
+                     tensor_t      e_n,    tensor_t e_n1,    tensor_t *sigma_ref,
+                     tensor_t      *sigma, double   *ErrMax, double   *gamma1D,
+                     double        *tao1D, double   *GGmax1D );
+
+void MatUpd_BA_GSL_v2 ( nlconstants_t el_cnt, double   *kappa,
+                     tensor_t      e_n,    tensor_t e_n1,    tensor_t *sigma_ref,
+                     tensor_t      *sigma, double   *ErrMax, double   *gamma1D,
+                     double        *tao1D, double   *GGmax1D );
+
+void vonMisesEP ( tensor_t sigma_n, tensor_t De_dev, tensor_t *sigma,
+                  double G, double K, double De_vol, double R  );
 /* -------------------------------------------------------------------------- */
 /*       Initialization of parameters, structures and memory allocations      */
 /* -------------------------------------------------------------------------- */
