@@ -6078,28 +6078,28 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
                 if ( ( theMaterialModel >= VONMISES_BAE ) ) {
                     enlcons->fs[i] = ErrBA;
                     if ( isnan(ErrBA) || ErrBA > theErrorTol ){
-                        fprintf(stdout,"found nan at gp=%d, element=%d, time=%f, step= %d, Su=%f, GGmax=%f, xo=%f, yo=%f, zo=%f, TopoNonlin=%d, Error=%12.8E  \n", i, eindex, step*theDeltaT, step, enlcons->c,
+                        fprintf(stderr,"found nan at gp=%d, element=%d, time=%f, step= %d, Su=%f, GGmax=%f, xo=%f, yo=%f, zo=%f, TopoNonlin=%d, Error=%12.8E  \n", i, eindex, step*theDeltaT, step, enlcons->c,
                                 GGmax1D->qv[i], myMesh->ticksize * myMesh->nodeTable[lnid0].x, myMesh->ticksize * myMesh->nodeTable[lnid0].y , myMesh->ticksize * myMesh->nodeTable[lnid0].z, enlcons->isTopoNonlin, ErrBA );
 
-                        fprintf(stdout,"current strains exx=%12.8E, eyy=%12.8E, ezz=%12.8E, exy=%12.8E, exz=%12.8E, eyz=%12.8E  \n",
+                        fprintf(stderr,"current strains exx=%12.8E, eyy=%12.8E, ezz=%12.8E, exy=%12.8E, exz=%12.8E, eyz=%12.8E  \n",
                                 tstrains->qp[i].xx, tstrains->qp[i].yy, tstrains->qp[i].zz,
                                 tstrains->qp[i].xy, tstrains->qp[i].xz, tstrains->qp[i].yz  );
 
-                        fprintf(stdout,"previous strains exx=%12.8E, eyy=%12.8E, ezz=%12.8E, exy=%12.8E, exz=%12.8E, eyz=%12.8E  \n",
+                        fprintf(stderr,"previous strains exx=%12.8E, eyy=%12.8E, ezz=%12.8E, exy=%12.8E, exz=%12.8E, eyz=%12.8E  \n",
                                 tstrains1->qp[i].xx, tstrains1->qp[i].yy, tstrains1->qp[i].zz,
                                 tstrains1->qp[i].xy, tstrains1->qp[i].xz, tstrains1->qp[i].yz  );
 
-                        fprintf(stdout,"predicted stresses Sxx=%12.8E, Syy=%12.8E, Szz=%12.8E, Sxy=%12.8E, Sxz=%12.8E, Syz=%12.8E  \n",
+                        fprintf(stderr,"predicted stresses Sxx=%12.8E, Syy=%12.8E, Szz=%12.8E, Sxy=%12.8E, Sxz=%12.8E, Syz=%12.8E  \n",
                                 stresses->qp[i].xx, stresses->qp[i].yy, stresses->qp[i].zz,
                                 stresses->qp[i].xy, stresses->qp[i].xz, stresses->qp[i].yz  );
 
-                        fprintf(stdout,"Auxiliar topo-nonlinear vars. IsTopononlin=%d,  Tetravol[0]=%12.8E, Tetravol[1]=%12.8E,Tetravol[2]=%12.8E"
+                        fprintf(stderr,"Auxiliar topo-nonlinear vars. IsTopononlin=%d,  Tetravol[0]=%12.8E, Tetravol[1]=%12.8E,Tetravol[2]=%12.8E"
                                 "Tetravol[3]=%12.8E, Tetravol[4]=%12.8E, Vp=%f, Vs=%f, rho=%f, h/Gmax=%f, k=%f, TopoPart=%d, esize=%f  \n",
                                 enlcons->isTopoNonlin, enlcons->tetraVol[0], enlcons->tetraVol[1], enlcons->tetraVol[2],
                                 enlcons->tetraVol[3], enlcons->tetraVol[4], edata->Vp, edata->Vs, edata->rho, enlcons->psi0,
                                 enlcons->m, enlcons->topoPart, edata->edgesize );
 
-                        fprintf(stdout,"Displ. u[0].x=%12.8E, u[0].y=%12.8E, u[0].z=%12.8E, \n"
+                        fprintf(stderr,"Displ. u[0].x=%12.8E, u[0].y=%12.8E, u[0].z=%12.8E, \n"
                                 " u[1].x=%12.8E, u[1].y=%12.8E, u[1].z=%12.8E, \n"
                                 " u[2].x=%12.8E, u[2].y=%12.8E, u[2].z=%12.8E, \n"
                                 " u[3].x=%12.8E, u[3].y=%12.8E, u[3].z=%12.8E, \n"
