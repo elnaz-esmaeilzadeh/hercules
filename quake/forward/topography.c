@@ -44,7 +44,7 @@
 static toposolver_t       *myTopoSolver;
 static int                ntp, np_ew, np_ns;
 static int8_t             theMaxoctlevel;
-static double             thebase_zcoord = 0.0, So, theDomainLong_ew, theDomainLong_ns;
+static double             thebase_zcoord = 0.0, So, theDomainLong_ew, theDomainLong_ns, theMinTopoVol;
 static double             *theTopoInfo;
 static etreetype_t        theEtreeType;
 static int32_t            myTopoElementsCount = 0;
@@ -909,7 +909,7 @@ void TetraHVol_2 ( double xo, double yo, double zo, double esize,
 
         }
 
-        if ( Vpr<=0.01 )
+        if ( Vpr <= theMinTopoVol )
             Vpr=0.0;
 
         vols1[m] = Vpr; /* percentage of the tetrahedron's volume filled by topography  */
@@ -967,7 +967,7 @@ void TetraHVol_2 ( double xo, double yo, double zo, double esize,
             }
         }
 
-        if ( Vpr<=0.01 )
+        if ( Vpr <= theMinTopoVol )
             Vpr=0.0;
 
         vols2[m] = Vpr; /* percentage of the tetrahedron's volume filled by topography  */
@@ -1200,7 +1200,7 @@ topography_initparameters ( const char *parametersin ) {
     int8_t              Maxoctlevel;
     char                topo_dir[256];
     char                topo_file[256];
-    double              L_ew, L_ns, int_np_ew, int_np_ns, fract_np_ew, fract_np_ns;
+    double              L_ew, L_ns, int_np_ew, int_np_ns, fract_np_ew, fract_np_ns, minvol;
     char                etree_model[64], fem_meth[64], type_of_damping[64];
     etreetype_t         etreetype;
     topometh_t          topo_method;
@@ -1221,9 +1221,10 @@ topography_initparameters ( const char *parametersin ) {
     if ( ( parsetext(fp, "maximum_octant_level",            'i', &Maxoctlevel              ) != 0) ||
          ( parsetext(fp, "computation_method",              's', &fem_meth                 ) != 0) ||
          ( parsetext(fp, "topographybase_zcoord",           'd', &thebase_zcoord           ) != 0) ||
-         ( parsetext(fp, "topoprahy_directory",             's', &topo_dir                 ) != 0) ||
+         ( parsetext(fp, "topography_directory",            's', &topo_dir                 ) != 0) ||
          ( parsetext(fp, "region_length_east_m",            'd', &L_ew                     ) != 0) ||
          ( parsetext(fp, "type_of_etree",                   's', &etree_model              ) != 0) ||
+         ( parsetext(fp, "min_enclosed_volume_perc",        'd', &minvol                   ) != 0) ||
          ( parsetext(fp, "region_length_north_m",           'd', &L_ns                     ) != 0) ||
          ( parsetext(fp, "consider_nonlinear_topography",   's', &consider_topo_nonlin     ) != 0) ||
          ( parsetext(fp, "type_of_damping",                 's', &type_of_damping          ) != 0) ||
@@ -1314,6 +1315,7 @@ topography_initparameters ( const char *parametersin ) {
 	theDomainLong_ns    = L_ns;
 	theNonlinTopo_flag  = considerTopoNonlin;
 	theTopoBKT_flag     = TopoBKT;
+	theMinTopoVol       = minvol;
 
     /* read topography info */
 	sprintf( topo_file,"%s/topography.in", topo_dir );
@@ -1360,7 +1362,7 @@ topography_initparameters ( const char *parametersin ) {
 void topo_init ( int32_t myID, const char *parametersin ) {
 
     int     int_message[8];
-    double  double_message[4];
+    double  double_message[5];
 
     /* Capturing data from file --- only done by PE0 */
     if (myID == 0) {
@@ -1379,6 +1381,7 @@ void topo_init ( int32_t myID, const char *parametersin ) {
     double_message[1]    = So;
     double_message[2]    = theDomainLong_ew;
     double_message[3]    = theDomainLong_ns;
+    double_message[4]    = theMinTopoVol;
 
     int_message   [0]    = theMaxoctlevel;
     int_message   [1]    = ntp;
@@ -1389,13 +1392,14 @@ void topo_init ( int32_t myID, const char *parametersin ) {
     int_message   [6]    = (int)theNonlinTopo_flag;
     int_message   [7]    = (int)theTopoBKT_flag;
 
-    MPI_Bcast(double_message, 4, MPI_DOUBLE, 0, comm_solver);
+    MPI_Bcast(double_message, 5, MPI_DOUBLE, 0, comm_solver);
     MPI_Bcast(int_message,    8, MPI_INT,    0, comm_solver);
 
     thebase_zcoord       = double_message[0];
     So				     = double_message[1];
     theDomainLong_ew     = double_message[2];
     theDomainLong_ns     = double_message[3];
+    theMinTopoVol        = double_message[4];
 
     theMaxoctlevel       = int_message[0];
     ntp					 = int_message[1];
