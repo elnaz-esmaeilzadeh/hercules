@@ -191,14 +191,16 @@ typedef struct bottomelement_t {
 
 typedef struct BAParam_t {
 
-tensor_t sigma_o;  // stress tensor at the last reversal
-tensor_t sigma_n;  // previous stress tensor
-tensor_t De_dev;   // incremental total deviatoric strain tensor
+// tensor_t sigma_o;  // stress tensor at the last reversal
+// tensor_t sigma_n;  // previous stress tensor
+// tensor_t De_dev;   // incremental total deviatoric strain tensor
 
-//double   R;        // bounding surface radius
-//double   h;        // H = h * kappa^m: exponential hardening function
-//double   m;
-//double   mu;       // shear modulus
+double   a;        // Sn:Sn
+double   b;        // Sn:Sno
+double   c;        // Sno:Sno
+double   d;        // Sn:De
+double   e;        // Sno:De
+double   f;        // De:De
 
 double   gamma_n;  // 1d shear strain as initial value for getting H of particular models
 nlconstants_t nl_const;

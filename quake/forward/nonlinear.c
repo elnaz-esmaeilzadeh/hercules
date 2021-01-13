@@ -1202,7 +1202,15 @@ void nonlinear_solver_init(int32_t myID, mesh_t *myMesh, double depth) {
         ecp   = myNonlinSolver->constants + nl_eindex;
 
         int32_t lnid0 = elemp->lnid[0];
+        double  xo    = myMesh->ticksize * myMesh->nodeTable[lnid0].z;
+        double  yo    = myMesh->ticksize * myMesh->nodeTable[lnid0].z;
         double  zo    = myMesh->ticksize * myMesh->nodeTable[lnid0].z;
+
+        if ( ( get_thebase_topo() != 0.0 ) && ( get_theetree_type() == SQD )  ) {
+                    zo -=  point_elevation ( xo, yo ) ;
+                    if ( zo < 0.0 )
+                        zo = 0.0;
+        }
 
         /* get element Vs */
         elementVs   = (double)edata->Vs;
@@ -2345,255 +2353,255 @@ void MatUpd_vMGeneralII ( nlconstants_t el_cnt, double *kappa,
 
 
 
-/*   Material update function for material models based on (1994) Borja & Amies approach    */
-void MatUpd_BA_GSL ( nlconstants_t el_cnt, double   *kappa,
-                     tensor_t      e_n,    tensor_t e_n1,    tensor_t *sigma_ref,
-                     tensor_t      *sigma, double   *ErrMax, double   *gamma1D,
-                     double        *tao1D, double   *GGmax1D ) {
-
-    /*   INPUTS:
-     * el_cnt            : Material constants
-
-     * e_n               : Total strain tensor.
-     * e_n1              : Total strain tensor at t-1
-     * sigma_ref         : reference stress
-     * BoundSurfTol  : substep Tolerance, Bounding surface Tolerance
-
-     * OUTPUTS:
-     * sigma                    : Updated stress tensor
-     * kappa                    : Updated hardening variable
-     * sigma_ref                : Updated deviator stress tensor at last load reversal
-     * ErrMax                   : max error
-     * gamma1D, tao1D, GGmax1D  : 1d backbone curve parameters         */
-
-    double   kappa_n, gamma_n, load_unload, Den1, Den2, K, R,
-    G=el_cnt.mu, Lambda = el_cnt.lambda;
-    tensor_t sigma_n, Num;
-
-    K     = Lambda + 2.0 * G / 3.0;
-    R     = el_cnt.c * sqrt(8.0/3.0);
-
-    /* At  this point *sigma, *kappa, and gamma1D, have the information at t-1 */
-    kappa_n = *kappa;
-    sigma_n = copy_tensor(*sigma);
-    gamma_n = *gamma1D;
-
-    /* deviatoric stress at t-1. At  this point *sigma has the information at t-1  */
-    tensor_t Sdev_n1   = tensor_deviator( *sigma, tensor_octahedral ( tensor_I1 ( *sigma ) ) );
-
-    /* total strain increment and deviatoric strain increment */
-    tensor_t De       = subtrac_tensors ( e_n, e_n1 );
-    double   De_vol   = tensor_I1 ( De );
-    tensor_t De_dev   = tensor_deviator( De, tensor_octahedral ( De_vol ) );
-
-    Den1 = ddot_tensors(Sdev_n1, subtrac_tensors (Sdev_n1 , *sigma_ref));
-    Den2 = kappa_n * ( ddot_tensors(subtrac_tensors (Sdev_n1 , *sigma_ref), subtrac_tensors (Sdev_n1 , *sigma_ref)) );
-    Num  = add_tensors ( scaled_tensor( Sdev_n1, (1.0+kappa_n) ), scaled_tensor( (subtrac_tensors (Sdev_n1 , *sigma_ref) ) ,kappa_n*(1.0+kappa_n) ) );
-
-    load_unload = -ddot_tensors(Num,De_dev) / (Den1 + Den2);
-
-   if ( load_unload > 0 )
-       *sigma_ref = copy_tensor( Sdev_n1 );
-
-    // *=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=
-    // Borja and Amies exponential model solved using gsl library
-    size_t iter = 0, status = GSL_CONTINUE;
-
-    struct BAParam_t *ParamBA;
-    double psi_up_gsl1D, kappa_up_gsl1D, H;
-    ParamBA = (BAParam_t *)calloc(sizeof(BAParam_t),1);
-
-    ParamBA->sigma_n = sigma_n;
-    ParamBA->sigma_o = *sigma_ref;
-    ParamBA->De_dev  = De_dev;
-
-/*    ParamBA->R       = el_cnt.c * sqrt(8.0/3.0);
-    ParamBA->h       = el_cnt.psi0 * el_cnt.mu ;
-    ParamBA->m       = el_cnt.m ;
-    ParamBA->mu      = el_cnt.mu;*/
-
-    //  = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
-    //  = = = = = = = = = = = = = 1D GSL solver = = = = = = = = = = = = = = = = = = = = = = = = = =
-    int max_iter = 1000;
-    double x_lo, x_hi, r, myfunc;
-
-    const gsl_root_fsolver_type * T1 = gsl_root_fsolver_brent;
-    gsl_root_fsolver            * s1 = gsl_root_fsolver_alloc(T1);
-
-    gsl_function F;
-    F.function = &BorjaAmies1D_f;
-    F.params   = ParamBA;
-
-    iter = 0;
-    gsl_set_error_handler_off();
-
-    // check if kappa_n satisfies the bounding surface eqn
-    r      = kappa_n;
-    myfunc = BorjaAmies1D_f(r, ParamBA);
-
-    if ( fabs(myfunc) <= theErrorTol ) {
-
-        *kappa             = r;
-        *ErrMax            = myfunc;
-
-        kappa_up_gsl1D = r;
-        //H              = ParamBA->h * pow(kappa_up_gsl1D,ParamBA->m);
-        H = getHardening(el_cnt, r, gamma_n);
-
-        psi_up_gsl1D   = 2.0 * G * H / ( H + 3.0 * G );
-
-        *sigma         =  add_tensors (  add_tensors( sigma_n, isotropic_tensor(K*De_vol) ), scaled_tensor( De_dev, psi_up_gsl1D)  );
-
-        get_Backbonevalues ( el_cnt,  *kappa, gamma_n, gamma1D, tao1D, GGmax1D ) ;
-
-        gsl_root_fsolver_free (s1);
-        free(ParamBA);
-        return;
-    }
-
-    // check if point on the boundary
-    if ( fabs(BorjaAmies1D_f( KAPPA_MIN,ParamBA)) <= theErrorTol && load_unload < 0) {
-
-        r      = KAPPA_MIN;
-        myfunc = BorjaAmies1D_f(r, ParamBA);
-
-        vonMisesEP (  sigma_n,  De_dev,  sigma,  G,  K,  De_vol, R  ) ;
-
-        *kappa             = KAPPA_MIN;
-        *ErrMax            = myfunc;
-
-        get_Backbonevalues ( el_cnt,  *kappa, gamma_n, gamma1D, tao1D, GGmax1D ) ;
-        gsl_root_fsolver_free (s1);
-        free(ParamBA);
-        return;
-    }
-
-    if ( (kappa_n == 100) || (load_unload > 0) ) { //  load reversal or beginning of the simulation
-        x_lo  = KAPPA_MIN;
-        x_hi  = 2.0 * x_lo;
-
-        while( gsl_root_fsolver_set (s1, &F, x_lo, x_hi) != 0 && iter < max_iter ) {
-            x_lo = x_hi;
-            x_hi = 2.0 * x_lo;
-            iter++;
-        }
-
-        if ( iter >= max_iter ) { //should not get here !
-            fprintf(stderr, "Could not find root interval for kappa at unloading\n");
-            //MPI_Abort(MPI_COMM_WORLD, ERROR);
-            //exit(1);
-        }
-
-    } else {
-
-        x_hi = kappa_n; // kappa must decrease from current state
-        x_lo = x_hi/2.0;
-
-        while( gsl_root_fsolver_set (s1, &F, x_lo, x_hi) != 0 && iter < max_iter && x_hi > KAPPA_MIN ) {
-            x_hi = x_lo;
-            x_lo = x_hi/2.0;
-            iter++;
-        }
-
-        if ( x_lo <= KAPPA_MIN )  {
-
-            if ( fabs(BorjaAmies1D_f( KAPPA_MIN,ParamBA)) <= theErrorTol) {
-
-                r      = KAPPA_MIN;
-                myfunc = BorjaAmies1D_f(r, ParamBA);
-
-                vonMisesEP (  sigma_n,  De_dev,  sigma,  G,  K,  De_vol, R  ) ;
-
-                *kappa             = KAPPA_MIN;
-                *ErrMax            = myfunc;
-
-                get_Backbonevalues ( el_cnt,  *kappa, gamma_n, gamma1D, tao1D, GGmax1D ) ;
-
-                gsl_root_fsolver_free (s1);
-                free(ParamBA);
-                return;
-            } else {
-
-                // perform full search of the interval
-                iter = 0;
-                x_lo  = KAPPA_MIN;
-                x_hi  = 2.0 * x_lo;
-
-                while( gsl_root_fsolver_set (s1, &F, x_lo, x_hi) != 0 && iter < max_iter ) {
-                    x_lo = x_hi;
-                    x_hi = 2.0 * x_lo;
-                    iter++;
-                }
-
-                if ( iter >= max_iter ) { //should not get here !
-                    fprintf(stderr, "Could not find root interval for kappa at loading\n");
-                    //MPI_Abort(MPI_COMM_WORLD, ERROR);
-                    //exit(1);
-                }
-            }
-        }
-    }
-
-    gsl_set_error_handler (NULL);
-
-    status = GSL_CONTINUE;
-
-    iter = 0;
-    r    = 1000;
-    while (status == GSL_CONTINUE && iter < max_iter && r >= KAPPA_MIN) {
-
-        iter++;
-
-        status = gsl_root_fsolver_iterate (s1);
-        r      = gsl_root_fsolver_root (s1);
-        x_lo   = gsl_root_fsolver_x_lower (s1);
-        x_hi   = gsl_root_fsolver_x_upper (s1);
-        //status = gsl_root_test_interval (x_lo, x_hi, 0, theErrorTol);
-
-        myfunc = fabs(BorjaAmies1D_f(r, ParamBA));
-        status = gsl_root_test_residual(myfunc,theErrorTol);
-
-        if((status == GSL_EBADFUNC) || (status == GSL_ENOPROG))
-            break;
-
-    }
-
-    if ( r <= KAPPA_MIN ) { // Elastoplastic return
-        r      = KAPPA_MIN;
-        myfunc = BorjaAmies1D_f(r, ParamBA);
-
-        vonMisesEP (  sigma_n,  De_dev,  sigma,  G,  K,  De_vol, R  ) ;
-
-        *kappa             = KAPPA_MIN;
-        *ErrMax            = myfunc;
-
-        get_Backbonevalues ( el_cnt,  *kappa, gamma_n, gamma1D, tao1D, GGmax1D ) ;
-
-        gsl_root_fsolver_free (s1);
-        free(ParamBA);
-        return;
-    }
-
-    if ( (status != GSL_SUCCESS)  )
-        printf("Status: %s\n", gsl_strerror(status));
-
-    *ErrMax = myfunc;
-    *kappa  = r;
-
-    kappa_up_gsl1D = r;
-    //H              = ParamBA->h * pow(kappa_up_gsl1D,ParamBA->m);
-    H = getHardening(el_cnt, r, gamma_n);
-
-    psi_up_gsl1D   = 2.0 * G * H / ( H + 3.0 * G );
-
-    *sigma         =  add_tensors (  add_tensors( sigma_n, isotropic_tensor(K*De_vol) ), scaled_tensor( De_dev, psi_up_gsl1D)  );
-
-    get_Backbonevalues ( el_cnt,  *kappa, gamma_n, gamma1D, tao1D, GGmax1D ) ;
-
-    gsl_root_fsolver_free (s1);
-    free(ParamBA);
-
-}
+///*   Material update function for material models based on (1994) Borja & Amies approach    */
+//void MatUpd_BA_GSL ( nlconstants_t el_cnt, double   *kappa,
+//                     tensor_t      e_n,    tensor_t e_n1,    tensor_t *sigma_ref,
+//                     tensor_t      *sigma, double   *ErrMax, double   *gamma1D,
+//                     double        *tao1D, double   *GGmax1D ) {
+//
+//    /*   INPUTS:
+//     * el_cnt            : Material constants
+//
+//     * e_n               : Total strain tensor.
+//     * e_n1              : Total strain tensor at t-1
+//     * sigma_ref         : reference stress
+//     * BoundSurfTol  : substep Tolerance, Bounding surface Tolerance
+//
+//     * OUTPUTS:
+//     * sigma                    : Updated stress tensor
+//     * kappa                    : Updated hardening variable
+//     * sigma_ref                : Updated deviator stress tensor at last load reversal
+//     * ErrMax                   : max error
+//     * gamma1D, tao1D, GGmax1D  : 1d backbone curve parameters         */
+//
+//    double   kappa_n, gamma_n, load_unload, Den1, Den2, K, R,
+//    G=el_cnt.mu, Lambda = el_cnt.lambda;
+//    tensor_t sigma_n, Num;
+//
+//    K     = Lambda + 2.0 * G / 3.0;
+//    R     = el_cnt.c * sqrt(8.0/3.0);
+//
+//    /* At  this point *sigma, *kappa, and gamma1D, have the information at t-1 */
+//    kappa_n = *kappa;
+//    sigma_n = copy_tensor(*sigma);
+//    gamma_n = *gamma1D;
+//
+//    /* deviatoric stress at t-1. At  this point *sigma has the information at t-1  */
+//    tensor_t Sdev_n1   = tensor_deviator( *sigma, tensor_octahedral ( tensor_I1 ( *sigma ) ) );
+//
+//    /* total strain increment and deviatoric strain increment */
+//    tensor_t De       = subtrac_tensors ( e_n, e_n1 );
+//    double   De_vol   = tensor_I1 ( De );
+//    tensor_t De_dev   = tensor_deviator( De, tensor_octahedral ( De_vol ) );
+//
+//    Den1 = ddot_tensors(Sdev_n1, subtrac_tensors (Sdev_n1 , *sigma_ref));
+//    Den2 = kappa_n * ( ddot_tensors(subtrac_tensors (Sdev_n1 , *sigma_ref), subtrac_tensors (Sdev_n1 , *sigma_ref)) );
+//    Num  = add_tensors ( scaled_tensor( Sdev_n1, (1.0+kappa_n) ), scaled_tensor( (subtrac_tensors (Sdev_n1 , *sigma_ref) ) ,kappa_n*(1.0+kappa_n) ) );
+//
+//    load_unload = -ddot_tensors(Num,De_dev) / (Den1 + Den2);
+//
+//   if ( load_unload > 0 )
+//       *sigma_ref = copy_tensor( Sdev_n1 );
+//
+//    // *=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=
+//    // Borja and Amies exponential model solved using gsl library
+//    size_t iter = 0, status = GSL_CONTINUE;
+//
+//    struct BAParam_t *ParamBA;
+//    double psi_up_gsl1D, kappa_up_gsl1D, H;
+//    ParamBA = (BAParam_t *)calloc(sizeof(BAParam_t),1);
+//
+//    ParamBA->sigma_n = sigma_n;
+//    ParamBA->sigma_o = *sigma_ref;
+//    ParamBA->De_dev  = De_dev;
+//
+///*    ParamBA->R       = el_cnt.c * sqrt(8.0/3.0);
+//    ParamBA->h       = el_cnt.psi0 * el_cnt.mu ;
+//    ParamBA->m       = el_cnt.m ;
+//    ParamBA->mu      = el_cnt.mu;*/
+//
+//    //  = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
+//    //  = = = = = = = = = = = = = 1D GSL solver = = = = = = = = = = = = = = = = = = = = = = = = = =
+//    int max_iter = 1000;
+//    double x_lo, x_hi, r, myfunc;
+//
+//    const gsl_root_fsolver_type * T1 = gsl_root_fsolver_brent;
+//    gsl_root_fsolver            * s1 = gsl_root_fsolver_alloc(T1);
+//
+//    gsl_function F;
+//    F.function = &BorjaAmies1D_f;
+//    F.params   = ParamBA;
+//
+//    iter = 0;
+//    gsl_set_error_handler_off();
+//
+//    // check if kappa_n satisfies the bounding surface eqn
+//    r      = kappa_n;
+//    myfunc = BorjaAmies1D_f(r, ParamBA);
+//
+//    if ( fabs(myfunc) <= theErrorTol ) {
+//
+//        *kappa             = r;
+//        *ErrMax            = myfunc;
+//
+//        kappa_up_gsl1D = r;
+//        //H              = ParamBA->h * pow(kappa_up_gsl1D,ParamBA->m);
+//        H = getHardening(el_cnt, r, gamma_n);
+//
+//        psi_up_gsl1D   = 2.0 * G * H / ( H + 3.0 * G );
+//
+//        *sigma         =  add_tensors (  add_tensors( sigma_n, isotropic_tensor(K*De_vol) ), scaled_tensor( De_dev, psi_up_gsl1D)  );
+//
+//        get_Backbonevalues ( el_cnt,  *kappa, gamma_n, gamma1D, tao1D, GGmax1D ) ;
+//
+//        gsl_root_fsolver_free (s1);
+//        free(ParamBA);
+//        return;
+//    }
+//
+//    // check if point on the boundary
+//    if ( fabs(BorjaAmies1D_f( KAPPA_MIN,ParamBA)) <= theErrorTol && load_unload < 0) {
+//
+//        r      = KAPPA_MIN;
+//        myfunc = BorjaAmies1D_f(r, ParamBA);
+//
+//        vonMisesEP (  sigma_n,  De_dev,  sigma,  G,  K,  De_vol, R  ) ;
+//
+//        *kappa             = KAPPA_MIN;
+//        *ErrMax            = myfunc;
+//
+//        get_Backbonevalues ( el_cnt,  *kappa, gamma_n, gamma1D, tao1D, GGmax1D ) ;
+//        gsl_root_fsolver_free (s1);
+//        free(ParamBA);
+//        return;
+//    }
+//
+//    if ( (kappa_n == 100) || (load_unload > 0) ) { //  load reversal or beginning of the simulation
+//        x_lo  = KAPPA_MIN;
+//        x_hi  = 2.0 * x_lo;
+//
+//        while( gsl_root_fsolver_set (s1, &F, x_lo, x_hi) != 0 && iter < max_iter ) {
+//            x_lo = x_hi;
+//            x_hi = 2.0 * x_lo;
+//            iter++;
+//        }
+//
+//        if ( iter >= max_iter ) { //should not get here !
+//            fprintf(stderr, "Could not find root interval for kappa at unloading\n");
+//            //MPI_Abort(MPI_COMM_WORLD, ERROR);
+//            //exit(1);
+//        }
+//
+//    } else {
+//
+//        x_hi = kappa_n; // kappa must decrease from current state
+//        x_lo = x_hi/2.0;
+//
+//        while( gsl_root_fsolver_set (s1, &F, x_lo, x_hi) != 0 && iter < max_iter && x_hi > KAPPA_MIN ) {
+//            x_hi = x_lo;
+//            x_lo = x_hi/2.0;
+//            iter++;
+//        }
+//
+//        if ( x_lo <= KAPPA_MIN )  {
+//
+//            if ( fabs(BorjaAmies1D_f( KAPPA_MIN,ParamBA)) <= theErrorTol) {
+//
+//                r      = KAPPA_MIN;
+//                myfunc = BorjaAmies1D_f(r, ParamBA);
+//
+//                vonMisesEP (  sigma_n,  De_dev,  sigma,  G,  K,  De_vol, R  ) ;
+//
+//                *kappa             = KAPPA_MIN;
+//                *ErrMax            = myfunc;
+//
+//                get_Backbonevalues ( el_cnt,  *kappa, gamma_n, gamma1D, tao1D, GGmax1D ) ;
+//
+//                gsl_root_fsolver_free (s1);
+//                free(ParamBA);
+//                return;
+//            } else {
+//
+//                // perform full search of the interval
+//                iter = 0;
+//                x_lo  = KAPPA_MIN;
+//                x_hi  = 2.0 * x_lo;
+//
+//                while( gsl_root_fsolver_set (s1, &F, x_lo, x_hi) != 0 && iter < max_iter ) {
+//                    x_lo = x_hi;
+//                    x_hi = 2.0 * x_lo;
+//                    iter++;
+//                }
+//
+//                if ( iter >= max_iter ) { //should not get here !
+//                    fprintf(stderr, "Could not find root interval for kappa at loading\n");
+//                    //MPI_Abort(MPI_COMM_WORLD, ERROR);
+//                    //exit(1);
+//                }
+//            }
+//        }
+//    }
+//
+//    gsl_set_error_handler (NULL);
+//
+//    status = GSL_CONTINUE;
+//
+//    iter = 0;
+//    r    = 1000;
+//    while (status == GSL_CONTINUE && iter < max_iter && r >= KAPPA_MIN) {
+//
+//        iter++;
+//
+//        status = gsl_root_fsolver_iterate (s1);
+//        r      = gsl_root_fsolver_root (s1);
+//        x_lo   = gsl_root_fsolver_x_lower (s1);
+//        x_hi   = gsl_root_fsolver_x_upper (s1);
+//        //status = gsl_root_test_interval (x_lo, x_hi, 0, theErrorTol);
+//
+//        myfunc = fabs(BorjaAmies1D_f(r, ParamBA));
+//        status = gsl_root_test_residual(myfunc,theErrorTol);
+//
+//        if((status == GSL_EBADFUNC) || (status == GSL_ENOPROG))
+//            break;
+//
+//    }
+//
+//    if ( r <= KAPPA_MIN ) { // Elastoplastic return
+//        r      = KAPPA_MIN;
+//        myfunc = BorjaAmies1D_f(r, ParamBA);
+//
+//        vonMisesEP (  sigma_n,  De_dev,  sigma,  G,  K,  De_vol, R  ) ;
+//
+//        *kappa             = KAPPA_MIN;
+//        *ErrMax            = myfunc;
+//
+//        get_Backbonevalues ( el_cnt,  *kappa, gamma_n, gamma1D, tao1D, GGmax1D ) ;
+//
+//        gsl_root_fsolver_free (s1);
+//        free(ParamBA);
+//        return;
+//    }
+//
+//    if ( (status != GSL_SUCCESS)  )
+//        printf("Status: %s\n", gsl_strerror(status));
+//
+//    *ErrMax = myfunc;
+//    *kappa  = r;
+//
+//    kappa_up_gsl1D = r;
+//    //H              = ParamBA->h * pow(kappa_up_gsl1D,ParamBA->m);
+//    H = getHardening(el_cnt, r, gamma_n);
+//
+//    psi_up_gsl1D   = 2.0 * G * H / ( H + 3.0 * G );
+//
+//    *sigma         =  add_tensors (  add_tensors( sigma_n, isotropic_tensor(K*De_vol) ), scaled_tensor( De_dev, psi_up_gsl1D)  );
+//
+//    get_Backbonevalues ( el_cnt,  *kappa, gamma_n, gamma1D, tao1D, GGmax1D ) ;
+//
+//    gsl_root_fsolver_free (s1);
+//    free(ParamBA);
+//
+//}
 
 
 /*   Material update function for material models based on (1994) Borja & Amies approach
@@ -2655,16 +2663,19 @@ void MatUpd_BA_GSL_v2 ( nlconstants_t el_cnt, double   *kappa,
     double psi_up_gsl1D, H;
     ParamBA = (BAParam_t *)calloc(sizeof(BAParam_t),1);
 
-    ParamBA->sigma_n = sigma_n;
+/*    ParamBA->sigma_n = sigma_n;
     ParamBA->sigma_o = *sigma_ref;
-    ParamBA->De_dev  = De_dev;
+    ParamBA->De_dev  = De_dev;*/
+
+    tensor_t Sno = subtrac_tensors( Sdev_n1, *sigma_ref);
+    ParamBA->a   = ddot_tensors( Sdev_n1, Sdev_n1 );
+    ParamBA->b   = ddot_tensors( Sdev_n1, Sno     );
+    ParamBA->c   = ddot_tensors( Sno    , Sno     );
+    ParamBA->d   = ddot_tensors( Sdev_n1, De_dev  );
+    ParamBA->e   = ddot_tensors( Sno    , De_dev  );
+    ParamBA->f   = ddot_tensors( De_dev , De_dev  );
 
     ParamBA->gamma_n = gamma_n;
-   // ParamBA->R       = el_cnt.c * sqrt(8.0/3.0);
-   // ParamBA->h       = el_cnt.psi0 * el_cnt.mu ;
-   // ParamBA->m       = el_cnt.m ;
-   // ParamBA->mu      = el_cnt.mu;
-
     ParamBA->nl_const = el_cnt;
 
     //  = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
@@ -6067,7 +6078,7 @@ void compute_nonlinear_state ( mesh_t     *myMesh,
 
                 double po=90;
 
-                if ( eindex==100356 && i==0 && step == 42 )
+                if ( eindex==100575 && i==0 && step == 3 )
                     po=78;
 
                 material_update ( *enlcons,           tstrains->qp[i],      tstrains1->qp[i],   pstrains1->qp[i],  alphastress1->qp[i], epstr1->qv[i],   sigma0,        theDeltaT,
@@ -6487,95 +6498,96 @@ void print_nonlinear_stations(mesh_t     *myMesh,
 
 }
 
-// Borja and Amies solution using gsl nonlinear solver
-
-int BorjaAmies_f (const gsl_vector * x, void *params, gsl_vector * f)
-{
-    double h, m, R, mu, y0, y1, H, gamma_n;
-    tensor_t Sn, So, Sdev, Sdevo, S_up, De_dev;
-    nlconstants_t elmcnt;
-
-    Sn     = ((struct BAParam_t *) params)->sigma_n;
-    So     = ((struct BAParam_t *) params)->sigma_o;
-    De_dev = ((struct BAParam_t *) params)->De_dev;
-
-    elmcnt = ((struct BAParam_t *) params)->nl_const;
-
-    R  = elmcnt.c * sqrt(8.0/3.0);
-    m  = elmcnt.m;
-    h  = elmcnt.psi0 * elmcnt.mu;
-    mu = elmcnt.mu;
-
-    gamma_n  = ((struct BAParam_t *) params)->gamma_n;
-
-    double psi   = gsl_vector_get (x, 0);
-    double kappa = gsl_vector_get (x, 1);
-
-    H = getHardening( elmcnt,  kappa,  gamma_n);
-
-    Sdev   = tensor_deviator( Sn, tensor_octahedral ( tensor_I1 ( Sn ) ) );
-    Sdev   = add_tensors ( Sdev, scaled_tensor( De_dev, psi ) );
-
-    Sdevo  = tensor_deviator( So, tensor_octahedral ( tensor_I1 ( So ) ) );
-
-    S_up   = add_tensors ( Sdev, scaled_tensor( subtrac_tensors( Sdev, Sdevo ), kappa ) );
-
-    y0 = sqrt( ddot_tensors(S_up,S_up) ) - R;
-    y1 = psi + 3.0 * mu * psi / H - 2.0 * mu;
-
-    gsl_vector_set (f, 0, y0);
-    gsl_vector_set (f, 1, y1);
-
-    return GSL_SUCCESS;
-}
+//// Borja and Amies solution using gsl nonlinear solver
+//
+//int BorjaAmies_f (const gsl_vector * x, void *params, gsl_vector * f)
+//{
+//    double h, m, R, mu, y0, y1, H, gamma_n;
+//    tensor_t Sn, So, Sdev, Sdevo, S_up, De_dev;
+//    nlconstants_t elmcnt;
+//
+//    Sn     = ((struct BAParam_t *) params)->sigma_n;
+//    So     = ((struct BAParam_t *) params)->sigma_o;
+//    De_dev = ((struct BAParam_t *) params)->De_dev;
+//
+//    elmcnt = ((struct BAParam_t *) params)->nl_const;
+//
+//    R  = elmcnt.c * sqrt(8.0/3.0);
+//    m  = elmcnt.m;
+//    h  = elmcnt.psi0 * elmcnt.mu;
+//    mu = elmcnt.mu;
+//
+//    gamma_n  = ((struct BAParam_t *) params)->gamma_n;
+//
+//    double psi   = gsl_vector_get (x, 0);
+//    double kappa = gsl_vector_get (x, 1);
+//
+//    H = getHardening( elmcnt,  kappa,  gamma_n);
+//
+//    Sdev   = tensor_deviator( Sn, tensor_octahedral ( tensor_I1 ( Sn ) ) );
+//    Sdev   = add_tensors ( Sdev, scaled_tensor( De_dev, psi ) );
+//
+//    Sdevo  = tensor_deviator( So, tensor_octahedral ( tensor_I1 ( So ) ) );
+//
+//    S_up   = add_tensors ( Sdev, scaled_tensor( subtrac_tensors( Sdev, Sdevo ), kappa ) );
+//
+//    y0 = sqrt( ddot_tensors(S_up,S_up) ) - R;
+//    y1 = psi + 3.0 * mu * psi / H - 2.0 * mu;
+//
+//    gsl_vector_set (f, 0, y0);
+//    gsl_vector_set (f, 1, y1);
+//
+//    return GSL_SUCCESS;
+//}
 
 // Borja and Amies 1D function -- only kappa as independent variable
 double BorjaAmies1D_f ( double kappa, void *params )
 {
-    double h, m, R, mu, y0, H, psi, gamma_n;
-    tensor_t Sn, So, Sdev, Sdevo, S_up, De_dev;
+    double R, mu, y0, H, psi, gamma_n;
+    double a, b, c, d, e, f, phi;
+    //tensor_t Sn, So, Sdev, Sdevo, S_up, De_dev;
     nlconstants_t elmcnt;
 
-    Sn     = ((struct BAParam_t *) params)->sigma_n;
+    a       = ((struct BAParam_t *) params)->a;  // Sn:Sn
+    b       = ((struct BAParam_t *) params)->b;  // Sn:Sno
+    c       = ((struct BAParam_t *) params)->c;  // Sno:Sno
+    d       = ((struct BAParam_t *) params)->d;  // Sn:De
+    e       = ((struct BAParam_t *) params)->e;  // Sno:De
+    f       = ((struct BAParam_t *) params)->f;  // De:De
+
+    gamma_n = ((struct BAParam_t *) params)->gamma_n;
+    elmcnt  = ((struct BAParam_t *) params)->nl_const;
+    R       = elmcnt.c * sqrt(8.0/3.0);
+    mu      = elmcnt.mu;
+
+    H     = getHardening( elmcnt,  kappa,  gamma_n);
+    psi =  2.0 * mu * H / ( H + 3.0 * mu );
+
+    phi = psi * ( 1.0 + kappa );
+
+    y0 = sqrt( a     +
+               2.0   * b     * kappa +
+               kappa * kappa * c     +
+               2.0   * phi   * d     +
+               2.0   * kappa * phi * e +
+               phi   * phi   * f ) - R;
+
+
+/*    Sn     = ((struct BAParam_t *) params)->sigma_n;
     So     = ((struct BAParam_t *) params)->sigma_o;
     De_dev = ((struct BAParam_t *) params)->De_dev;
 
-    elmcnt = ((struct BAParam_t *) params)->nl_const;
 
-    R  = elmcnt.c * sqrt(8.0/3.0);
-    m  = elmcnt.m;
-    h  = elmcnt.psi0 * elmcnt.mu;
-    mu = elmcnt.mu;
-
-    gamma_n  = ((struct BAParam_t *) params)->gamma_n;
-
-    H = getHardening( elmcnt,  kappa,  gamma_n);
-
-    // ParamBA->R       = el_cnt.c * sqrt(8.0/3.0);
-    // ParamBA->h       = el_cnt.psi0 * el_cnt.mu ;
-    // ParamBA->m       = el_cnt.m ;
-    // ParamBA->mu      = el_cnt.mu;
-
-/*    h  = ((struct BAParam_t *) params)->h;
-    m  = ((struct BAParam_t *) params)->m;
-    R  = ((struct BAParam_t *) params)->R;
-    mu = ((struct BAParam_t *) params)->mu;*/
-
-    //H   =  h * pow(kappa,m);
-    psi =  2.0 * mu * H / ( H + 3.0 * mu );
-
-    Sdev   = tensor_deviator( Sn, tensor_octahedral ( tensor_I1 ( Sn ) ) );
+  Sdev   = tensor_deviator( Sn, tensor_octahedral ( tensor_I1 ( Sn ) ) );
     Sdev   = add_tensors ( Sdev, scaled_tensor( De_dev, psi ) );
 
     Sdevo  = tensor_deviator( So, tensor_octahedral ( tensor_I1 ( So ) ) );
 
     S_up   = add_tensors ( Sdev, scaled_tensor( subtrac_tensors( Sdev, Sdevo ), kappa ) );
 
-    y0 = sqrt( ddot_tensors(S_up,S_up) ) - R;
-    //y1 = psi + 3.0 * mu * psi / ( h * pow(kappa,m) ) - 2.0 * mu;
+    y0 = sqrt( ddot_tensors(S_up,S_up) ) - R;*/
 
-    //gsl_vector_set (f, 0, y0);
-    //gsl_vector_set (f, 1, y1);
+
 
     return y0;
 }
