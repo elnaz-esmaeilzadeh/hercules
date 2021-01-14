@@ -3164,7 +3164,7 @@ double getH_MKZmodel (nlconstants_t el_cnt, double kappa, double gamma_n ) {
 void get_Backbonevalues (nlconstants_t el_cnt, double kappa, double gamma_n, double *gammabackbone, double *taobackbone, double *GGmax  ) {
 
     double  gamma_bar, tao_bar, Eo, Jac, gamma_ref, gamma=0.0, tao_max, m=el_cnt.m,
-            beta, s,  Su = el_cnt.c, Gmax, xi, h, tao;
+            beta, s,  Su = el_cnt.c, Gmax, xi, h, tao, ggmax;
 
     double  GP10, phi_r;
     int     cnt=0, cnt_max=200, i, ngp = 10;
@@ -3214,15 +3214,19 @@ void get_Backbonevalues (nlconstants_t el_cnt, double kappa, double gamma_n, dou
         h   = el_cnt.psi0 * Gmax;
 
         gamma = tao / Gmax;
+        ggmax = 0.0;
 
         for (i = 0; i < ngp; i++) {
             xi     = tao/2.0 * ( gp10[i][0] + 1.0 );
             gamma += 3.0 / h * pow ( ( xi / ( tao_max - xi )  ), m ) * gp10[i][1] * tao / 2.0;
+
+            ggmax +=  pow ( ( 2.0 * xi / ( tao_max - 2.0 * xi + tao )  ), m ) * gp10[i][1] * tao;
         }
 
         *gammabackbone = gamma;
         *taobackbone   = tao;
-        *GGmax         = tao / ( gamma * Gmax );
+        *GGmax         = 1.0 / ( 1.0 + 3.0 * Gmax * ggmax / ( 2.0 * h * tao ) );
+        //*GGmax         = tao / ( gamma * Gmax );
 
     } else if ( theMaterialModel == VONMISES_BAH ) {
 
